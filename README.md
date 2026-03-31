@@ -79,4 +79,4 @@ Este projeto está sob a licença Apache License 2.0 - veja o arquivo [LICENSE.m
 
 
 ---
-⌨️ com ❤️ por [Armstrong Lohãns](https://gist.github.com/lohhans) 😊
+⌨️ com ❤️ por [Shirruny](https://github.com/RodrigoGagliardi) 
