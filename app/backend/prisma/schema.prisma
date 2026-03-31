@@ -12,14 +12,14 @@ datasource db {
   provider = "postgresql"
 }
 
-// ============================================
+
 // USUÁRIOS E AUTENTICAÇÃO
-// ============================================
+
 
 model User {
-  id        Int      @id @default(autoincrement())
+  id        String   @id @default(uuid())
   email     String   @unique
-  password  String   // Hash bcrypt
+  password  String   
   name      String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -32,12 +32,12 @@ model User {
   @@map("users")
 }
 
-// ============================================
+
 // MELIPONÁRIO
-// ============================================
+
 
 model Meliponario {
-  id        Int      @id @default(autoincrement())
+  id        String      @id @default(uuid())
   nome      String
   endereco  String?
   cidade    String?
@@ -50,18 +50,18 @@ model Meliponario {
   updatedAt DateTime @updatedAt
 
   // Relações
-  userId Int  @unique
-  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String  @unique
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("meliponarios")
 }
 
-// ============================================
+
 // COLÔNIAS
-// ============================================
+
 
 model Colonia {
-  id               Int       @id @default(autoincrement())
+  id               String       @id @default(uuid())
   codigo           String    // TETang-001, MELquaqua-001
   especiePopular   String    // Jataí, Mandaçaia
   especieCientifica String?   // Tetragonisca angustula, Melipona quadrifasciata quadrifasciata
@@ -78,7 +78,7 @@ model Colonia {
   updatedAt        DateTime  @updatedAt
 
   // Relações
-  userId Int
+  userId String
   user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   avaliacoes  Avaliacao[]
@@ -86,7 +86,7 @@ model Colonia {
   producoes   Producao[]
   
   // Genealogia
-  coloniaMaeId     Int?
+  coloniaMaeId     String?
   coloniaMae       Colonia?  @relation("Genealogia", fields: [coloniaMaeId], references: [id], onDelete: SetNull)
   coloniasFilhas   Colonia[] @relation("Genealogia")
 
@@ -96,12 +96,10 @@ model Colonia {
   @@map("colonias")
 }
 
-// ============================================
 // PARÂMETROS PERSONALIZÁVEIS
-// ============================================
 
 model Parametro {
-  id            Int      @id @default(autoincrement())
+  id            String      @id @default(uuid())
   nome          String   // "População", "Potes de Mel"
   ordem         Int      @default(0)
   criterioBom   String   @db.Text
@@ -112,7 +110,7 @@ model Parametro {
   updatedAt     DateTime @updatedAt
 
   // Relações
-  userId Int
+  userId String
   user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   avaliacoesParametros AvaliacaoParametro[]
@@ -122,12 +120,10 @@ model Parametro {
   @@map("parametros")
 }
 
-// ============================================
 // AVALIAÇÕES
-// ============================================
 
 model Avaliacao {
-  id                Int      @id @default(autoincrement())
+  id                String      @id @default(uuid())
   dataAvaliacao     DateTime
   duracaoMinutos    Int?
   temperatura       Float?
@@ -141,7 +137,7 @@ model Avaliacao {
   updatedAt         DateTime @updatedAt
 
   // Relações
-  coloniaId Int
+  coloniaId String
   colonia   Colonia @relation(fields: [coloniaId], references: [id], onDelete: Cascade)
 
   parametros AvaliacaoParametro[]
@@ -152,22 +148,20 @@ model Avaliacao {
   @@map("avaliacoes")
 }
 
-// ============================================
 // AVALIAÇÃO DE PARÂMETROS (N:N)
-// ============================================
 
 model AvaliacaoParametro {
-  id            Int      @id @default(autoincrement())
+  id            String      @id @default(uuid())
   classificacao String   // bom, medio, ruim
   valorNumerico Int?     // Opcional: valor numérico se houver
   observacoes   String?  @db.Text
   createdAt     DateTime @default(now())
 
   // Relações
-  avaliacaoId Int
+  avaliacaoId String
   avaliacao   Avaliacao @relation(fields: [avaliacaoId], references: [id], onDelete: Cascade)
 
-  parametroId Int
+  parametroId String
   parametro   Parametro @relation(fields: [parametroId], references: [id], onDelete: Cascade)
 
   fotos Foto[]
@@ -178,25 +172,23 @@ model AvaliacaoParametro {
   @@map("avaliacoes_parametros")
 }
 
-// ============================================
 // FOTOS
-// ============================================
 
 model Foto {
-  id          Int      @id @default(autoincrement())
+  id          String      @id @default(uuid())
   url         String   
   legenda     String?
   tamanhoKb   Int?
   createdAt   DateTime @default(now())
 
   // Relações (pode estar associada a colônia, avaliação ou parâmetro)
-  coloniaId Int?
+  coloniaId String?
   colonia   Colonia? @relation(fields: [coloniaId], references: [id], onDelete: Cascade)
 
-  avaliacaoId Int?
+  avaliacaoId String?
   avaliacao   Avaliacao? @relation(fields: [avaliacaoId], references: [id], onDelete: Cascade)
 
-  avaliacaoParametroId Int?
+  avaliacaoParametroId String?
   avaliacaoParametro   AvaliacaoParametro? @relation(fields: [avaliacaoParametroId], references: [id], onDelete: Cascade)
 
   @@index([coloniaId])
@@ -204,22 +196,20 @@ model Foto {
   @@map("fotos")
 }
 
-// ============================================
 // PRODUÇÃO E COLHEITAS
-// ============================================
 
 model Producao {
   id             Int      @id @default(autoincrement())
   dataColheita   DateTime
   volumeMl       Float    // Volume em mililitros
   tipoProduto    String   // mel, polen, propolis, cera
-  caracteristicas String? @db.Text // JSON: {cor, aroma, sabor}
+  caracteristicas String? @db.Text // JSON:
   observacoes    String?  @db.Text
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   // Relações
-  coloniaId Int
+  coloniaId String
   colonia   Colonia @relation(fields: [coloniaId], references: [id], onDelete: Cascade)
 
   @@index([coloniaId])
@@ -227,15 +217,13 @@ model Producao {
   @@map("producoes")
 }
 
-// ============================================
-// FILA DE SINCRONIZAÇÃO (OFFLINE)
-// ============================================
+// SINCRONIZAÇÃO OFFLINE
 
 model SyncQueue {
-  id          Int      @id @default(autoincrement())
+  id          String   @id @default(uuid())
   tipo        String   // avaliacao, colonia, producao
   operacao    String   // create, update, delete
-  dados       String   @db.Text // JSON dos dados
+  dados       String   @db.Text // JSON
   tentativas  Int      @default(0)
   ultimoErro  String?  @db.Text
   sincronizado Boolean @default(false)
