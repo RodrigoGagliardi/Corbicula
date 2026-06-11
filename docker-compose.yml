@@ -1,0 +1,75 @@
+services:
+
+  # ─── Banco de Dados ───────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - corbicula_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ─── Backend Node.js ──────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./app/backend
+      dockerfile: Dockerfile
+      target: development
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      NODE_ENV: development
+    volumes:
+      - ./app/backend:/app
+      - backend_modules:/app/node_modules
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - corbicula_network
+    command: sh -c "npx prisma generate && npx prisma db push && npm run dev"
+
+  # ─── Frontend React (Fase 1 — adicionar quando criado) ────────────────────────
+  # frontend:
+  #   build:
+  #     context: ./app/frontend
+  #     dockerfile: Dockerfile
+  #     target: development
+  #   volumes:
+  #     - ./app/frontend:/app
+  #     - frontend_modules:/app/node_modules
+  #   ports:
+  #     - "5173:5173"
+  #   networks:
+  #     - corbicula_network
+
+  # ─── Analytics Python (Fase 2) ────────────────────────────────────────────────
+  # analytics:
+  #   build:
+  #     context: ./app/analytics
+  #     dockerfile: Dockerfile
+  #   ports:
+  #     - "8000:8000"
+  #   networks:
+  #     - corbicula_network
+
+networks:
+  corbicula_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  backend_modules:
+  # frontend_modules:
