@@ -10,6 +10,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 
@@ -199,7 +200,7 @@ model Foto {
 // PRODUÇÃO E COLHEITAS
 
 model Producao {
-  id             Int      @id @default(autoincrement())
+  id             String   @id @default(uuid())
   dataColheita   DateTime
   volumeMl       Float    // Volume em mililitros
   tipoProduto    String   // mel, polen, propolis, cera
