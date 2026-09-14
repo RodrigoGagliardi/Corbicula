@@ -1,5 +1,2 @@
-import { PrismaClient } from "@prisma/client";
-
-export const prisma = new PrismaClient({
-  datasourceUrl: process.env["DATABASE_URL"],
-});
+// Prisma Client singleton — use src/config/database.ts
+export { prisma } from "../config/database";

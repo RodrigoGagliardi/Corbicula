@@ -17,9 +17,9 @@ datasource db {
 
 
 model User {
-  id        String   @id @default(uuid())
+  id        String   @id @default(uuid()) @db.Uuid
   email     String   @unique
-  password  String   
+  password  String
   name      String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -37,7 +37,7 @@ model User {
 
 
 model Meliponario {
-  id        String      @id @default(uuid())
+  id        String      @id @default(uuid()) @db.Uuid
   nome      String
   endereco  String?
   cidade    String?
@@ -50,7 +50,7 @@ model Meliponario {
   updatedAt DateTime @updatedAt
 
   // Relações
-  userId String  @unique
+  userId String  @unique @db.Uuid
   user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("meliponarios")
@@ -61,45 +61,47 @@ model Meliponario {
 
 
 model Colonia {
-  id               String       @id @default(uuid())
-  codigo           String    // TETang-001, MELquaqua-001
-  especiePopular   String    // Jataí, Mandaçaia
-  especieCientifica String?   // Tetragonisca angustula, Melipona quadrifasciata quadrifasciata
-  dataEntrada      DateTime
-  origem           String    // captura, compra, divisao, resgate
-  tipoCaixa        String    // INPA, PNN, Schenck, tronco, outro
-  dimensoesCaixa   String?   // JSON: {altura: 20, largura: 15, ...}
-  localizacao      String?   // Local no meliponário
-  latitude         Float?
-  longitude        Float?
-  observacoes      String?   @db.Text
-  status           String    @default("ativa") // ativa, inativa (vendida, trocada, etc.), morta
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  id             String    @id @default(uuid()) @db.Uuid
+  codigo         String
+  dataEntrada    DateTime
+  origem         String    // captura, compra, divisao, resgate
+  tipoCaixa      String    // INPA, PNN, Schenck, tronco, outro
+  dimensoesCaixa String?   @db.Text // JSON: {altura, largura, profundidade}
+  localizacao    String?
+  latitude       Float?
+  longitude      Float?
+  observacoes    String?   @db.Text
+  status         String    @default("ativa") // ativa, inativa, morta
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   // Relações
-  userId String
-  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  avaliacoes  Avaliacao[]
-  fotos       Foto[]
-  producoes   Producao[]
-  
+  especieId String?   @db.Uuid
+  especie   Especie?  @relation(fields: [especieId], references: [id], onDelete: SetNull)
+
+  avaliacoes Avaliacao[]
+  fotos      Foto[]
+  producoes  Producao[]
+
   // Genealogia
-  coloniaMaeId     String?
-  coloniaMae       Colonia?  @relation("Genealogia", fields: [coloniaMaeId], references: [id], onDelete: SetNull)
-  coloniasFilhas   Colonia[] @relation("Genealogia")
+  coloniaMaeId   String?   @db.Uuid
+  coloniaMae     Colonia?  @relation("Genealogia", fields: [coloniaMaeId], references: [id], onDelete: SetNull)
+  coloniasFilhas Colonia[] @relation("Genealogia")
 
-  @@unique([userId, codigo]) // Código único por usuário
+  @@unique([userId, codigo])
   @@index([userId])
   @@index([status])
+  @@index([especieId])
   @@map("colonias")
 }
 
 // PARÂMETROS PERSONALIZÁVEIS
 
 model Parametro {
-  id            String      @id @default(uuid())
+  id            String      @id @default(uuid()) @db.Uuid
   nome          String   // "População", "Potes de Mel"
   ordem         Int      @default(0)
   criterioBom   String   @db.Text
@@ -110,20 +112,45 @@ model Parametro {
   updatedAt     DateTime @updatedAt
 
   // Relações
-  userId String
+  userId String  @db.Uuid
   user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   avaliacoesParametros AvaliacaoParametro[]
+  criteriosEspecie     ParametroEspecie[]
 
   @@unique([userId, nome])
   @@index([userId, ativo])
   @@map("parametros")
 }
 
+// Critérios específicos por espécie para um parâmetro.
+// Sobrescreve os critérios padrão do Parametro quando a colônia
+// tem espécie identificada. O Parametro mantém os critérios genéricos
+// como fallback para colônias sem espécie ou sem override configurado.
+model ParametroEspecie {
+  id            String   @id @default(uuid()) @db.Uuid
+  criterioBom   String   @db.Text
+  criterioMedio String   @db.Text
+  criterioRuim  String   @db.Text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  parametroId String    @db.Uuid
+  parametro   Parametro @relation(fields: [parametroId], references: [id], onDelete: Cascade)
+
+  especieId String  @db.Uuid
+  especie   Especie @relation(fields: [especieId], references: [id], onDelete: Cascade)
+
+  @@unique([parametroId, especieId])
+  @@index([parametroId])
+  @@index([especieId])
+  @@map("parametros_especies")
+}
+
 // AVALIAÇÕES
 
 model Avaliacao {
-  id                String      @id @default(uuid())
+  id                String      @id @default(uuid()) @db.Uuid
   dataAvaliacao     DateTime
   duracaoMinutos    Int?
   temperatura       Float?
@@ -137,7 +164,7 @@ model Avaliacao {
   updatedAt         DateTime @updatedAt
 
   // Relações
-  coloniaId String
+  coloniaId String  @db.Uuid
   colonia   Colonia @relation(fields: [coloniaId], references: [id], onDelete: Cascade)
 
   parametros AvaliacaoParametro[]
@@ -151,17 +178,17 @@ model Avaliacao {
 // AVALIAÇÃO DE PARÂMETROS (N:N)
 
 model AvaliacaoParametro {
-  id            String      @id @default(uuid())
+  id            String      @id @default(uuid()) @db.Uuid
   classificacao String   // bom, medio, ruim
   valorNumerico Int?     // Opcional: valor numérico se houver
   observacoes   String?  @db.Text
   createdAt     DateTime @default(now())
 
   // Relações
-  avaliacaoId String
+  avaliacaoId String  @db.Uuid
   avaliacao   Avaliacao @relation(fields: [avaliacaoId], references: [id], onDelete: Cascade)
 
-  parametroId String
+  parametroId String  @db.Uuid
   parametro   Parametro @relation(fields: [parametroId], references: [id], onDelete: Cascade)
 
   fotos Foto[]
@@ -175,20 +202,20 @@ model AvaliacaoParametro {
 // FOTOS
 
 model Foto {
-  id          String      @id @default(uuid())
-  url         String   
+  id          String      @id @default(uuid()) @db.Uuid
+  url         String
   legenda     String?
   tamanhoKb   Int?
   createdAt   DateTime @default(now())
 
   // Relações (pode estar associada a colônia, avaliação ou parâmetro)
-  coloniaId String?
+  coloniaId String?  @db.Uuid
   colonia   Colonia? @relation(fields: [coloniaId], references: [id], onDelete: Cascade)
 
-  avaliacaoId String?
+  avaliacaoId String?  @db.Uuid
   avaliacao   Avaliacao? @relation(fields: [avaliacaoId], references: [id], onDelete: Cascade)
 
-  avaliacaoParametroId String?
+  avaliacaoParametroId String?  @db.Uuid
   avaliacaoParametro   AvaliacaoParametro? @relation(fields: [avaliacaoParametroId], references: [id], onDelete: Cascade)
 
   @@index([coloniaId])
@@ -199,7 +226,7 @@ model Foto {
 // PRODUÇÃO E COLHEITAS
 
 model Producao {
-  id             String   @id @default(uuid())
+  id             String   @id @default(uuid()) @db.Uuid
   dataColheita   DateTime
   volumeMl       Float    // Volume em mililitros
   tipoProduto    String   // mel, polen, propolis, cera
@@ -209,7 +236,7 @@ model Producao {
   updatedAt      DateTime @updatedAt
 
   // Relações
-  coloniaId String
+  coloniaId String  @db.Uuid
   colonia   Colonia @relation(fields: [coloniaId], references: [id], onDelete: Cascade)
 
   @@index([coloniaId])
@@ -217,10 +244,35 @@ model Producao {
   @@map("producoes")
 }
 
+// ESPÉCIES (catálogo fixo — seed-only, somente leitura no app)
+
+model Especie {
+  id                String   @id @default(uuid()) @db.Uuid
+  codigo            String   @unique // padrão Kew: TETRANGU
+  nomePopular       String
+  nomeCientifico    String   @unique
+  genero            String
+  especie           String   // epíteto específico
+  subespecie        String?
+  nomesAlternativos String?  @db.Text // JSON array
+  caracteristicas   String?  @db.Text // JSON: tamanho, cor, comportamento, entrada, populacao
+  ocorrenciaBiomas  String?  @db.Text // JSON array
+  statusConservacao String?            // LC, VU, EN
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  colonias         Colonia[]
+  criteriosParametro ParametroEspecie[]
+
+  @@index([codigo])
+  @@index([genero])
+  @@map("especies")
+}
+
 // SINCRONIZAÇÃO OFFLINE
 
 model SyncQueue {
-  id          String   @id @default(uuid())
+  id          String   @id @default(uuid()) @db.Uuid
   tipo        String   // avaliacao, colonia, producao
   operacao    String   // create, update, delete
   dados       String   @db.Text // JSON

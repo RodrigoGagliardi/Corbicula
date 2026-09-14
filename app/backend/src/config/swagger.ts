@@ -1,16 +1,25 @@
-import swaggerJSDoc from "swagger-jsdoc";
+import type { FastifyDynamicSwaggerOptions } from "@fastify/swagger";
+import type { FastifySwaggerUiOptions } from "@fastify/swagger-ui";
 
-const options = {
-  definition: {
-    openapi: "3.0.0",
+export const swaggerOptions: FastifyDynamicSwaggerOptions = {
+  openapi: {
     info: {
-      title: "Minha API",
+      title: "Corbicula API",
+      description: "API para gestão de colônias de abelhas sem ferrão",
       version: "1.0.0",
     },
+    tags: [
+      { name: "auth", description: "Autenticação" },
+      { name: "users", description: "Usuários e meliponário" },
+      { name: "colonias", description: "Colônias" },
+      { name: "avaliacoes", description: "Avaliações de colônias" },
+      { name: "parametros", description: "Parâmetros de avaliação" },
+      { name: "especies", description: "Espécies (catálogo somente leitura)" },
+      { name: "producao", description: "Produção e colheitas" },
+    ],
   },
-  apis: ["./src/routes/*.ts"],
 };
 
-const swaggerSpec = swaggerJSDoc(options);
-
-export default swaggerSpec;
+export const swaggerUiOptions: FastifySwaggerUiOptions = {
+  routePrefix: "/api-docs",
+};
