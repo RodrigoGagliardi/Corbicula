@@ -11,6 +11,8 @@ export const dimensoesCaixaSchema = z.object({
 });
 
 export const criarColoniaSchema = z.object({
+  // Opcional: UUID gerado no cliente para registros criados offline (ver /sync).
+  id: z.uuid().optional(),
   dataEntrada: z.string().datetime({ message: "Data inválida (use formato ISO 8601)" }),
   origem: z.enum(ORIGENS, {
     message: "Origem deve ser: captura, compra, divisao ou resgate",

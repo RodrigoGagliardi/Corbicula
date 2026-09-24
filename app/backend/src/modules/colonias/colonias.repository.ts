@@ -71,6 +71,7 @@ export const coloniasRepository = {
   criar: (userId: string, codigo: string, data: CriarColoniaInput) =>
     prisma.colonia.create({
       data: {
+        ...(data.id !== undefined && { id: data.id }),
         userId,
         codigo,
         dataEntrada: new Date(data.dataEntrada),
@@ -117,4 +118,6 @@ export const coloniasRepository = {
 
   contarAvaliacoes: (coloniaId: string) =>
     prisma.avaliacao.count({ where: { coloniaId } }),
+
+  existeId: async (id: string) => (await prisma.colonia.count({ where: { id } })) > 0,
 };

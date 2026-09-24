@@ -10,7 +10,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     networks:
       - corbicula_network
     healthcheck:
@@ -32,6 +32,7 @@ services:
     volumes:
       - ./app/backend:/app
       - backend_modules:/app/node_modules
+      - backend_uploads:/app/uploads
     ports:
       - "3000:3000"
     depends_on:
@@ -39,7 +40,7 @@ services:
         condition: service_healthy
     networks:
       - corbicula_network
-    command: sh -c "npx prisma generate && npx prisma db push && npm run dev"
+    command: sh -c "npx prisma generate && npx prisma migrate deploy && npm run dev"
 
   # ─── Frontend React (Fase 1 — adicionar quando criado) ────────────────────────
   # frontend:
@@ -72,4 +73,5 @@ networks:
 volumes:
   postgres_data:
   backend_modules:
+  backend_uploads:
   # frontend_modules:

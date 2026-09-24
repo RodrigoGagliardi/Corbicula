@@ -14,6 +14,8 @@ const avaliacaoParametroSchema = z.object({
 });
 
 export const criarAvaliacaoSchema = z.object({
+  // Opcional: UUID gerado no cliente para registros criados offline (ver /sync).
+  id: z.uuid().optional(),
   dataAvaliacao: z.string().datetime({ message: "Data inválida (use formato ISO 8601)" }),
   duracaoMinutos: z.number().int().positive().nullable().optional(),
   temperatura: z.number().min(-20).max(60).nullable().optional(),

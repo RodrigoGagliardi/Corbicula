@@ -1,7 +1,11 @@
+import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcrypt";
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  adapter: new PrismaPg({ connectionString: process.env["DATABASE_URL"] ?? "" }),
+});
 
 function gerarCodigoKew(
   genero: string,
@@ -492,6 +496,8 @@ async function main() {
           nome: "Meliponário Demonstração",
           cidade: "Porto Alegre",
           estado: "RS",
+          latitude: -30.0346,
+          longitude: -51.2177,
           bioma: "Mata Atlântica",
         },
       },
@@ -516,11 +522,12 @@ async function main() {
     where: { codigo: "TETRANGU" },
   });
 
+  // Código segue o padrão do service (gerarCodigoColonia): [KEW]-[NNN]
   await prisma.colonia.upsert({
-    where: { userId_codigo: { userId: usuario.id, codigo: "JAT-001" } },
+    where: { userId_codigo: { userId: usuario.id, codigo: "TETRANGU-001" } },
     update: {},
     create: {
-      codigo: "JAT-001",
+      codigo: "TETRANGU-001",
       dataEntrada: new Date("2024-03-15"),
       origem: "compra",
       tipoCaixa: "INPA",
@@ -530,7 +537,7 @@ async function main() {
       especieId: jatai?.id ?? null,
     },
   });
-  console.log("  [OK] JAT-001 (Jataí)");
+  console.log("  [OK] TETRANGU-001 (Jataí)");
 
   console.log("Seed concluído.");
 }

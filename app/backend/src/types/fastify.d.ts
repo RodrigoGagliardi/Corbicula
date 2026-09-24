@@ -16,6 +16,8 @@ declare module "fastify" {
 declare module "fastify/types/request" {
   interface FastifyRequest {
     userId: string;
+    // Espelha a augmentation do @fastify/multipart (que só toca "fastify").
+    parts: import("fastify").FastifyRequest["parts"];
   }
 }
 

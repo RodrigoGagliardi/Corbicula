@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
+import { apagarArquivos, listarArquivosDe } from "../fotos/fotos.service";
 import { coloniasRepository, parsearDimensoes } from "./colonias.repository";
 import type { CriarColoniaInput, AtualizarColoniaInput, FiltrosColonia } from "./colonias.types";
 
@@ -82,6 +83,10 @@ export const coloniasService = {
       if (!mae) throw erroNaoEncontrado("Colônia mãe não encontrada ou não pertence ao usuário");
     }
 
+    if (data.id && (await coloniasRepository.existeId(data.id))) {
+      throw erroConflito("Já existe um registro com este id.");
+    }
+
     const codigo = await gerarCodigoColonia(userId, data.especieId);
 
     try {
@@ -126,6 +131,9 @@ export const coloniasService = {
       );
     }
 
+    // O cascade apaga as linhas de fotos/produções; os arquivos em disco saem aqui.
+    const arquivos = await listarArquivosDe({ coloniaId: id });
     await coloniasRepository.excluir(id, userId);
+    await apagarArquivos(arquivos);
   },
 };

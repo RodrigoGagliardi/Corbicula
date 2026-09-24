@@ -1,5 +1,6 @@
 import { prisma } from "../../config/database";
 import { enriquecerComClima } from "../../services/weather.service";
+import { apagarArquivos, listarArquivosDe } from "../fotos/fotos.service";
 import { avaliacoesRepository } from "./avaliacoes.repository";
 import type { CriarAvaliacaoInput, AtualizarAvaliacaoInput } from "./avaliacoes.types";
 
@@ -113,6 +114,10 @@ export const avaliacoesService = {
       userId
     );
 
+    if (data.id && (await avaliacoesRepository.existeId(data.id))) {
+      throw erroConflito("Já existe um registro com este id.");
+    }
+
     const { scoreGeral, statusGeral } = calcularScore(data.parametros);
     const avaliacao = await avaliacoesRepository.criar(coloniaId, scoreGeral, statusGeral, data);
 
@@ -161,6 +166,8 @@ export const avaliacoesService = {
     await validarPropriedadeColonia(coloniaId, userId);
     const existente = await avaliacoesRepository.buscarPorId(id, coloniaId);
     if (!existente) throw erroNaoEncontrado();
+    const arquivos = await listarArquivosDe({ avaliacaoId: id });
     await avaliacoesRepository.excluir(id, coloniaId);
+    await apagarArquivos(arquivos);
   },
 };

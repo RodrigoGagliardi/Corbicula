@@ -28,6 +28,7 @@ model User {
   meliponario Meliponario?
   colonias    Colonia[]
   parametros  Parametro[]
+  syncQueue   SyncQueue[]
 
   @@map("users")
 }
@@ -208,7 +209,9 @@ model Foto {
   tamanhoKb   Int?
   createdAt   DateTime @default(now())
 
-  // Relações (pode estar associada a colônia, avaliação ou parâmetro)
+  // Relações (pode estar associada a colônia, avaliação, parâmetro ou colheita).
+  // Regra de integridade (validada em fotos.service.ts, não no banco):
+  // pelo menos uma FK preenchida — nenhuma foto órfã.
   coloniaId String?  @db.Uuid
   colonia   Colonia? @relation(fields: [coloniaId], references: [id], onDelete: Cascade)
 
@@ -216,10 +219,16 @@ model Foto {
   avaliacao   Avaliacao? @relation(fields: [avaliacaoId], references: [id], onDelete: Cascade)
 
   avaliacaoParametroId String?  @db.Uuid
-  avaliacaoParametro   AvaliacaoParametro? @relation(fields: [avaliacaoParametroId], references: [id], onDelete: Cascade)
+  // SetNull: se o parâmetro sair da avaliação, a foto continua vinculada à avaliação.
+  avaliacaoParametro   AvaliacaoParametro? @relation(fields: [avaliacaoParametroId], references: [id], onDelete: SetNull)
+
+  producaoId String?   @db.Uuid
+  producao   Producao? @relation(fields: [producaoId], references: [id], onDelete: Cascade)
 
   @@index([coloniaId])
   @@index([avaliacaoId])
+  @@index([avaliacaoParametroId])
+  @@index([producaoId])
   @@map("fotos")
 }
 
@@ -228,9 +237,12 @@ model Foto {
 model Producao {
   id             String   @id @default(uuid()) @db.Uuid
   dataColheita   DateTime
-  volumeMl       Float    // Volume em mililitros
   tipoProduto    String   // mel, polen, propolis, cera
-  caracteristicas String? @db.Text // JSON:
+  // Mel é medido em volume; pólen/própolis/cera normalmente em massa.
+  // Unidades diferentes nunca são somadas entre si nos relatórios.
+  quantidade     Float
+  unidade        String   // ml, g
+  caracteristicas String? @db.Text // JSON: { cor, aroma, sabor }
   observacoes    String?  @db.Text
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -239,7 +251,10 @@ model Producao {
   coloniaId String  @db.Uuid
   colonia   Colonia @relation(fields: [coloniaId], references: [id], onDelete: Cascade)
 
+  fotos Foto[]
+
   @@index([coloniaId])
+  @@index([tipoProduto])
   @@index([dataColheita])
   @@map("producoes")
 }
@@ -270,18 +285,27 @@ model Especie {
 }
 
 // SINCRONIZAÇÃO OFFLINE
+// A fila "viva" fica no cliente (IndexedDB). Esta tabela é o registro, no
+// servidor, de cada operação recebida via POST /sync. O `id` é o UUID gerado
+// pelo cliente para a operação — reenviar a mesma operação é idempotente.
 
 model SyncQueue {
-  id          String   @id @default(uuid()) @db.Uuid
-  tipo        String   // avaliacao, colonia, producao
-  operacao    String   // create, update, delete
-  dados       String   @db.Text // JSON
-  tentativas  Int      @default(0)
-  ultimoErro  String?  @db.Text
-  sincronizado Boolean @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String   @id @db.Uuid
+  tipo         String   // colonia, avaliacao, producao
+  operacao     String   // create, update, delete
+  entidadeId   String?  @db.Uuid
+  dados        String   @db.Text // JSON (payload recebido)
+  resultado    String   // aplicado, conflito, erro
+  tentativas   Int      @default(1)
+  ultimoErro   String?  @db.Text
+  sincronizado Boolean  @default(false)
+  criadoNoCliente DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  @@index([sincronizado])
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, sincronizado])
   @@map("sync_queue")
 }

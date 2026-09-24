@@ -4,3 +4,6 @@ dist
 .env
 
 /src/generated/prisma
+
+# Fotos enviadas (volume Docker backend_uploads)
+uploads/

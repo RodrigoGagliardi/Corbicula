@@ -29,7 +29,7 @@ studio:
 
 # Roda o seed de espécies + usuário de teste
 seed:
-	docker compose exec backend npx ts-node prisma/seed.ts
+	docker compose exec backend npx prisma db seed
 
 # Abre shell no container do backend
 shell-backend:

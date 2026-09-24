@@ -55,6 +55,7 @@ export const avaliacoesRepository = {
   ) =>
     prisma.avaliacao.create({
       data: {
+        ...(data.id !== undefined && { id: data.id }),
         coloniaId,
         dataAvaliacao: new Date(data.dataAvaliacao),
         duracaoMinutos: data.duracaoMinutos ?? null,
@@ -70,9 +71,10 @@ export const avaliacoesRepository = {
       include: INCLUDE_COMPLETO,
     }),
 
-  // Quando `data.parametros` está presente, substitui todos os parâmetros via
-  // transação — deleteMany + create garante que o score reflita exatamente o
-  // conjunto enviado, sem resíduos da versão anterior.
+  // Quando `data.parametros` está presente, substitui o conjunto de parâmetros
+  // via transação: remove os que saíram e faz upsert dos enviados. O score
+  // reflete exatamente o conjunto enviado, e parâmetros mantidos preservam o
+  // id — e com ele as fotos vinculadas (fotos.avaliacaoParametroId).
   atualizar: async (
     id: string,
     scoreGeral: number,
@@ -92,16 +94,21 @@ export const avaliacoesRepository = {
     };
 
     if (data.parametros) {
+      const novos = serializarParametros(data.parametros);
       return prisma.$transaction(async (tx) => {
-        await tx.avaliacaoParametro.deleteMany({ where: { avaliacaoId: id } });
+        await tx.avaliacaoParametro.deleteMany({
+          where: { avaliacaoId: id, parametroId: { notIn: novos.map((p) => p.parametroId) } },
+        });
+        for (const { parametroId, ...campos } of novos) {
+          await tx.avaliacaoParametro.upsert({
+            where: { avaliacaoId_parametroId: { avaliacaoId: id, parametroId } },
+            update: campos,
+            create: { avaliacaoId: id, parametroId, ...campos },
+          });
+        }
         return tx.avaliacao.update({
           where: { id },
-          data: {
-            ...camposBase,
-            scoreGeral,
-            statusGeral,
-            parametros: { create: serializarParametros(data.parametros!) },
-          },
+          data: { ...camposBase, scoreGeral, statusGeral },
           include: INCLUDE_COMPLETO,
         });
       });
@@ -116,4 +123,6 @@ export const avaliacoesRepository = {
 
   excluir: (id: string, coloniaId: string) =>
     prisma.avaliacao.delete({ where: { id, coloniaId } }),
+
+  existeId: async (id: string) => (await prisma.avaliacao.count({ where: { id } })) > 0,
 };

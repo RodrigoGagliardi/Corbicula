@@ -16,6 +16,9 @@ export const swaggerOptions: FastifyDynamicSwaggerOptions = {
       { name: "parametros", description: "Parâmetros de avaliação" },
       { name: "especies", description: "Espécies (catálogo somente leitura)" },
       { name: "producao", description: "Produção e colheitas" },
+      { name: "fotos", description: "Fotos (sempre opcionais)" },
+      { name: "exportacao", description: "Exportação de dados (CSV/JSON) e backup" },
+      { name: "sync", description: "Sincronização offline" },
     ],
   },
 };
