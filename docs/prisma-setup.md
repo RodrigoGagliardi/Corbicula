@@ -107,6 +107,7 @@ model User {
   meliponario Meliponario?
   colonias    Colonia[]
   parametros  Parametro[]
+  syncQueue   SyncQueue[]
 
   @@map("users")
 }
@@ -264,25 +265,35 @@ model Foto {
   tamanhoKb Int?
   createdAt DateTime @default(now())
 
+  // Pelo menos uma FK preenchida — validado em fotos.service.ts (não no banco).
+  // O service deriva as FKs superiores, então coloniaId sempre fica preenchido.
   coloniaId String?  @db.Uuid
   colonia   Colonia? @relation(fields: [coloniaId], references: [id], onDelete: Cascade)
 
   avaliacaoId String?    @db.Uuid
   avaliacao   Avaliacao? @relation(fields: [avaliacaoId], references: [id], onDelete: Cascade)
 
+  // SetNull: se o parâmetro sair da avaliação, a foto continua vinculada à avaliação.
   avaliacaoParametroId String?             @db.Uuid
-  avaliacaoParametro   AvaliacaoParametro? @relation(fields: [avaliacaoParametroId], references: [id], onDelete: Cascade)
+  avaliacaoParametro   AvaliacaoParametro? @relation(fields: [avaliacaoParametroId], references: [id], onDelete: SetNull)
+
+  producaoId String?   @db.Uuid
+  producao   Producao? @relation(fields: [producaoId], references: [id], onDelete: Cascade)
 
   @@index([coloniaId])
   @@index([avaliacaoId])
+  @@index([avaliacaoParametroId])
+  @@index([producaoId])
   @@map("fotos")
 }
 
 model Producao {
   id              String   @id @default(uuid()) @db.Uuid
   dataColheita    DateTime
-  volumeMl        Float
   tipoProduto     String   // mel, polen, propolis, cera
+  // Mel em volume; pólen/própolis/cera em massa. Unidades diferentes nunca são somadas.
+  quantidade      Float
+  unidade         String   // ml, g
   caracteristicas String?  @db.Text // JSON: {cor, aroma, sabor}
   observacoes     String?  @db.Text
   createdAt       DateTime @default(now())
@@ -291,7 +302,10 @@ model Producao {
   coloniaId String  @db.Uuid
   colonia   Colonia @relation(fields: [coloniaId], references: [id], onDelete: Cascade)
 
+  fotos Foto[]
+
   @@index([coloniaId])
+  @@index([tipoProduto])
   @@index([dataColheita])
   @@map("producoes")
 }
@@ -319,18 +333,27 @@ model Especie {
   @@map("especies")
 }
 
+// Registro no servidor das operações recebidas via POST /sync. A fila "viva"
+// fica no IndexedDB do cliente. id = UUID da operação gerado no cliente →
+// reenviar a mesma operação é idempotente.
 model SyncQueue {
-  id           String   @id @default(uuid()) @db.Uuid
-  tipo         String   // avaliacao, colonia, producao
-  operacao     String   // create, update, delete
-  dados        String   @db.Text // JSON
-  tentativas   Int      @default(0)
-  ultimoErro   String?  @db.Text
-  sincronizado Boolean  @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id              String   @id @db.Uuid
+  tipo            String   // colonia, avaliacao, producao
+  operacao        String   // create, update, delete
+  entidadeId      String?  @db.Uuid
+  dados           String   @db.Text // JSON (payload recebido)
+  resultado       String   // aplicado, conflito, erro
+  tentativas      Int      @default(1)
+  ultimoErro      String?  @db.Text
+  sincronizado    Boolean  @default(false)
+  criadoNoCliente DateTime
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  @@index([sincronizado])
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, sincronizado])
   @@map("sync_queue")
 }
 ```
@@ -408,19 +431,27 @@ Já existe em `app/backend/src/config/database.ts`:
 
 ```typescript
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
+
+// Prisma v7: a conexão é feita por driver adapter (a URL não fica mais no schema).
+function criarClient(): PrismaClient {
+  return new PrismaClient({
+    adapter: new PrismaPg({ connectionString: process.env["DATABASE_URL"] ?? "" }),
+    log: process.env["NODE_ENV"] === "development" ? ["error", "warn"] : ["error"],
+  });
+}
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient | undefined };
 
-export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
-    log: process.env["NODE_ENV"] === "development" ? ["error", "warn"] : ["error"],
-  });
+export const prisma = globalForPrisma.prisma ?? criarClient();
 
 if (process.env["NODE_ENV"] !== "production") {
   globalForPrisma.prisma = prisma;
 }
 ```
+
+> **Prisma v7:** `new PrismaClient()` sem opções lança erro. É obrigatório passar
+> um driver adapter (`@prisma/adapter-pg`), tanto no app quanto no `seed.ts`.
 
 Importar em qualquer módulo com: `import { prisma } from "../../config/database";`
 
@@ -455,13 +486,18 @@ export const coloniasService = {
 
 ### **9. Criar Seed (Dados de Exemplo)**
 
-**Crie `app/backend/prisma/seed.ts`:**
+**`app/backend/prisma/seed.ts`** (versão resumida — o arquivo real tem as 19
+espécies, 5 parâmetros padrão e o meliponário com coordenadas):
 
 ```typescript
+import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcrypt";
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  adapter: new PrismaPg({ connectionString: process.env["DATABASE_URL"] ?? "" }),
+});
 
 async function main() {
   // ── Espécies (catálogo fixo — ver docs/especies.md para a lista completa) ──
@@ -481,10 +517,10 @@ async function main() {
 
   // ── Usuário de teste ────────────────────────────────────────────────────────
   const user = await prisma.user.upsert({
-    where: { email: "teste@corbicula.com" },
+    where: { email: "teste@corbicula.app" },
     update: {},
     create: {
-      email: "teste@corbicula.com",
+      email: "teste@corbicula.app",
       password: await bcrypt.hash("senha123", 10),
       name: "Usuário Teste",
       meliponario: {
@@ -524,21 +560,26 @@ main()
 > automaticamente** pelo service (`gerarCodigoColonia`). No seed, ele é inserido
 > diretamente porque não passa pelo service. Use o padrão `[KEW]-[NNN]`.
 
-**Configure no `package.json`:**
+**Configure em `prisma.config.ts`** (o Prisma v7 ignora a chave `prisma.seed` do `package.json`):
 
-```json
-// app/backend/package.json
-{
-  "prisma": {
-    "seed": "tsx prisma/seed.ts"
-  }
-}
+```typescript
+// app/backend/prisma.config.ts
+export default defineConfig({
+  schema: "prisma/schema.prisma",
+  migrations: {
+    path: "prisma/migrations",
+    seed: "tsx prisma/seed.ts",
+  },
+  datasource: { url: process.env["DATABASE_URL"]! },
+});
 ```
 
 **Execute o seed:**
 ```bash
-npx prisma db seed
+npx prisma db seed        # ou: make seed (dentro do container)
 ```
+
+Usuário de teste criado: `teste@corbicula.app` / `senha123`.
 
 ---
 

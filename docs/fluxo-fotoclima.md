@@ -136,8 +136,9 @@ inspeção = irreal). Novo padrão:
   de um "＋ adicionar foto" discreto (para o power user documentar uma
   praga específica, por exemplo)
 
-O schema atual (tabela `fotos` com 3 FKs opcionais) **já suporta ambos**
-sem alteração. É só uma decisão de interface, não de banco.
+O schema (tabela `fotos` com 4 FKs opcionais: colônia, avaliação, parâmetro
+avaliado e colheita) **suporta todos os casos**. É só uma decisão de interface,
+não de banco. A colheita (tela 26) também aceita 1 foto opcional via `producaoId`.
 
 ### Onde a foto aparece no fluxo de avaliação
 
@@ -166,6 +167,9 @@ Bibliotecas: `browser-image-compression` ou canvas nativo.
 No modo offline (PWA), a foto vai para a fila de sincronização
 (`sync_queue`) como blob no IndexedDB. Sobe quando houver conexão.
 O usuário não espera o upload terminar para continuar.
+Ordem ao reconectar: primeiro `POST /sync` (cria colônias/avaliações/colheitas
+com os UUIDs gerados no cliente); depois cada foto via `POST /fotos`
+referenciando esses mesmos UUIDs.
 
 **3. Câmera direto, sem sair do fluxo**
 No mobile, `<input type="file" accept="image/*" capture="environment">`
@@ -173,24 +177,33 @@ abre a câmera traseira direto. Um toque para fotografar, sem trocar de app.
 
 ### Regra de integridade da tabela fotos
 
-Como a foto pode referenciar colônia, avaliação OU parâmetro, garantir
-na aplicação (não no banco) que:
-- Toda foto tem **pelo menos uma** referência (não fica órfã)
+Como a foto pode referenciar colônia, avaliação, parâmetro avaliado OU colheita,
+`fotos.service.ts` garante (na aplicação, não no banco):
+- Toda foto tem **pelo menos uma** referência (não fica órfã) → senão 400
 - A referência é definida pelo contexto onde foi tirada
-  (foto no step 4 → avaliacao_id; foto num parâmetro → avaliacao_parametro_id)
-
-Isso é validação no `fotos.service.ts`, já que o design de 3 FKs
-opcionais não impede órfãs por si só.
+  (foto no step 4 → avaliacao_id; foto num parâmetro → avaliacao_parametro_id;
+  foto da colheita → producao_id)
+- As FKs superiores são **derivadas e conferidas**: avaliacao_parametro →
+  avaliacao → colonia; producao → colonia. `colonia_id` fica sempre preenchido
+  (galeria da colônia) e vínculos incoerentes ou de outro usuário são rejeitados
+- Uma foto não pode apontar para avaliação e colheita ao mesmo tempo
+- Se um parâmetro sair da avaliação (edição), a FK vira `NULL` e a foto continua
+  ligada à avaliação
 
 ### Armazenamento local (custo zero)
 
 Como o projeto roda em Docker local:
-- Fotos vão para um volume Docker (`uploads/`)
-- Caminho salvo no campo `fotos.url`
+- Fotos vão para o volume Docker `backend_uploads` (`/app/uploads/fotos/<uuid>.<ext>`)
+- Caminho público salvo em `fotos.url` (`/uploads/fotos/<uuid>.<ext>`), servido
+  estaticamente pelo backend; nome UUID aleatório, não adivinhável
+- Formatos aceitos: JPEG, PNG, WebP (HEIC deve ser convertido no cliente); limite
+  de 5 MB no servidor
+- Excluir foto, colônia, avaliação ou colheita remove também os arquivos do disco
 - Comprimidas, ocupam pouco espaço (200 KB × milhares = alguns GB)
 
-Se um dia for para nuvem, trocar o `upload.service` por S3/Cloudinary
-sem mexer no resto.
+Se um dia for para nuvem, trocar as funções de armazenamento em
+`fotos.service.ts` (`salvarArquivo`/`apagarArquivos`) por S3/Cloudinary sem
+mexer no resto.
 
 ---
 

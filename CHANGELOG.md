@@ -4,6 +4,35 @@ Todas as mudanças relevantes do projeto são documentadas aqui.
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 Versões seguem [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
+## [Não lançado]
+
+### Funcionalidades
+
+- **Fotos** — upload multipart em `/fotos` (JPEG/PNG/WebP, máx. 5 MB); vínculo com colônia, avaliação, parâmetro avaliado ou colheita; regra de integridade (nenhuma foto órfã) com derivação e conferência das FKs; arquivos servidos em `/uploads/fotos/` e removidos do disco quando o registro dono é excluído
+- **Produção** — CRUD de colheitas em `/producoes` com filtros (colônia, tipo, período); `/producoes/resumo` com totais, médias e ranking por (tipo, unidade) e por espécie — ml e g nunca são somados
+- **Exportação** — CSV (RFC 4180) e JSON com metadados e metodologia para colônias, avaliações (formato longo, uma linha por avaliação × parâmetro) e produções; backup completo em JSON (`/exportacao/backup`); dicionário de dados em `docs/exportacao.md`
+- **Sincronização offline** — `POST /sync` aplica lotes de operações idempotentes (create/update/delete de colônias, avaliações e produções) com detecção de conflito por `baseUpdatedAt`; `GET /sync/alteracoes` (pull incremental + `idsAtuais`); `GET /sync/status`
+- Creates de colônia, avaliação e produção aceitam `id` (UUID) gerado no cliente
+
+### Alterado
+
+- `Producao`: `volumeMl` substituído por `quantidade` + `unidade` (ml | g)
+- `Foto`: nova FK `producaoId`; FK para `AvaliacaoParametro` passa a `SetNull`
+- `SyncQueue`: passa a ser o registro das operações recebidas (com `userId`, `entidadeId`, `resultado`, `criadoNoCliente`)
+- Editar os parâmetros de uma avaliação faz upsert em vez de apagar e recriar, preservando as fotos vinculadas
+- Erros 4xx do Fastify/plugins (JSON malformado, arquivo grande demais) retornam o status correto em vez de 500
+- Seed: colônia de exemplo passa a usar o código `TETRANGU-001`; meliponário de teste com coordenadas
+- Docker: backend roda `prisma migrate deploy` ao subir (antes `db push`); porta do postgres no host configurável via `POSTGRES_PORT`; volume `backend_uploads`
+
+### Corrigido
+
+- `PrismaClient` não inicializava no Prisma v7 sem driver adapter — adicionado `@prisma/adapter-pg` no client e no seed
+- Comando de seed movido para `prisma.config.ts` (o Prisma v7 ignora a chave `prisma.seed` do `package.json`)
+
+### Removido
+
+- Arquivos mortos: `src/shared/logger.ts`, `src/experiments/`, `src/routes/`, `src/prisma/client.ts`
+
 ## [0.1.0] — 2026-09-14
 
 Primeira versão com backend MVP completo (Node.js + Fastify + Prisma v7).

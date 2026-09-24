@@ -9,7 +9,7 @@
 > de encerrar a tarefa. Se encontrar divergência entre este documento e o disco,
 > o disco é a verdade — corrija o documento para refletir o real.
 
-**Última sincronização:** backend com autenticação, CRUD de colônias, espécies, parâmetros (com ParametroEspecie), avaliações e serviço de clima implementados.
+**Última sincronização (24/09/2026):** backend do MVP completo — além dos módulos anteriores, fotos, produções, exportação e sincronização offline; migration `init` gerada.
 
 ---
 
@@ -38,6 +38,7 @@ CORBICULA/
 │   ├── telas.md
 │   ├── fluxo-fotoclima.md
 │   ├── efetividade.md
+│   ├── exportacao.md          # dicionário de dados e metodologia da exportação
 │   └── estrutura-pastas.md    # este arquivo
 └── app/
     ├── backend/               # Node.js + Fastify + Prisma  [EXISTE]
@@ -55,10 +56,11 @@ Arquitetura modular: cada domínio de negócio vive em `src/modules/<nome>/` com
 app/backend/
 ├── prisma/
 │   ├── schema.prisma          # 11 tabelas (ver docs/prisma-setup.md)
-│   └── migrations/            # geradas por prisma migrate
+│   ├── seed.ts                # 19 espécies + usuário de teste + parâmetros + colônia exemplo
+│   └── migrations/            # geradas por prisma migrate (<timestamp>_init/)
 ├── src/
 │   ├── config/
-│   │   ├── database.ts        # singleton do PrismaClient
+│   │   ├── database.ts        # singleton do PrismaClient (driver adapter @prisma/adapter-pg)
 │   │   └── swagger.ts         # opções do @fastify/swagger
 │   ├── modules/
 │   │   ├── auth/
@@ -82,35 +84,58 @@ app/backend/
 │   │   │   ├── parametros.service.ts
 │   │   │   ├── parametros.repository.ts  # inclui upsertCriterioEspecie
 │   │   │   └── parametros.types.ts
-│   │   └── avaliacoes/
-│   │       ├── avaliacoes.routes.ts   # montado em /:coloniaId/avaliacoes
-│   │       ├── avaliacoes.service.ts  # dispara enriquecerComClima após criar
-│   │       ├── avaliacoes.repository.ts
-│   │       └── avaliacoes.types.ts
+│   │   ├── avaliacoes/
+│   │   │   ├── avaliacoes.routes.ts   # montado em /:coloniaId/avaliacoes
+│   │   │   ├── avaliacoes.service.ts  # dispara enriquecerComClima após criar
+│   │   │   ├── avaliacoes.repository.ts  # upsert de parâmetros (preserva fotos vinculadas)
+│   │   │   └── avaliacoes.types.ts
+│   │   ├── fotos/
+│   │   │   ├── fotos.routes.ts        # upload multipart (/fotos)
+│   │   │   ├── fotos.service.ts       # regra de integridade das FKs + armazenamento em disco
+│   │   │   ├── fotos.repository.ts
+│   │   │   └── fotos.types.ts
+│   │   ├── producoes/
+│   │   │   ├── producoes.routes.ts    # /producoes e /producoes/resumo
+│   │   │   ├── producoes.service.ts   # totais/médias/ranking por (tipo, unidade)
+│   │   │   ├── producoes.repository.ts
+│   │   │   └── producoes.types.ts
+│   │   ├── exportacao/
+│   │   │   ├── exportacao.routes.ts   # /exportacao/{colonias,avaliacoes,producoes,backup}
+│   │   │   ├── exportacao.service.ts  # linhas tidy + metadados/metodologia
+│   │   │   ├── exportacao.types.ts
+│   │   │   └── csv.ts                 # serialização RFC 4180
+│   │   └── sync/
+│   │       ├── sync.routes.ts         # POST /sync, GET /sync/alteracoes, GET /sync/status
+│   │       ├── sync.service.ts        # aplica operações offline via services existentes
+│   │       └── sync.types.ts
 │   ├── services/
 │   │   └── weather.service.ts  # Open-Meteo: Forecast + Archive + cache + enrichment
 │   ├── shared/
-│   │   ├── env.ts              # variáveis de ambiente validadas
-│   │   ├── logger.ts
+│   │   ├── env.ts              # variáveis de ambiente (inclui UPLOADS_DIR)
+│   │   ├── errors.ts           # erros tipados (NOT_FOUND, CONFLICT, BAD_REQUEST)
+│   │   ├── json.ts             # parse tolerante de campos JSON-em-texto
 │   │   └── middleware/
 │   │       └── authenticate.ts # verifica JWT e injeta userId no request
 │   ├── types/
-│   │   └── fastify.d.ts        # augmentação de FastifyRequest (userId) e FastifySchema
-│   └── server.ts               # entry point: registra plugins e rotas
+│   │   └── fastify.d.ts        # augmentação de FastifyRequest (userId, parts) e FastifySchema
+│   └── server.ts               # entry point: registra plugins (cors, multipart, static) e rotas
+├── uploads/                    # fotos (volume Docker backend_uploads; ignorado no git)
 ├── node_modules/
 ├── Dockerfile
 ├── .dockerignore
 ├── .gitignore
 ├── package.json
-├── prisma.config.ts            # config do Prisma v7 (datasource URL, sem url no schema)
+├── prisma.config.ts            # config do Prisma v7 (datasource URL, migrations, comando de seed)
 └── tsconfig.json
 ```
 
 Notas:
 - O código da colônia é **auto-gerado** pelo serviço (`[KEW_CODIGO]-[NNN]`), nunca digitado pelo usuário.
 - `avaliacoesRoutes` é registrado como plugin filho dentro de `coloniasRoutes` para herdar o hook de autenticação.
-- `species.routes.ts` acessa o Prisma diretamente (sem camada de service/repository) por ser somente-leitura.
+- `especies.routes.ts` acessa o Prisma diretamente (sem camada de service/repository) por ser somente-leitura.
 - `weather.service.ts` implementa a integração Open-Meteo com cache em memória (ver `docs/fluxo-fotoclima.md`).
+- Fotos são servidas estaticamente em `/uploads/fotos/<uuid>.<ext>`; excluir foto/colônia/avaliação/colheita remove também os arquivos.
+- `sync` não duplica regras: cada operação offline é aplicada pelos mesmos services da API REST.
 
 ---
 
@@ -200,3 +225,10 @@ Notas:
   a necessidade dessas pastas separadas. Schema Prisma expandido para 11 tabelas (adicionada
   `ParametroEspecie`). `especies.routes.ts` opera diretamente sobre o Prisma sem
   service/repository por ser catálogo somente-leitura.
+
+- **[2026-09-24 — pauta 2 do backend]** — Criados os módulos `src/modules/fotos/`,
+  `producoes/`, `exportacao/` e `sync/`; `src/shared/errors.ts` e `src/shared/json.ts`;
+  migration `prisma/migrations/<timestamp>_init/`; pasta `uploads/` (volume Docker
+  `backend_uploads`). Removidos arquivos mortos: `src/shared/logger.ts` (vazio),
+  `src/experiments/` (README vazio), `src/routes/` (pasta vazia) e `src/prisma/client.ts`
+  (reexport sem uso). Adicionado `docs/exportacao.md`.
