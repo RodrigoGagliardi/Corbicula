@@ -26,6 +26,16 @@ export const authService = {
         name: data.name,
         email: data.email,
         password: senhaHash,
+        ...(data.meliponario && {
+          meliponario: {
+            create: {
+              nome: data.meliponario.nome,
+              cidade: data.meliponario.cidade ?? null,
+              estado: data.meliponario.estado ?? null,
+              bioma: data.meliponario.bioma ?? null,
+            },
+          },
+        }),
       },
       include: { meliponario: true },
     });
