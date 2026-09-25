@@ -4,13 +4,13 @@ O Projeto Corbicula tem como principal objetivo a coleta e análise de dados de 
 
 Voltado a abelhas sem ferrão (Meliponini), o sistema permite avaliações personalizáveis de saúde das colônias, controle genético de linhagens (relação mãe/filha em divisões), análise de horários e dias de atividade, cálculo de velocidade de postura e estimativa de idade da rainha. Funciona offline (PWA) e enriquece cada inspeção com dados climáticos automáticos a partir das coordenadas da colônia.
 
-## 🚀 Começando
+## Começando
 
 Essas instruções permitirão que você obtenha uma cópia do projeto em operação na sua máquina local para fins de desenvolvimento e teste.
 
 Consulte **[Implantação](#-implantação)** para saber como implantar o projeto.
 
-### 📋 Pré-requisitos
+### Pré-requisitos
 
 O projeto roda inteiramente em containers, então você só precisa do Docker instalado. Git é necessário para clonar o repositório.
 
@@ -34,7 +34,7 @@ docker compose version
 git --version
 ```
 
-### 🔧 Instalação
+### Instalação
 
 Uma série de exemplos passo-a-passo que informam o que você deve executar para ter um ambiente de desenvolvimento em execução.
 
@@ -96,7 +96,7 @@ Senha:  senha123
 
 A partir daí você pode cadastrar uma colônia, definir seus parâmetros de avaliação e registrar a primeira inspeção — o clima do momento é preenchido automaticamente pela API a partir das coordenadas informadas.
 
-## ⚙️ Executando os testes
+## Executando os testes
 
 Os testes são separados por serviço: o backend Node.js usa Jest, o microsserviço Python usa pytest e o frontend usa Vitest. Todos podem ser executados dentro dos respectivos containers.
 
@@ -106,7 +106,7 @@ docker compose exec analytics pytest
 docker compose exec frontend npm test
 ```
 
-### 🔩 Analise os testes de ponta a ponta
+### Analise os testes de ponta a ponta
 
 Os testes de integração verificam os fluxos completos da aplicação: autenticação, criação de colônias, registro de avaliações com cálculo automático de score, e a comunicação entre o backend Node.js e o microsserviço Python de análise. Servem para garantir que uma mudança em um serviço não quebre o contrato entre eles.
 
@@ -116,7 +116,7 @@ docker compose exec backend npm run test:integration
 
 Esses testes sobem um banco de testes isolado, simulam requisições HTTP às rotas e conferem se os dados persistem corretamente e se as respostas seguem o formato esperado.
 
-### ⌨️ E testes de estilo de codificação
+### E testes de estilo de codificação
 
 O padrão de código é garantido por ESLint e Prettier (TypeScript) e por Black e Ruff (Python). Eles verificam formatação consistente, ausência de código morto e aderência às convenções do projeto, mantendo a base legível para colaboradores.
 
@@ -126,7 +126,7 @@ docker compose exec frontend npm run lint
 docker compose exec analytics black --check . && ruff check .
 ```
 
-## 🛠️ Construído com
+## Construído com
 
 Mencione as ferramentas que você usou para criar seu projeto
 
@@ -140,11 +140,11 @@ Mencione as ferramentas que você usou para criar seu projeto
 * [Docker](https://www.docker.com/) - Containerização e ambiente de desenvolvimento
 * [Open-Meteo](https://open-meteo.com/) - Dados meteorológicos (CC BY 4.0)
 
-## 📌 Versão
+## Versão
 
 Nós usamos [SemVer](http://semver.org/) para controle de versão. Para as versões disponíveis, observe as [tags neste repositório](https://github.com/RodrigoGagliardi/Corbicula/tags).
 
-## 📄 Licença
+## Licença
 
 Este projeto está sob a licença Apache License 2.0 - veja o arquivo [LICENSE](https://github.com/RodrigoGagliardi/Corbicula/blob/main/LICENSE) para detalhes.
 
