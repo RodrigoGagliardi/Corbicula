@@ -13,6 +13,8 @@ Versões seguem [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **Exportação** — CSV (RFC 4180) e JSON com metadados e metodologia para colônias, avaliações (formato longo, uma linha por avaliação × parâmetro) e produções; backup completo em JSON (`/exportacao/backup`); dicionário de dados em `docs/exportacao.md`
 - **Sincronização offline** — `POST /sync` aplica lotes de operações idempotentes (create/update/delete de colônias, avaliações e produções) com detecção de conflito por `baseUpdatedAt`; `GET /sync/alteracoes` (pull incremental + `idsAtuais`); `GET /sync/status`
 - Creates de colônia, avaliação e produção aceitam `id` (UUID) gerado no cliente
+- **Testes automatizados** — suíte Vitest com 114 testes: unitários (score, CSV RFC 4180, clima com fetch mockado) e de integração via `app.inject` (auth, colônias, avaliações, fotos, produção, exportação, sync) contra um banco Postgres de teste separado; `npm test`, `npm run typecheck`, `make test`
+- **CI** — GitHub Actions roda typecheck e testes do backend em push/PR
 
 ### Alterado
 
@@ -24,7 +26,12 @@ Versões seguem [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - Seed: colônia de exemplo passa a usar o código `TETRANGU-001`; meliponário de teste com coordenadas
 - Docker: backend roda `prisma migrate deploy` ao subir (antes `db push`); porta do postgres no host configurável via `POSTGRES_PORT`; volume `backend_uploads`
 
+- `src/server.ts` dividido: montagem da aplicação em `src/app.ts` (`buildApp()`), reutilizada pelos testes
+- Enviar mais de uma foto por requisição retorna 413 (limite do multipart); removida checagem redundante que nunca era alcançada
+
 ### Corrigido
+
+- `POST /auth/register` ignorava o campo opcional `meliponario` — agora o meliponário é criado junto com o usuário
 
 - `PrismaClient` não inicializava no Prisma v7 sem driver adapter — adicionado `@prisma/adapter-pg` no client e no seed
 - Comando de seed movido para `prisma.config.ts` (o Prisma v7 ignora a chave `prisma.seed` do `package.json`)

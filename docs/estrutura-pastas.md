@@ -9,7 +9,7 @@
 > de encerrar a tarefa. Se encontrar divergência entre este documento e o disco,
 > o disco é a verdade — corrija o documento para refletir o real.
 
-**Última sincronização (24/09/2026):** backend do MVP completo — além dos módulos anteriores, fotos, produções, exportação e sincronização offline; migration `init` gerada.
+**Última sincronização (25/09/2026):** backend do MVP completo (inclui fotos, produções, exportação e sync offline) com suíte de testes automatizados (Vitest) e CI no GitHub Actions.
 
 ---
 
@@ -21,6 +21,9 @@ orquestração, licença e contexto ficam na raiz.
 ```
 CORBICULA/
 ├── .claude/                   # config do Claude Code
+├── .github/
+│   └── workflows/
+│       └── backend-tests.yml  # CI: typecheck + testes do backend (Postgres como service)
 ├── claude.md                  # contexto vivo do projeto (lido pelo Claude Code)
 ├── handoff_doc.md             # registro histórico de contexto (legado)
 ├── README.md
@@ -118,7 +121,16 @@ app/backend/
 │   │       └── authenticate.ts # verifica JWT e injeta userId no request
 │   ├── types/
 │   │   └── fastify.d.ts        # augmentação de FastifyRequest (userId, parts) e FastifySchema
-│   └── server.ts               # entry point: registra plugins (cors, multipart, static) e rotas
+│   ├── app.ts                  # buildApp(): registra plugins (cors, multipart, static) e rotas
+│   └── server.ts               # entry point: buildApp() + listen
+├── tests/
+│   ├── setup/
+│   │   ├── test-env.mts        # URL do banco <nome>_test e pasta de uploads temporária
+│   │   └── global-setup.ts     # recria o banco de teste (migrate reset + seed) antes da suíte
+│   ├── unit/                   # score, CSV, clima (fetch mockado)
+│   ├── integration/            # API via app.inject: auth, colonias, avaliacoes, fotos,
+│   │                           # producoes, exportacao, sync
+│   └── helpers.ts              # cliente autenticado, fábricas de dados, multipart
 ├── uploads/                    # fotos (volume Docker backend_uploads; ignorado no git)
 ├── node_modules/
 ├── Dockerfile
@@ -126,7 +138,9 @@ app/backend/
 ├── .gitignore
 ├── package.json
 ├── prisma.config.ts            # config do Prisma v7 (datasource URL, migrations, comando de seed)
-└── tsconfig.json
+├── vitest.config.mts           # Vitest: env de teste, globalSetup
+├── tsconfig.json               # build (src + prisma)
+└── tsconfig.test.json          # typecheck incluindo tests/ (npm run typecheck)
 ```
 
 Notas:
@@ -136,6 +150,7 @@ Notas:
 - `weather.service.ts` implementa a integração Open-Meteo com cache em memória (ver `docs/fluxo-fotoclima.md`).
 - Fotos são servidas estaticamente em `/uploads/fotos/<uuid>.<ext>`; excluir foto/colônia/avaliação/colheita remove também os arquivos.
 - `sync` não duplica regras: cada operação offline é aplicada pelos mesmos services da API REST.
+- Testes: `npm test` (ou `make test` no container). Usam um banco separado (`<DATABASE_URL>_test`), recriado a cada execução, e nunca tocam o banco de desenvolvimento. Cada arquivo cria seus próprios usuários, o que isola os dados entre arquivos. A Open-Meteo nunca é chamada nos testes.
 
 ---
 
@@ -232,3 +247,8 @@ Notas:
   `backend_uploads`). Removidos arquivos mortos: `src/shared/logger.ts` (vazio),
   `src/experiments/` (README vazio), `src/routes/` (pasta vazia) e `src/prisma/client.ts`
   (reexport sem uso). Adicionado `docs/exportacao.md`.
+
+- **[2026-09-25 — testes automatizados]** — Criados `tests/` (unit, integration, setup,
+  helpers), `vitest.config.mts`, `tsconfig.test.json` e `.github/workflows/backend-tests.yml`.
+  `src/server.ts` dividido: a montagem da aplicação foi para `src/app.ts` (`buildApp()`),
+  usada pelos testes via `app.inject`. `tsconfig.json` passou a incluir só `src/` e `prisma/`.
