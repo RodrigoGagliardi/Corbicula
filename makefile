@@ -1,4 +1,4 @@
-.PHONY: up down restart build logs shell-backend shell-db migrate db-push seed reset
+.PHONY: up down restart build logs shell-backend shell-db migrate db-push seed reset test
 
 up:
 	docker compose up -d
@@ -43,3 +43,7 @@ shell-db:
 reset:
 	docker compose down -v
 	docker compose up -d
+
+# Roda a suíte de testes do backend (usa o banco corbicula_db_test, recriado a cada execução)
+test:
+	docker compose exec backend npm test

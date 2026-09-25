@@ -1,0 +1,48 @@
+name: Backend — testes
+
+on:
+  push:
+    branches: [main, development]
+    paths: ["app/backend/**", ".github/workflows/backend-tests.yml"]
+  pull_request:
+    paths: ["app/backend/**", ".github/workflows/backend-tests.yml"]
+
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: corbicula
+          POSTGRES_PASSWORD: corbicula123
+          POSTGRES_DB: corbicula_db
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U corbicula -d corbicula_db"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    defaults:
+      run:
+        working-directory: app/backend
+
+    env:
+      # Os testes derivam o banco corbicula_db_test a partir desta URL.
+      DATABASE_URL: postgresql://corbicula:corbicula123@localhost:5432/corbicula_db
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: app/backend/package-lock.json
+
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run typecheck
+      - run: npm test
