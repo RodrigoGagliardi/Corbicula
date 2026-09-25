@@ -140,10 +140,6 @@ Mencione as ferramentas que você usou para criar seu projeto
 * [Docker](https://www.docker.com/) - Containerização e ambiente de desenvolvimento
 * [Open-Meteo](https://open-meteo.com/) - Dados meteorológicos (CC BY 4.0)
 
-## Versão
-
-Nós usamos [SemVer](http://semver.org/) para controle de versão. Para as versões disponíveis, observe as [tags neste repositório](https://github.com/RodrigoGagliardi/Corbicula/tags).
-
 ## Licença
 
 Este projeto está sob a licença Apache License 2.0 - veja o arquivo [LICENSE](https://github.com/RodrigoGagliardi/Corbicula/blob/main/LICENSE) para detalhes.
