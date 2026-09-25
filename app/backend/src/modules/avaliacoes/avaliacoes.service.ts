@@ -26,7 +26,7 @@ function erroConflito(msg: string): Error {
 // Fórmula: (qtd_BOM × 100 + qtd_MEDIO × 50 + qtd_RUIM × 0) / total_parametros
 // 80–100 = excelente | 60–79 = boa | 40–59 = atencao | 0–39 = critica
 
-function calcularScore(parametros: { classificacao: string }[]): {
+export function calcularScore(parametros: { classificacao: string }[]): {
   scoreGeral: number;
   statusGeral: string;
 } {

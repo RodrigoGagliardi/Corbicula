@@ -11,15 +11,14 @@ import {
 } from "./fotos.types";
 
 // Lê o multipart independentemente da ordem das partes: campos de texto viram
-// objeto; o (único) arquivo é lido para memória — o limite de tamanho é
-// aplicado pelo @fastify/multipart (413 se exceder).
+// objeto; o (único) arquivo é lido para memória. Os limites — 1 arquivo por
+// requisição e tamanho máximo — são aplicados pelo @fastify/multipart (413).
 async function lerMultipart(request: FastifyRequest) {
   const campos: Record<string, string> = {};
   let arquivo: ArquivoFoto | undefined;
 
   for await (const parte of request.parts()) {
     if (parte.type === "file") {
-      if (arquivo) throw erroRequisicao("Envie apenas uma foto por requisição.");
       arquivo = { buffer: await parte.toBuffer(), mimetype: parte.mimetype };
     } else if (typeof parte.value === "string" && parte.value !== "") {
       campos[parte.fieldname] = parte.value;
