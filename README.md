@@ -11,7 +11,7 @@ Voltado a abelhas sem ferrão (Meliponini), o sistema permite avaliações perso
 | Parte | Estado |
 |-------|--------|
 | **Backend** (Node.js + Fastify + Prisma) | ✅ MVP completo, com testes automatizados e CI |
-| **Frontend** (React + Vite + PWA) | 🚧 Em desenvolvimento |
+| **Frontend** (React + Vite + PWA) | 🚧 Primeiras telas do MVP prontas; modo offline ainda não implementado |
 | **Analytics** (Python + FastAPI) | 📋 Planejado (Fase 2): análises, correlações, genealogia |
 
 O que o backend já faz:
@@ -23,6 +23,17 @@ O que o backend já faz:
 - **Produção** — registro de colheitas (mel, pólen, própolis, cera) com resumo e ranking por colônia e espécie
 - **Exportação** — CSV e JSON com dicionário de dados e metodologia documentados, além de backup completo
 - **Sincronização offline** — API de sync idempotente, com detecção de conflitos, pronta para o PWA
+
+O que o frontend já tem:
+
+- **Acesso** — landing, login e cadastro
+- **Dashboard** — visão geral das colônias e do score
+- **Colônias** — lista, detalhes, cadastro e edição
+- **Avaliação rápida** — fluxo mobile-first de Bom/Médio/Ruim, com foto-resumo opcional
+- **Parâmetros** — lista, criação e edição dos critérios de avaliação
+- **Layout responsivo** — sidebar no desktop e barra de navegação inferior no mobile, com a mesma base de código; instalável como PWA
+
+A fila de sincronização offline no cliente (IndexedDB + `/sync`) e as telas de produção, análises e exportação ainda estão por vir.
 
 ## Começando
 
@@ -80,6 +91,7 @@ docker compose exec backend npx prisma db seed
 Ao finalizar, os serviços estarão disponíveis em:
 
 ```
+Frontend (app):        http://localhost:5173
 Backend (API):         http://localhost:3000
 Documentação da API:   http://localhost:3000/api-docs
 PostgreSQL:            localhost:5432 (ou a porta definida em POSTGRES_PORT)
@@ -92,7 +104,7 @@ E-mail: teste@corbicula.app
 Senha:  senha123
 ```
 
-Pela documentação interativa (Swagger), faça login em `POST /auth/login`, clique em **Authorize** e cole o token. A partir daí dá para cadastrar colônias, registrar avaliações e exportar os dados. O clima de cada inspeção é preenchido automaticamente em segundo plano.
+Abra `http://localhost:5173` e entre com esse usuário para usar o app. Para explorar a API diretamente, use a documentação interativa (Swagger): faça login em `POST /auth/login`, clique em **Authorize** e cole o token. A partir daí dá para cadastrar colônias, registrar avaliações e exportar os dados. O clima de cada inspeção é preenchido automaticamente em segundo plano.
 
 ### Atalhos do makefile
 
@@ -124,6 +136,13 @@ docker compose exec backend npm run typecheck
 
 Os dois rodam automaticamente no GitHub Actions a cada push e pull request que altere o backend.
 
+No frontend, o typecheck e o build de produção rodam assim:
+
+```
+docker compose exec frontend npm run typecheck
+docker compose exec frontend npm run build
+```
+
 ## Dados e metodologia
 
 O Corbicula nasceu com propósito acadêmico, e por isso a exportação de dados e a transparência da metodologia fazem parte do projeto:
@@ -153,7 +172,11 @@ O Corbicula nasceu com propósito acadêmico, e por isso a exportação de dados
 * [PostgreSQL](https://www.postgresql.org/) - Banco de dados relacional
 * [Zod](https://zod.dev/) - Validação de dados
 * [Vitest](https://vitest.dev/) - Testes automatizados
-* [React](https://react.dev/) + [TypeScript](https://www.typescriptlang.org/) + [Vite](https://vitejs.dev/) - Interface e PWA (em desenvolvimento)
+* [React](https://react.dev/) + [TypeScript](https://www.typescriptlang.org/) + [Vite](https://vitejs.dev/) - Interface do app
+* [vite-plugin-pwa](https://vite-pwa-org.netlify.app/) - Service Worker e instalação como PWA
+* [Tailwind CSS](https://tailwindcss.com/) - Estilos
+* [TanStack Query](https://tanstack.com/query) + [Zustand](https://zustand.docs.pmnd.rs/) - Dados do servidor e estado local
+* [React Router](https://reactrouter.com/) - Rotas
 * [FastAPI](https://fastapi.tiangolo.com/) + [pandas](https://pandas.pydata.org/) / [scikit-learn](https://scikit-learn.org/) - Microsserviço de análise (Fase 2)
 * [Docker](https://www.docker.com/) - Containerização e ambiente de desenvolvimento
 * [Open-Meteo](https://open-meteo.com/) - Dados meteorológicos ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/))
