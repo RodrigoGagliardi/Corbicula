@@ -1,0 +1,42 @@
+@import "tailwindcss";
+
+/* Paleta "mel": âmbar para ações, marrom-cera para texto/estrutura.
+   Cores de status seguem as faixas do score (docs/exportacao.md). */
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  --color-mel-50: #fffbeb;
+  --color-mel-100: #fef3c7;
+  --color-mel-200: #fde68a;
+  --color-mel-300: #fcd34d;
+  --color-mel-400: #fbbf24;
+  --color-mel-500: #f59e0b;
+  --color-mel-600: #d97706;
+  --color-mel-700: #b45309;
+  --color-mel-800: #92400e;
+  --color-mel-900: #78350f;
+  --color-mel-950: #451a03;
+
+  --color-excelente: #15803d;
+  --color-boa: #65a30d;
+  --color-atencao: #d97706;
+  --color-critica: #dc2626;
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  @apply bg-stone-50 text-stone-900 antialiased;
+}
+
+/* Espaço para a barra inferior do mobile + área segura do iPhone */
+.pb-nav {
+  padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
+}
+@media (min-width: 768px) {
+  .pb-nav {
+    padding-bottom: 0;
+  }
+}
