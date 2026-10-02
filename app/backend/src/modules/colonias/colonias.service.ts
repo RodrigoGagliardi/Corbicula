@@ -56,11 +56,15 @@ async function gerarCodigoColonia(userId: string, especieId?: string | null): Pr
 
 // ─── Mapper de saída ──────────────────────────────────────────────────────────
 
-function mapearSaida<T extends { dimensoesCaixa: string | null }>(
-  colonia: T
-): Omit<T, "dimensoesCaixa"> & { dimensoesCaixa: ReturnType<typeof parsearDimensoes> } {
-  const { dimensoesCaixa, ...resto } = colonia;
-  return { ...resto, dimensoesCaixa: parsearDimensoes(dimensoesCaixa) };
+// `avaliacoes` vem do banco como lista com no máximo 1 item (a mais recente);
+// sai como `ultimaAvaliacao` (objeto ou null).
+function mapearSaida<T extends { dimensoesCaixa: string | null; avaliacoes: unknown[] }>(colonia: T) {
+  const { dimensoesCaixa, avaliacoes, ...resto } = colonia;
+  return {
+    ...resto,
+    dimensoesCaixa: parsearDimensoes(dimensoesCaixa),
+    ultimaAvaliacao: (avaliacoes[0] ?? null) as T["avaliacoes"][number] | null,
+  };
 }
 
 // ─── Service ──────────────────────────────────────────────────────────────────

@@ -139,6 +139,26 @@ describe("colônias — CRUD e regras", () => {
     expect((await api.get(`/colonias/${c.id}`)).status).toBe(200);
   });
 
+  it("traz a avaliação mais recente (por data da inspeção) como ultimaAvaliacao", async () => {
+    const { api } = await novoUsuario(app);
+    const [p] = await criarParametros(api, 1);
+    const c = await criarColonia(api);
+    expect(c.ultimaAvaliacao).toBeNull();
+
+    await criarAvaliacao(api, c.id, [{ parametroId: p!, classificacao: "ruim" }], {
+      dataAvaliacao: "2026-03-01T10:00:00.000Z",
+    });
+    // registrada depois, mas com data de inspeção anterior
+    await criarAvaliacao(api, c.id, [{ parametroId: p!, classificacao: "bom" }], {
+      dataAvaliacao: "2026-02-01T10:00:00.000Z",
+    });
+
+    const esperado = { dataAvaliacao: "2026-03-01T10:00:00.000Z", scoreGeral: 0, statusGeral: "critica" };
+    expect((await api.get(`/colonias/${c.id}`)).body.ultimaAvaliacao).toMatchObject(esperado);
+    expect((await api.get("/colonias")).body[0].ultimaAvaliacao).toMatchObject(esperado);
+    expect((await api.get("/colonias")).body[0]).not.toHaveProperty("avaliacoes");
+  });
+
   it("aceita id gerado no cliente e recusa id repetido (409)", async () => {
     const { api } = await novoUsuario(app);
     const id = randomUUID();

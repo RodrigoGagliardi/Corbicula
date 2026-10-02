@@ -3,10 +3,18 @@ import type { CriarColoniaInput, AtualizarColoniaInput, DimensoesCaixa, FiltrosC
 
 // ─── Includes reutilizáveis ───────────────────────────────────────────────────
 
+// Avaliação mais recente — alimenta score atual e "dias desde a última inspeção".
+const ULTIMA_AVALIACAO = {
+  select: { id: true, dataAvaliacao: true, scoreGeral: true, statusGeral: true },
+  orderBy: { dataAvaliacao: "desc" as const },
+  take: 1,
+};
+
 const INCLUDE_BASICO = {
   especie: {
     select: { codigo: true, nomePopular: true, nomeCientifico: true },
   },
+  avaliacoes: ULTIMA_AVALIACAO,
   _count: {
     select: { avaliacoes: true, producoes: true },
   },
@@ -16,6 +24,7 @@ const INCLUDE_DETALHADO = {
   especie: {
     select: { codigo: true, nomePopular: true, nomeCientifico: true, caracteristicas: true },
   },
+  avaliacoes: ULTIMA_AVALIACAO,
   coloniaMae: {
     select: { id: true, codigo: true },
   },
