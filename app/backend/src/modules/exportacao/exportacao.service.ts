@@ -54,7 +54,8 @@ export const COLUNAS_COLONIAS = [
   "colonia_id", "codigo", "status", "especie_codigo", "especie_nome_cientifico",
   "especie_nome_popular", "data_entrada", "origem", "tipo_caixa", "caixa_altura",
   "caixa_largura", "caixa_profundidade", "localizacao", "latitude", "longitude",
-  "colonia_mae_id", "colonia_mae_codigo", "n_avaliacoes", "n_producoes", "observacoes",
+  "colonia_mae_id", "colonia_mae_codigo", "colonia_doadora_campeiras_id",
+  "colonia_doadora_campeiras_codigo", "n_avaliacoes", "n_producoes", "observacoes",
   "registrado_em", "atualizado_em",
 ] as const;
 
@@ -64,6 +65,7 @@ async function linhasColonias(userId: string, f: ExportarColoniasInput): Promise
     include: {
       especie: { select: { codigo: true, nomeCientifico: true, nomePopular: true } },
       coloniaMae: { select: { codigo: true } },
+      coloniaDoadoraCampeiras: { select: { codigo: true } },
       _count: { select: { avaliacoes: true, producoes: true } },
     },
     orderBy: { codigo: "asc" },
@@ -89,6 +91,8 @@ async function linhasColonias(userId: string, f: ExportarColoniasInput): Promise
       longitude: c.longitude,
       colonia_mae_id: c.coloniaMaeId,
       colonia_mae_codigo: c.coloniaMae?.codigo,
+      colonia_doadora_campeiras_id: c.coloniaDoadoraCampeirasId,
+      colonia_doadora_campeiras_codigo: c.coloniaDoadoraCampeiras?.codigo,
       n_avaliacoes: c._count.avaliacoes,
       n_producoes: c._count.producoes,
       observacoes: c.observacoes,

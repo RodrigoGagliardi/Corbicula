@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { avaliacoesApi, coloniasApi, especiesApi, fotosApi, parametrosApi } from "../services/api/endpoints";
+import { avaliacoesApi, coloniasApi, especiesApi, fotosApi, parametrosApi, producoesApi } from "../services/api/endpoints";
+import type { FiltrosProducao } from "../types/api";
 
 // Chaves de cache centralizadas — usadas também para invalidar após mutações.
 export const chaves = {
@@ -10,6 +11,10 @@ export const chaves = {
   parametros: ["parametros"] as const,
   especies: ["especies"] as const,
   fotos: (filtro: object) => ["fotos", filtro] as const,
+  producoes: ["producoes"] as const,
+  listaProducoes: (filtros: FiltrosProducao) => ["producoes", "lista", filtros] as const,
+  resumoProducao: (filtros: FiltrosProducao) => ["producoes", "resumo", filtros] as const,
+  producao: (id: string) => ["producoes", id] as const,
 };
 
 export const useColonias = () => useQuery({ queryKey: chaves.colonias, queryFn: coloniasApi.listar });
@@ -33,5 +38,14 @@ export const useParametros = () => useQuery({ queryKey: chaves.parametros, query
 export const useEspecies = () =>
   useQuery({ queryKey: chaves.especies, queryFn: especiesApi.listar, staleTime: Infinity });
 
-export const useFotos = (filtro: { coloniaId?: string; avaliacaoId?: string }) =>
+export const useFotos = (filtro: { coloniaId?: string; avaliacaoId?: string; producaoId?: string }) =>
   useQuery({ queryKey: chaves.fotos(filtro), queryFn: () => fotosApi.listar(filtro) });
+
+export const useProducoes = (filtros: FiltrosProducao = {}) =>
+  useQuery({ queryKey: chaves.listaProducoes(filtros), queryFn: () => producoesApi.listar(filtros) });
+
+export const useResumoProducao = (filtros: FiltrosProducao = {}) =>
+  useQuery({ queryKey: chaves.resumoProducao(filtros), queryFn: () => producoesApi.resumo(filtros) });
+
+export const useProducao = (id: string) =>
+  useQuery({ queryKey: chaves.producao(id), queryFn: () => producoesApi.buscar(id), enabled: Boolean(id) });

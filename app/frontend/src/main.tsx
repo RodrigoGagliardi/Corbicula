@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { RouterProvider } from "react-router";
 import { ErroApi } from "./services/api/client";
 import { router } from "./router";
+import { aplicarTema } from "./store/preferencias";
 import "./index.css";
 
 const queryClient = new QueryClient({
@@ -16,6 +17,8 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+aplicarTema();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

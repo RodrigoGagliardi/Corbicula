@@ -20,22 +20,22 @@ export function GraficoScore({ avaliacoes }: { avaliacoes: AvaliacaoLista[] }) {
         {/* faixas de status: 80 excelente, 60 boa, 40 atenção */}
         {[80, 60, 40].map((v) => (
           <g key={v}>
-            <line x1={M.esq} x2={L - M.dir} y1={y(v)} y2={y(v)} stroke="#e7e5e4" strokeDasharray="4 4" />
-            <text x={M.esq - 6} y={y(v) + 4} textAnchor="end" fontSize="11" fill="#a8a29e">
+            <line x1={M.esq} x2={L - M.dir} y1={y(v)} y2={y(v)} className="stroke-border" strokeDasharray="4 4" />
+            <text x={M.esq - 6} y={y(v) + 4} textAnchor="end" fontSize="11" className="fill-muted-foreground">
               {v}
             </text>
           </g>
         ))}
-        <path d={caminho} fill="none" stroke="#b45309" strokeWidth="2.5" strokeLinejoin="round" />
+        <path d={caminho} fill="none" className="stroke-chart-1" strokeWidth="2.5" strokeLinejoin="round" />
         {pontos.map((p, i) => (
-          <circle key={p.id} cx={x(i)} cy={y(p.scoreGeral)} r="4" fill="#b45309">
+          <circle key={p.id} cx={x(i)} cy={y(p.scoreGeral)} r="5" className="fill-chart-2 stroke-foreground" strokeWidth="2">
             <title>{`${formatarData(p.dataAvaliacao)}: ${p.scoreGeral}`}</title>
           </circle>
         ))}
-        <text x={M.esq} y={A - 4} fontSize="11" fill="#a8a29e">
+        <text x={M.esq} y={A - 4} fontSize="11" className="fill-muted-foreground">
           {formatarData(pontos[0]!.dataAvaliacao)}
         </text>
-        <text x={L - M.dir} y={A - 4} fontSize="11" fill="#a8a29e" textAnchor="end">
+        <text x={L - M.dir} y={A - 4} fontSize="11" className="fill-muted-foreground" textAnchor="end">
           {formatarData(pontos[pontos.length - 1]!.dataAvaliacao)}
         </text>
       </svg>

@@ -92,6 +92,11 @@ model Colonia {
   coloniaMae     Colonia?  @relation("Genealogia", fields: [coloniaMaeId], references: [id], onDelete: SetNull)
   coloniasFilhas Colonia[] @relation("Genealogia")
 
+  // Divisão: colônia (opcional, diferente da mãe) que doou campeiras à filha
+  coloniaDoadoraCampeirasId   String?   @db.Uuid
+  coloniaDoadoraCampeiras     Colonia?  @relation("DoacaoCampeiras", fields: [coloniaDoadoraCampeirasId], references: [id], onDelete: SetNull)
+  coloniasReceptorasCampeiras Colonia[] @relation("DoacaoCampeiras")
+
   @@unique([userId, codigo])
   @@index([userId])
   @@index([status])

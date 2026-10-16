@@ -21,7 +21,7 @@ export function Dashboard() {
       titulo={usuario?.meliponario?.nome ?? "Meu meliponário"}
       subtitulo={`Olá, ${usuario?.name.split(" ")[0] ?? ""}!`}
       acoes={
-        <LinkBotao to="/avaliacoes/nova" tamanho="md">
+        <LinkBotao to="/app/avaliacoes/nova" variante="destaque" tamanho="md">
           <ClipboardCheck className="size-4" aria-hidden /> Nova avaliação
         </LinkBotao>
       }
@@ -40,7 +40,7 @@ export function Dashboard() {
           titulo="Nenhuma colônia cadastrada"
           descricao="Cadastre sua primeira colônia para começar a registrar avaliações."
           acao={
-            <LinkBotao to="/colonias/nova">
+            <LinkBotao to="/app/colonias/nova">
               <Plus className="size-4" aria-hidden /> Cadastrar colônia
             </LinkBotao>
           }
@@ -83,9 +83,9 @@ export function Dashboard() {
 
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <Cartao>
-          <h2 className="mb-3 font-semibold text-stone-800">Status das colônias ativas</h2>
+          <h2 className="mb-3 font-semibold text-foreground">Status das colônias ativas</h2>
           {avaliadas.length === 0 ? (
-            <p className="text-sm text-stone-500">Nenhuma colônia ativa avaliada ainda.</p>
+            <p className="text-sm text-muted-foreground">Nenhuma colônia ativa avaliada ainda.</p>
           ) : (
             <ul className="space-y-2.5">
               {ORDEM_STATUS.map((s) => {
@@ -94,11 +94,11 @@ export function Dashboard() {
                   <li key={s}>
                     <div className="mb-1 flex justify-between text-sm">
                       <span className={`font-medium ${COR_STATUS[s].texto}`}>{ROTULO_STATUS[s]}</span>
-                      <span className="text-stone-500">
+                      <span className="text-muted-foreground">
                         {porStatus[s]} · {pct}%
                       </span>
                     </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-stone-100">
+                    <div className="h-2 overflow-hidden rounded-full bg-muted">
                       <div className={`h-full rounded-full ${COR_STATUS[s].barra}`} style={{ width: `${pct}%` }} />
                     </div>
                   </li>
@@ -106,32 +106,32 @@ export function Dashboard() {
               })}
             </ul>
           )}
-          <p className="mt-3 text-xs text-stone-400">Considera a avaliação mais recente de cada colônia.</p>
+          <p className="mt-3 text-xs text-muted-foreground">Considera a avaliação mais recente de cada colônia.</p>
         </Cartao>
 
         <Cartao>
-          <h2 className="mb-3 flex items-center gap-2 font-semibold text-stone-800">
+          <h2 className="mb-3 flex items-center gap-2 font-semibold text-foreground">
             <AlertTriangle className="size-4 text-atencao" aria-hidden /> Precisam de atenção
           </h2>
           {atencao.length === 0 ? (
-            <p className="text-sm text-stone-500">Tudo em dia. 🐝</p>
+            <p className="text-sm text-muted-foreground">Tudo em dia. 🐝</p>
           ) : (
-            <ul className="divide-y divide-stone-100">
+            <ul className="divide-y divide-border">
               {atencao.slice(0, 5).map(({ colonia, alerta }) => (
                 <li key={colonia.id} className="flex items-center justify-between gap-2 py-2.5">
                   <div className="min-w-0">
-                    <Link to={`/colonias/${colonia.id}`} className="font-mono font-medium hover:underline">
+                    <Link to={`/app/colonias/${colonia.id}`} className="font-mono font-medium hover:underline">
                       {colonia.codigo}
                     </Link>
-                    <p className="truncate text-sm text-stone-500">{alerta!.motivo}</p>
+                    <p className="truncate text-sm text-muted-foreground">{alerta!.motivo}</p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     {colonia.ultimaAvaliacao && (
                       <SeloScore score={colonia.ultimaAvaliacao.scoreGeral} status={colonia.ultimaAvaliacao.statusGeral} />
                     )}
                     <Link
-                      to={`/avaliacoes/nova?colonia=${colonia.id}`}
-                      className="rounded-lg px-2 py-1 text-sm font-medium text-mel-800 hover:bg-mel-50"
+                      to={`/app/avaliacoes/nova?colonia=${colonia.id}`}
+                      className="rounded-lg px-2 py-1 text-sm font-medium text-foreground hover:bg-accent hover:text-accent-foreground"
                     >
                       Avaliar
                     </Link>
@@ -143,15 +143,15 @@ export function Dashboard() {
         </Cartao>
 
         <Cartao className="md:col-span-2">
-          <h2 className="mb-3 font-semibold text-stone-800">Colônias ativas por espécie</h2>
+          <h2 className="mb-3 font-semibold text-foreground">Colônias ativas por espécie</h2>
           <ul className="space-y-2">
             {especies.map(([nome, qtd]) => (
               <li key={nome} className="flex items-center gap-3 text-sm">
-                <span className="w-40 shrink-0 truncate text-stone-700">{nome}</span>
-                <div className="h-2 flex-1 overflow-hidden rounded-full bg-stone-100">
-                  <div className="h-full rounded-full bg-mel-500" style={{ width: `${(qtd / ativas.length) * 100}%` }} />
+                <span className="w-40 shrink-0 truncate text-foreground">{nome}</span>
+                <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                  <div className="h-full rounded-full bg-primary" style={{ width: `${(qtd / ativas.length) * 100}%` }} />
                 </div>
-                <span className="w-6 text-right text-stone-500">{qtd}</span>
+                <span className="w-6 text-right text-muted-foreground">{qtd}</span>
               </li>
             ))}
           </ul>
@@ -164,9 +164,9 @@ export function Dashboard() {
 function Resumo({ rotulo, valor, detalhe }: { rotulo: string; valor: number | string; detalhe: string }) {
   return (
     <Cartao className="!p-4">
-      <p className="text-sm text-stone-500">{rotulo}</p>
-      <p className="mt-1 text-3xl font-bold text-stone-900">{valor}</p>
-      <p className="mt-1 text-xs text-stone-400">{detalhe}</p>
+      <p className="text-sm text-muted-foreground">{rotulo}</p>
+      <p className="mt-1 text-3xl font-bold text-foreground">{valor}</p>
+      <p className="mt-1 text-xs text-muted-foreground">{detalhe}</p>
     </Cartao>
   );
 }

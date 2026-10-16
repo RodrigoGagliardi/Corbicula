@@ -26,7 +26,7 @@ O que o backend já faz:
 
 O que o frontend já tem:
 
-- **Acesso** — landing, login e cadastro
+- **Acesso** — login e cadastro
 - **Dashboard** — visão geral das colônias e do score
 - **Colônias** — lista, detalhes, cadastro e edição
 - **Avaliação rápida** — fluxo mobile-first de Bom/Médio/Ruim, com foto-resumo opcional

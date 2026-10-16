@@ -1,24 +1,56 @@
-import type { ReactNode } from "react";
-import { Link } from "react-router";
+import { Link, NavLink, Outlet } from "react-router";
+import { useAuth } from "../../store/auth";
+import { classesBotao } from "../ui/Botao";
+import { Marca } from "./Marca";
 
-export function LayoutPublico({ titulo, subtitulo, children }: { titulo: string; subtitulo: string; children: ReactNode }) {
+// Casca das páginas públicas (landing, login, cadastro, recuperar senha, sobre):
+// cabeçalho fixo com a marca e as ações de conta + rodapé.
+export function LayoutPublico() {
+  const logado = Boolean(useAuth((s) => s.token));
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center bg-gradient-to-b from-mel-50 to-stone-50 px-4 py-10">
-      <Link to="/" className="mb-8 flex flex-col items-center gap-3">
-        <img src="/icons/favicon.svg" alt="" className="size-16" />
-        <span className="text-2xl font-bold tracking-tight text-mel-950">Corbicula</span>
-      </Link>
-      <div className="w-full max-w-sm rounded-2xl border border-stone-200 bg-white p-6 shadow-sm">
-        <h1 className="text-xl font-semibold text-stone-900">{titulo}</h1>
-        <p className="mt-1 mb-6 text-sm text-stone-500">{subtitulo}</p>
-        {children}
-      </div>
-      <p className="mt-6 max-w-sm text-center text-xs text-stone-500">
-        Coleta e análise de dados de colônias de abelhas sem ferrão do Rio Grande do Sul.{" "}
-        <Link to="/sobre" className="underline hover:text-stone-700">
-          Sobre o projeto
-        </Link>
-      </p>
+    <div className="flex min-h-dvh flex-col">
+      <header className="sticky top-0 z-20 border-b border-border bg-background/90 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
+          <Link to="/">
+            <Marca />
+          </Link>
+          <nav className="flex items-center gap-1 sm:gap-2" aria-label="Site">
+            <NavLink
+              to="/sobre"
+              className={({ isActive }) =>
+                `rounded-lg px-3 py-2 text-sm font-medium ${isActive ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`
+              }
+            >
+              Sobre
+            </NavLink>
+            {logado ? (
+              <Link to="/app" className={classesBotao("primario", "sm")}>
+                Abrir o app
+              </Link>
+            ) : (
+              <>
+                <Link to="/login" className="rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground">
+                  Entrar
+                </Link>
+                <Link to="/cadastro" className={classesBotao("primario", "sm", "hidden sm:inline-flex")}>
+                  Começar agora
+                </Link>
+              </>
+            )}
+          </nav>
+        </div>
+      </header>
+
+      <main className="flex flex-1 flex-col animate-fade-in">
+        <Outlet />
+      </main>
+
+      <footer className="border-t border-border">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-2 px-4 py-6 text-sm text-muted-foreground sm:flex-row">
+          <Marca />
+          <p>© {new Date().getFullYear()} Corbicula · Software livre (Apache 2.0)</p>
+        </div>
+      </footer>
     </div>
   );
 }

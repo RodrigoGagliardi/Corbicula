@@ -1,49 +1,60 @@
-// Gera os ícones PNG do PWA sem dependências externas (rasterização própria +
-// encoder PNG com zlib). Desenho: favo hexagonal âmbar sobre fundo mel escuro,
-// o mesmo do favicon.svg. Rode com `npm run icones` após alterar o desenho.
+// Gera os ícones do PWA e o favicon.svg sem dependências externas
+// (rasterização própria + encoder PNG com zlib). O desenho reproduz os logos
+// oficiais (public/icons/Logo Corbicula*.png): favo de 7 hexágonos "flat-top"
+// amarelo #fff000 com contorno preto, bordas compartilhadas entre vizinhos.
+// Rode com `npm run icones` após alterar o desenho.
 import { writeFileSync } from "node:fs";
 import { deflateSync } from "node:zlib";
 
-const FUNDO = [69, 26, 3]; // #451a03
-const MEL = [245, 158, 11]; // #f59e0b
-const CERA = [254, 243, 199]; // #fef3c7
+const AMARELO = [255, 240, 0]; // #fff000 — cor exata do logo
+const PRETO = [0, 0, 0];
+const VERDE = [74, 157, 63]; // #4a9d3f — fundo dos ícones (folhagem)
 
 // ─── Geometria ────────────────────────────────────────────────────────────────
 
-function hexagono(cx, cy, r) {
-  return Array.from({ length: 6 }, (_, i) => {
-    const a = (Math.PI / 3) * i - Math.PI / 2; // vértice para cima
-    return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
-  });
-}
+const RAIZ3 = Math.sqrt(3);
 
-function dentro(x, y, poligono) {
-  let dentro = false;
-  for (let i = 0, j = poligono.length - 1; i < poligono.length; j = i++) {
-    const [xi, yi] = poligono[i];
-    const [xj, yj] = poligono[j];
-    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) dentro = !dentro;
-  }
-  return dentro;
-}
-
-// Favo: 1 hexágono central + 6 ao redor (vizinhos de um hexágono "pointy-top").
-function favo(tamanho, escala) {
-  const c = tamanho / 2;
-  const r = tamanho * 0.13 * escala;
-  const passo = r * Math.sqrt(3) * 1.08;
-  const centros = [[c, c]];
+// Centros do favo para hexágonos de raio r (flat-top): o central + 6 vizinhos
+// a distância r·√3, nos ângulos 30°, 90°, 150°...
+function centros(cx, cy, r) {
+  const lista = [[cx, cy]];
   for (let i = 0; i < 6; i++) {
-    const a = (Math.PI / 3) * i;
-    centros.push([c + passo * Math.cos(a), c + passo * Math.sin(a)]);
+    const a = Math.PI / 6 + (Math.PI / 3) * i;
+    lista.push([cx + r * RAIZ3 * Math.cos(a), cy + r * RAIZ3 * Math.sin(a)]);
   }
-  return centros.map(([x, y], i) => ({ poligono: hexagono(x, y, r), cor: i === 0 ? CERA : MEL }));
+  return lista;
+}
+
+// Ponto dentro de um hexágono flat-top de raio r centrado em (cx, cy).
+function dentroHex(x, y, cx, cy, r) {
+  const dx = Math.abs(x - cx);
+  const dy = Math.abs(y - cy);
+  return dy <= (RAIZ3 / 2) * r && RAIZ3 * dx + dy <= RAIZ3 * r;
+}
+
+// O favo ocupa 5r de largura e 3√3·r de altura (+ contorno).
+// `ocupacao`: fração do lado do ícone que o desenho ocupa.
+// `contorno`: espessura do traço em relação ao raio (logo original: ~0,077).
+function favo(tamanho, ocupacao, contorno) {
+  const r = (tamanho * ocupacao) / (3 * RAIZ3 + contorno);
+  return { r, traco: r * contorno, centros: centros(tamanho / 2, tamanho / 2, r) };
+}
+
+function corNoPonto(x, y, { r, traco, centros }, fundo) {
+  const meio = traco / 2;
+  if (centros.some(([cx, cy]) => dentroHex(x, y, cx, cy, r - meio))) {
+    // dentro do miolo de algum hexágono, mas ainda pode cair na faixa do traço de um vizinho
+    const naBorda = centros.some(([cx, cy]) => dentroHex(x, y, cx, cy, r + meio) && !dentroHex(x, y, cx, cy, r - meio));
+    return naBorda ? PRETO : AMARELO;
+  }
+  if (centros.some(([cx, cy]) => dentroHex(x, y, cx, cy, r + meio))) return PRETO;
+  return fundo;
 }
 
 // ─── Rasterização com supersampling 4×4 ──────────────────────────────────────
 
-function desenhar(tamanho, { escala = 1, cantos = 0.22 } = {}) {
-  const celulas = favo(tamanho, escala);
+function desenhar(tamanho, { ocupacao = 0.8, contorno = 0.09, cantos = 0.22, fundo = VERDE } = {}) {
+  const geo = favo(tamanho, ocupacao, contorno);
   const raio = tamanho * cantos;
   const px = Buffer.alloc(tamanho * tamanho * 4);
   const S = 4;
@@ -63,8 +74,8 @@ function desenhar(tamanho, { escala = 1, cantos = 0.22 } = {}) {
           const fx = x + (sx + 0.5) / S;
           const fy = y + (sy + 0.5) / S;
           if (!noFundoArredondado(fx, fy)) continue;
-          const cel = celulas.find((c) => dentro(fx, fy, c.poligono));
-          const cor = cel ? cel.cor : FUNDO;
+          const cor = corNoPonto(fx, fy, geo, fundo);
+          if (!cor) continue; // fundo transparente
           r += cor[0];
           g += cor[1];
           b += cor[2];
@@ -81,6 +92,28 @@ function desenhar(tamanho, { escala = 1, cantos = 0.22 } = {}) {
     }
   }
   return px;
+}
+
+// ─── Favicon SVG (mesma geometria, fundo transparente) ────────────────────────
+
+function faviconSvg() {
+  const lado = 64;
+  const contorno = 0.16; // traço mais grosso: o favicon é exibido a 16–32 px
+  const { r, traco, centros: cs } = favo(lado, 0.94, contorno);
+  const f = (n) => Number(n.toFixed(2));
+  const hex = ([cx, cy]) =>
+    Array.from({ length: 6 }, (_, i) => {
+      const a = (Math.PI / 3) * i;
+      return `${f(cx + r * Math.cos(a))},${f(cy + r * Math.sin(a))}`;
+    }).join(" ");
+  const poligonos = cs.map((c) => `    <polygon points="${hex(c)}"/>`).join("\n");
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${lado} ${lado}">
+  <!-- Gerado por scripts/gerar-icones.mjs — não editar à mão -->
+  <g fill="#fff000" stroke="#000" stroke-width="${f(traco)}" stroke-linejoin="round">
+${poligonos}
+  </g>
+</svg>
+`;
 }
 
 // ─── Encoder PNG (RGBA 8 bits) ────────────────────────────────────────────────
@@ -129,14 +162,20 @@ function png(tamanho, rgba) {
 
 const destino = new URL("../public/icons/", import.meta.url);
 const icones = [
-  ["icon-192.png", 192, {}],
-  ["icon-512.png", 512, {}],
-  // maskable: fundo cheio (sem cantos) e desenho dentro da zona segura (80%)
-  ["icon-maskable-512.png", 512, { escala: 0.8, cantos: 0 }],
-  ["apple-touch-icon.png", 180, { cantos: 0 }],
+  // ícones comuns: só o favo, fundo transparente
+  ["icon-192.png", 192, { ocupacao: 0.94, fundo: null }],
+  ["icon-512.png", 512, { ocupacao: 0.94, fundo: null }],
+  // maskable e iOS exigem fundo opaco (o sistema recorta o ícone ou preenche a
+  // transparência de preto), então usam fundo preto.
+  // maskable: fundo cheio (sem cantos) e favo dentro do círculo da zona segura (80%)
+  ["icon-maskable-512.png", 512, { ocupacao: 0.62, cantos: 0, fundo: PRETO }],
+  ["apple-touch-icon.png", 180, { ocupacao: 0.74, cantos: 0, fundo: PRETO }],
 ];
 
 for (const [nome, tamanho, opcoes] of icones) {
   writeFileSync(new URL(nome, destino), png(tamanho, desenhar(tamanho, opcoes)));
   console.log(`  [OK] public/icons/${nome}`);
 }
+
+writeFileSync(new URL("favicon.svg", destino), faviconSvg());
+console.log("  [OK] public/icons/favicon.svg");

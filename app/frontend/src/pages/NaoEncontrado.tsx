@@ -8,7 +8,7 @@ export function NaoEncontrado() {
       icone={<SearchX className="size-10" />}
       titulo="Página não encontrada"
       descricao="O endereço pode estar errado ou a página ainda não existe nesta versão."
-      acao={<LinkBotao to="/dashboard">Ir para o início</LinkBotao>}
+      acao={<LinkBotao to="/app">Ir para o início</LinkBotao>}
     />
   );
 }

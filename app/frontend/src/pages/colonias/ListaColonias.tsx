@@ -48,7 +48,7 @@ export function ListaColonias() {
   );
 
   const acoes = (
-    <LinkBotao to="/colonias/nova">
+    <LinkBotao to="/app/colonias/nova">
       <Plus className="size-4" aria-hidden /> Nova colônia
     </LinkBotao>
   );
@@ -78,7 +78,7 @@ export function ListaColonias() {
 
       <div className="mb-4 space-y-3">
         <div className="relative">
-          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-stone-400" aria-hidden />
+          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
           <input
             type="search"
             placeholder="Buscar por código, espécie ou localização"
@@ -97,8 +97,8 @@ export function ListaColonias() {
                 aria-pressed={status === s}
                 className={`shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium ${
                   status === s
-                    ? "border-mel-700 bg-mel-700 text-white"
-                    : "border-stone-300 bg-white text-stone-600 hover:bg-stone-100"
+                    ? "border-sidebar bg-sidebar text-sidebar-primary"
+                    : "border-input bg-card text-muted-foreground hover:bg-muted"
                 }`}
               >
                 {s === "todas" ? "Todas" : `${ROTULO_STATUS_COLONIA[s]}s`}
@@ -120,7 +120,7 @@ export function ListaColonias() {
       </div>
 
       {visiveis.length === 0 ? (
-        <p className="py-12 text-center text-stone-500">Nenhuma colônia corresponde aos filtros.</p>
+        <p className="py-12 text-center text-muted-foreground">Nenhuma colônia corresponde aos filtros.</p>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {visiveis.map((c) => (

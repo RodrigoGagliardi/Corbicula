@@ -32,7 +32,7 @@ export function ListaParametros() {
   const excluir = useMutation({ mutationFn: parametrosApi.excluir, onSettled: invalidar });
 
   const acoes = (
-    <LinkBotao to="/parametros/novo">
+    <LinkBotao to="/app/parametros/novo">
       <Plus className="size-4" aria-hidden /> Novo parâmetro
     </LinkBotao>
   );
@@ -64,9 +64,9 @@ export function ListaParametros() {
 
       {parametros.length === 0 ? (
         <Cartao className="space-y-4 text-center">
-          <Sparkles className="mx-auto size-10 text-mel-600" aria-hidden />
+          <Sparkles className="mx-auto size-10 text-primary" aria-hidden />
           <h2 className="text-lg font-semibold">{boasVindas ? "Bem-vindo(a) ao Corbicula!" : "Nenhum parâmetro ainda"}</h2>
-          <p className="mx-auto max-w-md text-stone-600">
+          <p className="mx-auto max-w-md text-muted-foreground">
             Comece com um conjunto sugerido de 5 parâmetros (fluxo de entrada, potes de mel, discos de cria, condição da
             rainha e sanidade) — dá para editar tudo depois — ou crie os seus.
           </p>
@@ -74,7 +74,7 @@ export function ListaParametros() {
             <Botao onClick={() => usarSugeridos.mutate()} carregando={usarSugeridos.isPending}>
               Usar parâmetros sugeridos
             </Botao>
-            <LinkBotao to="/parametros/novo" variante="secundario">
+            <LinkBotao to="/app/parametros/novo" variante="secundario">
               Criar do zero
             </LinkBotao>
           </div>
@@ -88,20 +88,20 @@ export function ListaParametros() {
               const usos = p._count.avaliacoesParametros;
               return (
                 <li key={p.id}>
-                  <Cartao className={p.ativo ? "" : "bg-stone-50 opacity-75"}>
+                  <Cartao className={p.ativo ? "" : "bg-background opacity-75"}>
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <h2 className="font-semibold text-stone-900">
-                          <span className="mr-1 text-stone-400">{i + 1}.</span> {p.nome}
+                        <h2 className="font-semibold text-foreground">
+                          <span className="mr-1 text-muted-foreground">{i + 1}.</span> {p.nome}
                         </h2>
                         <div className="mt-1 flex flex-wrap gap-1.5">
-                          {!p.ativo && <Selo className="bg-stone-200 text-stone-600">Inativo</Selo>}
+                          {!p.ativo && <Selo className="bg-muted text-muted-foreground">Inativo</Selo>}
                           {p.criteriosEspecie.length > 0 && (
-                            <Selo className="bg-mel-100 text-mel-900">
+                            <Selo className="bg-accent text-accent-foreground">
                               Critérios próprios p/ {p.criteriosEspecie.length} espécie(s)
                             </Selo>
                           )}
-                          <Selo className="bg-stone-100 text-stone-500">
+                          <Selo className="bg-muted text-muted-foreground">
                             {usos === 0 ? "Nunca usado" : `Usado em ${usos} avaliação(ões)`}
                           </Selo>
                         </div>
@@ -117,7 +117,7 @@ export function ListaParametros() {
                         >
                           <ArrowDown className="size-4" />
                         </IconeBotao>
-                        <Link to={`/parametros/${p.id}/editar`} className="rounded-lg p-2 text-stone-500 hover:bg-stone-100" aria-label={`Editar ${p.nome}`}>
+                        <Link to={`/app/parametros/${p.id}/editar`} className="rounded-lg p-2 text-muted-foreground hover:bg-muted" aria-label={`Editar ${p.nome}`}>
                           <Pencil className="size-4" />
                         </Link>
                         {usos === 0 && (
@@ -135,10 +135,10 @@ export function ListaParametros() {
                       <Criterio rotulo="Médio" texto={p.criterioMedio} cor="text-atencao" />
                       <Criterio rotulo="Ruim" texto={p.criterioRuim} cor="text-critica" />
                     </dl>
-                    <label className="mt-3 inline-flex items-center gap-2 text-sm text-stone-600">
+                    <label className="mt-3 inline-flex items-center gap-2 text-sm text-muted-foreground">
                       <input
                         type="checkbox"
-                        className="size-4 accent-mel-700"
+                        className="size-4 accent-primary"
                         checked={p.ativo}
                         disabled={alterar.isPending || (p.ativo && ativos === 1)}
                         onChange={(e) => alterar.mutate([{ id: p.id, dados: { ativo: e.target.checked } }])}
@@ -150,7 +150,7 @@ export function ListaParametros() {
               );
             })}
           </ol>
-          <p className="mt-4 text-sm text-stone-500">
+          <p className="mt-4 text-sm text-muted-foreground">
             Parâmetros já usados em avaliações não podem ser excluídos (preserva o histórico) — desative-os.
           </p>
         </>
@@ -163,7 +163,7 @@ function Criterio({ rotulo, texto, cor }: { rotulo: string; texto: string; cor: 
   return (
     <div>
       <dt className={`font-medium ${cor}`}>{rotulo}</dt>
-      <dd className="text-stone-600">{texto}</dd>
+      <dd className="text-muted-foreground">{texto}</dd>
     </div>
   );
 }
@@ -174,7 +174,7 @@ function IconeBotao({
   ...props
 }: { rotulo: string; children: ReactNode } & ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
-    <button type="button" aria-label={rotulo} title={rotulo} className="rounded-lg p-2 text-stone-500 hover:bg-stone-100 disabled:opacity-30" {...props}>
+    <button type="button" aria-label={rotulo} title={rotulo} className="rounded-lg p-2 text-muted-foreground hover:bg-muted disabled:opacity-30" {...props}>
       {children}
     </button>
   );

@@ -14,9 +14,9 @@ import { formatarDataHora, ROTULO_CLIMA } from "../../utils/format";
 import { COR_STATUS, ROTULO_CLASSIFICACAO, ROTULO_STATUS } from "../../utils/score";
 
 const COR_CLASSIFICACAO: Record<Classificacao, string> = {
-  bom: "bg-green-100 text-green-800",
-  medio: "bg-amber-100 text-amber-800",
-  ruim: "bg-red-100 text-red-800",
+  bom: "bg-green-100 text-green-800 dark:bg-green-950/60 dark:text-green-300",
+  medio: "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300",
+  ruim: "bg-red-100 text-destructive",
 };
 
 export function DetalheAvaliacao() {
@@ -45,7 +45,7 @@ export function DetalheAvaliacao() {
     mutationFn: () => avaliacoesApi.excluir(coloniaId, id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: chaves.colonias });
-      navegar(`/colonias/${coloniaId}`, { replace: true });
+      navegar(`/app/colonias/${coloniaId}`, { replace: true });
     },
   });
 
@@ -64,7 +64,7 @@ export function DetalheAvaliacao() {
     <>
       <CabecalhoPagina
         voltar={
-          <Link to={`/colonias/${coloniaId}`} className="inline-flex items-center gap-1 text-sm text-stone-500 hover:text-stone-800">
+          <Link to={`/app/colonias/${coloniaId}`} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
             <ArrowLeft className="size-4" aria-hidden /> {colonia?.codigo ?? "Colônia"}
           </Link>
         }
@@ -73,7 +73,7 @@ export function DetalheAvaliacao() {
       />
 
       {estado?.nova && (
-        <p className="mb-4 flex items-center gap-2 rounded-xl bg-green-50 px-4 py-3 text-sm text-green-800" role="status">
+        <p className="mb-4 flex items-center gap-2 rounded-xl bg-green-50 px-4 py-3 text-sm text-green-800 dark:bg-green-950/50 dark:text-green-300" role="status">
           <CheckCircle2 className="size-4" aria-hidden /> Avaliação salva.
           {estado.fotoFalhou && " A foto não pôde ser enviada — tente adicioná-la abaixo."}
         </p>
@@ -81,14 +81,14 @@ export function DetalheAvaliacao() {
 
       <div className="grid gap-4 md:grid-cols-3">
         <Cartao className={`${cor.fundo} border-transparent`}>
-          <p className="text-sm text-stone-600">Score</p>
+          <p className="text-sm text-muted-foreground">Score</p>
           <p className={`text-5xl font-bold ${cor.texto}`}>{avaliacao.scoreGeral}</p>
           <p className={`font-semibold ${cor.texto}`}>{ROTULO_STATUS[avaliacao.statusGeral]}</p>
           <div className="mt-3">
             <BarraScore score={avaliacao.scoreGeral} status={avaliacao.statusGeral} />
           </div>
           {diferenca !== null && (
-            <p className="mt-3 flex items-center gap-1 text-sm text-stone-600">
+            <p className="mt-3 flex items-center gap-1 text-sm text-muted-foreground">
               {diferenca > 0 ? (
                 <ArrowUp className="size-4 text-excelente" aria-hidden />
               ) : diferenca < 0 ? (
@@ -102,7 +102,7 @@ export function DetalheAvaliacao() {
         </Cartao>
 
         <Cartao className="md:col-span-2">
-          <h2 className="mb-3 flex items-center gap-2 font-semibold text-stone-800">
+          <h2 className="mb-3 flex items-center gap-2 font-semibold text-foreground">
             <CloudSun className="size-4" aria-hidden /> Clima no momento da inspeção
           </h2>
           {temClima ? (
@@ -112,24 +112,24 @@ export function DetalheAvaliacao() {
               <Dado rotulo="Condição" valor={avaliacao.condicaoClimatica ? ROTULO_CLIMA[avaliacao.condicaoClimatica] : "—"} />
             </dl>
           ) : (
-            <p className="text-sm text-stone-500">
+            <p className="text-sm text-muted-foreground">
               Ainda não disponível. O clima é buscado automaticamente em segundo plano; se a colônia e o meliponário não
               tiverem coordenadas, ele não pode ser obtido.
             </p>
           )}
-          <p className="mt-3 text-xs text-stone-400">Dados: Open-Meteo.com (CC BY 4.0)</p>
+          <p className="mt-3 text-xs text-muted-foreground">Dados: Open-Meteo.com (CC BY 4.0)</p>
         </Cartao>
 
         <Cartao className="md:col-span-3">
-          <h2 className="mb-3 font-semibold text-stone-800">Parâmetros avaliados</h2>
-          <ul className="divide-y divide-stone-100">
+          <h2 className="mb-3 font-semibold text-foreground">Parâmetros avaliados</h2>
+          <ul className="divide-y divide-border">
             {avaliacao.parametros.map((p) => (
               <li key={p.id} className="py-2.5">
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-stone-800">{p.parametro.nome}</span>
+                  <span className="text-foreground">{p.parametro.nome}</span>
                   <Selo className={COR_CLASSIFICACAO[p.classificacao]}>{ROTULO_CLASSIFICACAO[p.classificacao]}</Selo>
                 </div>
-                {p.observacoes && <p className="mt-1 text-sm text-stone-500">{p.observacoes}</p>}
+                {p.observacoes && <p className="mt-1 text-sm text-muted-foreground">{p.observacoes}</p>}
               </li>
             ))}
           </ul>
@@ -139,17 +139,17 @@ export function DetalheAvaliacao() {
           <Cartao className="md:col-span-3 space-y-3">
             {avaliacao.observacoesGerais && (
               <div>
-                <h2 className="mb-1 font-semibold text-stone-800">Observações</h2>
-                <p className="text-sm whitespace-pre-line text-stone-700">{avaliacao.observacoesGerais}</p>
+                <h2 className="mb-1 font-semibold text-foreground">Observações</h2>
+                <p className="text-sm whitespace-pre-line text-foreground">{avaliacao.observacoesGerais}</p>
               </div>
             )}
             {avaliacao.acoesTomadas.length > 0 && (
               <div>
-                <h2 className="mb-1 font-semibold text-stone-800">Ações tomadas</h2>
+                <h2 className="mb-1 font-semibold text-foreground">Ações tomadas</h2>
                 <ul className="flex flex-wrap gap-1.5">
                   {avaliacao.acoesTomadas.map((a) => (
                     <li key={a}>
-                      <Selo className="bg-stone-100 text-stone-700">{a}</Selo>
+                      <Selo className="bg-muted text-foreground">{a}</Selo>
                     </li>
                   ))}
                 </ul>
@@ -159,16 +159,16 @@ export function DetalheAvaliacao() {
         )}
 
         <Cartao className="md:col-span-3">
-          <h2 className="mb-3 font-semibold text-stone-800">Fotos</h2>
+          <h2 className="mb-3 font-semibold text-foreground">Fotos</h2>
           <GaleriaFotos vinculo={{ avaliacaoId: avaliacao.id }} />
         </Cartao>
       </div>
 
-      <div className="mt-8 border-t border-stone-200 pt-6">
+      <div className="mt-8 border-t border-border pt-6">
         <Botao
           variante="fantasma"
           tamanho="sm"
-          className="text-red-700 hover:bg-red-50"
+          className="text-destructive hover:bg-destructive/10"
           carregando={excluir.isPending}
           onClick={() => {
             if (confirm("Excluir esta avaliação e suas fotos? Esta ação não pode ser desfeita.")) excluir.mutate();
@@ -186,9 +186,9 @@ export function DetalheAvaliacao() {
 
 function Dado({ rotulo, valor }: { rotulo: string; valor: string }) {
   return (
-    <div className="rounded-xl bg-stone-50 px-2 py-3">
-      <dt className="text-xs text-stone-500">{rotulo}</dt>
-      <dd className="mt-0.5 font-semibold text-stone-800">{valor}</dd>
+    <div className="rounded-xl bg-background px-2 py-3">
+      <dt className="text-xs text-muted-foreground">{rotulo}</dt>
+      <dd className="mt-0.5 font-semibold text-foreground">{valor}</dd>
     </div>
   );
 }

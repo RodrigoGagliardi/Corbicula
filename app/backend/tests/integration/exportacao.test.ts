@@ -60,7 +60,7 @@ beforeAll(async () => {
   params = await criarParametros(api, 3);
   const jatai = await idEspecie(api, "TETRANGU");
   colA = await criarColonia(api, { especieId: jatai, latitude: -30.03, longitude: -51.22 });
-  colB = await criarColonia(api, { status: "morta", coloniaMaeId: colA.id });
+  colB = await criarColonia(api, { status: "morta", origem: "divisao", coloniaMaeId: colA.id });
 
   avJan = (
     await criarAvaliacao(

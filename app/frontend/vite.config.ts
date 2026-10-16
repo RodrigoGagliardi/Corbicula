@@ -16,12 +16,12 @@ export default defineConfig({
         short_name: "Corbicula",
         description: "Coleta e análise de dados de colônias de abelhas sem ferrão do RS.",
         lang: "pt-BR",
-        start_url: "/",
+        start_url: "/app",
         scope: "/",
         display: "standalone",
         orientation: "portrait",
-        background_color: "#fffbeb",
-        theme_color: "#b45309",
+        background_color: "#000000",
+        theme_color: "#203c2a",
         icons: [
           { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
           { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
@@ -33,6 +33,18 @@ export default defineConfig({
         // (IndexedDB + fila /sync) são a próxima etapa do PWA.
         globPatterns: ["**/*.{js,css,html,svg,png,woff2}"],
         navigateFallback: "/index.html",
+        // Fontes do Google: guardadas no primeiro acesso para o app abrir offline com a tipografia certa.
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "fontes",
+              expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+        ],
       },
       devOptions: { enabled: false },
     }),

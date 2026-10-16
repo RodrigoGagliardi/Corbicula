@@ -2,10 +2,10 @@ import { CabecalhoPagina, Cartao } from "../components/ui/Cartao";
 
 export function Sobre() {
   return (
-    <>
+    <div className="mx-auto w-full max-w-3xl px-4 py-8 md:py-12">
       <CabecalhoPagina titulo="Sobre o Corbicula" subtitulo="Software livre para meliponicultura e pesquisa." />
       <div className="space-y-4">
-        <Cartao className="space-y-3 text-stone-700">
+        <Cartao className="space-y-3 text-foreground">
           <p>
             O <b>Corbicula</b> é uma aplicação de código aberto e gratuita para coleta e análise de dados de colônias de
             abelhas sem ferrão (Meliponini) do Rio Grande do Sul — para pesquisa acadêmica e para o manejo de
@@ -17,13 +17,13 @@ export function Sobre() {
           </p>
         </Cartao>
 
-        <Cartao className="space-y-2 text-stone-700">
-          <h2 className="font-semibold text-stone-900">Metodologia</h2>
+        <Cartao className="space-y-2 text-foreground">
+          <h2 className="font-semibold text-foreground">Metodologia</h2>
           <p>
             Cada avaliação classifica os parâmetros definidos pelo usuário como Bom (100 pontos), Médio (50) ou Ruim (0).
             O score da avaliação é a média desses pontos, arredondada:
           </p>
-          <p className="rounded-xl bg-stone-50 px-3 py-2 font-mono text-sm">
+          <p className="rounded-xl bg-background px-3 py-2 font-mono text-sm">
             score = (n_bom × 100 + n_médio × 50 + n_ruim × 0) / n_parâmetros
           </p>
           <p>Faixas: Excelente (80–100) · Boa (60–79) · Atenção (40–59) · Crítica (0–39).</p>
@@ -33,11 +33,11 @@ export function Sobre() {
           </p>
         </Cartao>
 
-        <Cartao className="space-y-2 text-stone-700">
-          <h2 className="font-semibold text-stone-900">Dados meteorológicos</h2>
+        <Cartao className="space-y-2 text-foreground">
+          <h2 className="font-semibold text-foreground">Dados meteorológicos</h2>
           <p>
             Temperatura, umidade e condição do tempo de cada inspeção são obtidas automaticamente da{" "}
-            <a href="https://open-meteo.com/" target="_blank" rel="noreferrer" className="text-mel-800 underline">
+            <a href="https://open-meteo.com/" target="_blank" rel="noreferrer" className="text-foreground underline decoration-accent decoration-2 underline-offset-4 hover:decoration-foreground">
               Open-Meteo
             </a>
             .
@@ -55,22 +55,22 @@ export function Sobre() {
           </p>
         </Cartao>
 
-        <Cartao className="space-y-2 text-stone-700">
-          <h2 className="font-semibold text-stone-900">Código aberto</h2>
+        <Cartao className="space-y-2 text-foreground">
+          <h2 className="font-semibold text-foreground">Código aberto</h2>
           <p>
             Licenciado sob a{" "}
-            <a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noreferrer" className="text-mel-800 underline">
+            <a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noreferrer" className="text-foreground underline decoration-accent decoration-2 underline-offset-4 hover:decoration-foreground">
               Apache License 2.0
             </a>
             . Código-fonte, documentação e contribuições em{" "}
-            <a href="https://github.com/RodrigoGagliardi/Corbicula" target="_blank" rel="noreferrer" className="text-mel-800 underline">
+            <a href="https://github.com/RodrigoGagliardi/Corbicula" target="_blank" rel="noreferrer" className="text-foreground underline decoration-accent decoration-2 underline-offset-4 hover:decoration-foreground">
               github.com/RodrigoGagliardi/Corbicula
             </a>
             .
           </p>
-          <p className="text-sm text-stone-500">Desenvolvido por Rodrigo Gagliardi (Shirruny).</p>
+          <p className="text-sm text-muted-foreground">Desenvolvido por Rodrigo Gagliardi (Shirruny).</p>
         </Cartao>
       </div>
-    </>
+    </div>
   );
 }

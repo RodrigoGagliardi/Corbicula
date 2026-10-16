@@ -1,7 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
-import { LayoutPublico } from "../components/layout/LayoutPublico";
+import { CartaoAutenticacao } from "../components/layout/CartaoAutenticacao";
 import { Botao } from "../components/ui/Botao";
 import { Campo, Entrada } from "../components/ui/Campo";
 import { MensagemErro } from "../components/ui/Estados";
@@ -37,7 +37,7 @@ export function Cadastro() {
       }),
     onSuccess: ({ token, user }) => {
       entrar(token, user);
-      navegar("/parametros", { replace: true, state: { boasVindas: true } });
+      navegar("/app/parametros", { replace: true, state: { boasVindas: true } });
     },
   });
 
@@ -50,7 +50,7 @@ export function Cadastro() {
   const erro = (campo: keyof typeof erros) => (tentou ? erros[campo] : undefined);
 
   return (
-    <LayoutPublico titulo="Criar conta" subtitulo="Gratuito e de código aberto.">
+    <CartaoAutenticacao titulo="Criar conta" subtitulo="Gratuito e de código aberto.">
       <form onSubmit={enviar} className="space-y-4" noValidate>
         <Campo rotulo="Nome" obrigatorio erro={erro("nome")}>
           {(id) => <Entrada id={id} autoComplete="name" value={dados.nome} onChange={alterar("nome")} />}
@@ -84,12 +84,12 @@ export function Cadastro() {
           Criar conta
         </Botao>
       </form>
-      <p className="mt-6 text-center text-sm text-stone-600">
+      <p className="mt-6 text-center text-sm text-muted-foreground">
         Já tem conta?{" "}
-        <Link to="/login" className="font-medium text-mel-800 hover:underline">
+        <Link to="/login" className="font-medium text-foreground underline decoration-accent decoration-2 underline-offset-4 hover:decoration-foreground">
           Entrar
         </Link>
       </p>
-    </LayoutPublico>
+    </CartaoAutenticacao>
   );
 }

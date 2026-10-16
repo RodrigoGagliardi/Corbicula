@@ -2,6 +2,8 @@
 
 ## 📱 Estrutura de Navegação
 
+> Rotas públicas ficam na raiz (`/`, `/login`...). As privadas ficam sob `/app` (ex.: `/app/colonias`); o dashboard é `/app`. Telas ainda não implementadas já têm rota e mostram uma página "em construção" (`pages/telasPlanejadas.ts`). Configurações usam `/app/configuracoes/dados` e `/app/configuracoes/sync`.
+
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                    PÚBLICAS (Sem Login)                  │
@@ -165,7 +167,7 @@
 
 ## 📊 DASHBOARD
 
-### **6. Dashboard Principal** `/dashboard`
+### **6. Dashboard Principal** `/app`
 
 **Objetivo:** Visão geral do meliponário
 
@@ -223,7 +225,7 @@
 
 ## 🐝 COLÔNIAS
 
-### **7. Lista de Colônias** `/colonias`
+### **7. Lista de Colônias** `/app/colonias`
 
 **Objetivo:** Visualizar todas as colônias
 
@@ -271,7 +273,7 @@
 
 ---
 
-### **8. Detalhes da Colônia** `/colonias/:id`
+### **8. Detalhes da Colônia** `/app/colonias/:id`
 
 **Objetivo:** Ver informações completas de uma colônia
 
@@ -333,7 +335,7 @@
 
 ---
 
-### **9. Criar Colônia** `/colonias/nova`
+### **9. Criar Colônia** `/app/colonias/nova`
 
 **Objetivo:** Cadastrar nova colônia
 
@@ -384,7 +386,7 @@
 
 ---
 
-### **10. Editar Colônia** `/colonias/:id/editar`
+### **10. Editar Colônia** `/app/colonias/:id/editar`
 
 **Objetivo:** Atualizar informações da colônia
 
@@ -398,7 +400,7 @@
 
 ---
 
-### **11. Mapa de Colônias** `/colonias/mapa`
+### **11. Mapa de Colônias** `/app/colonias/mapa`
 
 **Objetivo:** Visualizar colônias geograficamente
 
@@ -422,7 +424,7 @@
 
 ## 📋 AVALIAÇÕES
 
-### **12. Nova Avaliação (Quick)** `/avaliacoes/nova`
+### **12. Nova Avaliação (Quick)** `/app/avaliacoes/nova`
 
 **Objetivo:** Avaliar colônia rapidamente (mobile-first)
 
@@ -497,7 +499,7 @@ Para cada parâmetro configurado:
 
 ---
 
-### **13. Histórico de Avaliações** `/avaliacoes`
+### **13. Histórico de Avaliações** `/app/avaliacoes`
 
 **Objetivo:** Ver todas as avaliações
 
@@ -535,7 +537,7 @@ Novembro 2024
 
 ---
 
-### **14. Detalhes da Avaliação** `/avaliacoes/:id`
+### **14. Detalhes da Avaliação** `/app/avaliacoes/:id`
 
 **Objetivo:** Ver avaliação completa
 
@@ -576,7 +578,7 @@ Novembro 2024
 
 ---
 
-### **15. Editar Avaliação** `/avaliacoes/:id/editar`
+### **15. Editar Avaliação** `/app/avaliacoes/:id/editar`
 
 **Objetivo:** Corrigir avaliação
 
@@ -589,7 +591,7 @@ Novembro 2024
 
 ## ⚙️ PARÂMETROS
 
-### **16. Gerenciar Parâmetros** `/parametros`
+### **16. Gerenciar Parâmetros** `/app/parametros`
 
 **Objetivo:** Configurar critérios de avaliação
 
@@ -624,7 +626,7 @@ Novembro 2024
 
 ---
 
-### **17. Criar/Editar Parâmetro** `/parametros/novo` ou `/parametros/:id/editar`
+### **17. Criar/Editar Parâmetro** `/app/parametros/novo` ou `/app/parametros/:id/editar`
 
 **Objetivo:** Definir critério personalizado
 
@@ -661,7 +663,7 @@ Novembro 2024
 
 ---
 
-### **18. Templates de Parâmetros** `/parametros/templates`
+### **18. Templates de Parâmetros** `/app/parametros/templates`
 
 **Objetivo:** Usar conjuntos pré-definidos
 
@@ -691,7 +693,7 @@ Novembro 2024
 
 ## 📊 ANÁLISES
 
-### **19. Dashboard de Análises** `/analises`
+### **19. Dashboard de Análises** `/app/analises`
 
 **Objetivo:** Hub de análises científicas
 
@@ -727,7 +729,7 @@ Novembro 2024
 
 ---
 
-### **20. Análise Individual (Colônia)** `/analises/colonia/:id`
+### **20. Análise Individual (Colônia)** `/app/analises/colonia/:id`
 
 **Objetivo:** Análise profunda de uma colônia
 
@@ -772,7 +774,7 @@ Novembro 2024
 
 ---
 
-### **21. Análise Comparativa** `/analises/comparativa`
+### **21. Análise Comparativa** `/app/analises/comparativa`
 
 **Objetivo:** Comparar múltiplas colônias
 
@@ -811,7 +813,7 @@ Novembro 2024
 
 ---
 
-### **22. Correlações** `/analises/correlacoes`
+### **22. Correlações** `/app/analises/correlacoes`
 
 **Objetivo:** Encontrar relações entre parâmetros
 
@@ -849,7 +851,7 @@ Pólen       0.65   0.71   0.55       1.00
 
 ---
 
-### **23. Genealogia (Árvore)** `/analises/genealogia`
+### **23. Genealogia (Árvore)** `/app/analises/genealogia`
 
 **Objetivo:** Visualizar linhagens
 
@@ -894,7 +896,7 @@ MAND-005
 
 ---
 
-### **24. Análise Comportamental** `/analises/comportamental`
+### **24. Análise Comportamental** `/app/analises/comportamental`
 
 **Objetivo:** Padrões de atividade
 
@@ -927,7 +929,7 @@ MAND-005
 
 ---
 
-### **25. Predições (ML)** `/analises/predicoes`
+### **25. Predições (ML)** `/app/analises/predicoes`
 
 **Objetivo:** Machine Learning para previsões
 
@@ -960,7 +962,7 @@ MAND-005
 
 ## 🍯 PRODUÇÃO
 
-### **26. Registrar Colheita** `/producao/nova`
+### **26. Registrar Colheita** `/app/producao/nova`
 
 **Objetivo:** Registrar uma colheita de mel, pólen ou própolis
 
@@ -980,7 +982,7 @@ MAND-005
 
 ---
 
-### **27. Histórico de Produção** `/producao`
+### **27. Histórico de Produção** `/app/producao`
 
 **Objetivo:** Ver todas as colheitas registradas
 
@@ -998,7 +1000,7 @@ MAND-005
 
 ---
 
-### **28. Relatório de Produção** `/producao/relatorio`
+### **28. Relatório de Produção** `/app/producao/relatorio`
 
 **Objetivo:** Consolidar dados de produção para análise ou exportação
 
@@ -1014,7 +1016,7 @@ MAND-005
 
 ## 📅 CALENDÁRIO & ALERTAS
 
-### **29. Calendário de Inspeções** `/calendario`
+### **29. Calendário de Inspeções** `/app/calendario`
 
 **Objetivo:** Planejar e acompanhar inspeções
 
@@ -1031,7 +1033,7 @@ MAND-005
 
 ---
 
-### **30. Central de Alertas** `/alertas`
+### **30. Central de Alertas** `/app/alertas`
 
 **Objetivo:** Reunir avisos que exigem atenção
 
@@ -1054,7 +1056,7 @@ MAND-005
 
 ## ⚙️ CONFIGURAÇÕES
 
-### **31. Perfil do Usuário** `/configuracoes/perfil`
+### **31. Perfil do Usuário** `/app/configuracoes/perfil`
 
 **Campos:**
 - Nome, e-mail
@@ -1065,7 +1067,7 @@ MAND-005
 
 ---
 
-### **32. Dados do Meliponário** `/configuracoes/meliponario`
+### **32. Dados do Meliponário** `/app/configuracoes/meliponario`
 
 **Campos:**
 - Nome do meliponário
@@ -1078,7 +1080,7 @@ MAND-005
 
 ---
 
-### **33. Preferências** `/configuracoes/preferencias`
+### **33. Preferências** `/app/configuracoes/preferencias`
 
 **Opções:**
 - Idioma (PT-BR / EN / ES)
@@ -1090,7 +1092,7 @@ MAND-005
 
 ---
 
-### **34. Exportar/Importar Dados** `/configuracoes/dados`
+### **34. Exportar/Importar Dados** `/app/configuracoes/dados`
 
 **Objetivo:** Portabilidade e backup (relevante para LGPD e uso científico)
 
@@ -1110,7 +1112,7 @@ MAND-005
 
 ---
 
-### **35. Sincronização Offline** `/configuracoes/sync`
+### **35. Sincronização Offline** `/app/configuracoes/sync`
 
 **Objetivo:** Controlar e monitorar a sincronização
 

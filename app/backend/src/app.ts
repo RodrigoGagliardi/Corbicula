@@ -27,7 +27,8 @@ export async function buildApp(opts: { logger?: boolean } = {}): Promise<Fastify
     logger: opts.logger === false ? false : { transport: { target: "pino-pretty" } },
   });
 
-  await app.register(cors);
+  // Content-Disposition exposto: o frontend (outra origem) lê o nome dos arquivos exportados.
+  await app.register(cors, { exposedHeaders: ["Content-Disposition"] });
   await app.register(multipart, { limits: { fileSize: TAMANHO_MAX_BYTES, files: 1 } });
 
   // Fotos: servidas estaticamente com nomes UUID (não adivinháveis).

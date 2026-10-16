@@ -27,12 +27,15 @@ export const criarColoniaSchema = z.object({
   observacoes: z.string().max(2000).nullable().optional(),
   especieId: z.uuid("ID de espécie inválido").nullable().optional(),
   coloniaMaeId: z.uuid("ID de colônia mãe inválido").nullable().optional(),
+  // Só em divisão: outra colônia que doou campeiras à filha.
+  coloniaDoadoraCampeirasId: z.uuid("ID de colônia doadora inválido").nullable().optional(),
   status: z.enum(STATUS_COLONIA).default("ativa"),
 });
 
 // No PATCH todos os campos são opcionais. Campos nullable permitem ser zerados
 // enviando null explicitamente (ex.: remover colônia mãe = { coloniaMaeId: null }).
 // `codigo` é somente leitura — gerado automaticamente pelo sistema no momento da criação.
+// `especieId` só pode ser definido uma vez (identificar colônia COL-NNN); depois é imutável.
 export const atualizarColoniaSchema = z.object({
   dataEntrada: z.string().datetime().optional(),
   origem: z.enum(ORIGENS).optional(),
@@ -44,6 +47,7 @@ export const atualizarColoniaSchema = z.object({
   observacoes: z.string().max(2000).nullable().optional(),
   especieId: z.uuid().nullable().optional(),
   coloniaMaeId: z.uuid().nullable().optional(),
+  coloniaDoadoraCampeirasId: z.uuid().nullable().optional(),
   status: z.enum(STATUS_COLONIA).optional(),
 });
 

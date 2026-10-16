@@ -2,19 +2,22 @@ import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { Link, type LinkProps } from "react-router";
 import { Loader2 } from "lucide-react";
 
-type Variante = "primario" | "secundario" | "fantasma" | "perigo";
+// primario = verde floresta (ações comuns); destaque = amarelo do logo com borda
+// preta (a ação principal da tela, ex.: Nova avaliação).
+type Variante = "primario" | "destaque" | "secundario" | "fantasma" | "perigo";
 type Tamanho = "sm" | "md" | "lg";
 
 const BASE =
   "inline-flex items-center justify-center gap-2 rounded-xl font-medium transition-colors " +
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mel-600 " +
+  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring " +
   "disabled:cursor-not-allowed disabled:opacity-50";
 
 const VARIANTES: Record<Variante, string> = {
-  primario: "bg-mel-700 text-white hover:bg-mel-800 active:bg-mel-900",
-  secundario: "border border-stone-300 bg-white text-stone-800 hover:bg-stone-100",
-  fantasma: "text-stone-700 hover:bg-stone-100",
-  perigo: "bg-red-600 text-white hover:bg-red-700",
+  primario: "bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/80",
+  destaque: "border-2 border-black bg-accent text-accent-foreground hover:bg-mel-500 active:bg-mel-600",
+  secundario: "border border-input bg-card text-foreground hover:bg-muted",
+  fantasma: "text-foreground hover:bg-muted",
+  perigo: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
 };
 
 const TAMANHOS: Record<Tamanho, string> = {

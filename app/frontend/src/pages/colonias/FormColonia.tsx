@@ -16,6 +16,7 @@ interface Estado {
   dataEntrada: string;
   origem: Origem;
   coloniaMaeId: string;
+  coloniaDoadoraId: string;
   tipoCaixa: TipoCaixa;
   altura: string;
   largura: string;
@@ -33,6 +34,7 @@ function estadoInicial(colonia?: ColoniaDetalhada, maeSugerida?: string | null):
     dataEntrada: colonia ? colonia.dataEntrada.slice(0, 10) : paraInputData(new Date()),
     origem: colonia?.origem ?? (maeSugerida ? "divisao" : "captura"),
     coloniaMaeId: colonia?.coloniaMaeId ?? maeSugerida ?? "",
+    coloniaDoadoraId: colonia?.coloniaDoadoraCampeirasId ?? "",
     tipoCaixa: colonia?.tipoCaixa ?? "INPA",
     altura: colonia?.dimensoesCaixa?.altura?.toString() ?? "",
     largura: colonia?.dimensoesCaixa?.largura?.toString() ?? "",
@@ -58,6 +60,7 @@ function paraPayload(e: Estado): ColoniaInput {
     tipoCaixa: e.tipoCaixa,
     especieId: e.especieId || null,
     coloniaMaeId: e.origem === "divisao" && e.coloniaMaeId ? e.coloniaMaeId : null,
+    coloniaDoadoraCampeirasId: e.origem === "divisao" && e.coloniaDoadoraId ? e.coloniaDoadoraId : null,
     status: e.status,
     dimensoesCaixa: Object.keys(dimensoes).length ? dimensoes : null,
     localizacao: textoOuNull(e.localizacao),
@@ -96,14 +99,36 @@ function Formulario({ colonia }: { colonia?: ColoniaDetalhada | undefined }) {
 
   const alterar = <K extends keyof Estado>(campo: K, valor: Estado[K]) => setEstado((e) => ({ ...e, [campo]: valor }));
 
+  const maeSelecionada = colonias?.find((c) => c.id === estado.coloniaMaeId);
+  const doadoraSelecionada = colonias?.find((c) => c.id === estado.coloniaDoadoraId);
+  // Espécie é imutável depois de definida; colônia COL-NNN pode ser identificada uma vez.
+  const especieTravada = Boolean(colonia?.especieId);
+  // Colônias formadas a partir desta (filhas e receptoras de campeiras): não podem ter entrado antes dela.
+  const derivadas = colonia
+    ? (colonias ?? []).filter((c) => c.coloniaMaeId === colonia.id || c.coloniaDoadoraCampeirasId === colonia.id)
+    : [];
+  const derivadaAnterior = derivadas.find((c) => c.dataEntrada.slice(0, 10) < estado.dataEntrada);
+  const divisao = estado.origem === "divisao";
+  const conflitoOrigem = (rel: typeof maeSelecionada, papel: string) =>
+    !rel
+      ? undefined
+      : rel.especieId && estado.especieId && rel.especieId !== estado.especieId
+        ? `A colônia ${papel} é de outra espécie: uma divisão não muda de espécie.`
+        : estado.dataEntrada && estado.dataEntrada < rel.dataEntrada.slice(0, 10)
+          ? `A data de entrada não pode ser anterior à da colônia ${papel} (${rel.codigo}).`
+          : undefined;
+
   const hoje = paraInputData(new Date());
   const erros = {
     dataEntrada: !estado.dataEntrada
       ? "Informe a data de entrada."
       : estado.dataEntrada > hoje
         ? "A data de entrada não pode ser futura."
-        : undefined,
-    coloniaMaeId: estado.origem === "divisao" && !estado.coloniaMaeId ? "Selecione a colônia-mãe." : undefined,
+        : derivadaAnterior
+          ? `A data de entrada não pode ser posterior à de ${derivadaAnterior.codigo}, formada a partir desta colônia.`
+          : undefined,
+    coloniaMaeId: !divisao ? undefined : !estado.coloniaMaeId ? "Selecione a colônia-mãe." : conflitoOrigem(maeSelecionada, "mãe"),
+    coloniaDoadoraId: !divisao ? undefined : conflitoOrigem(doadoraSelecionada, "doadora"),
     latitude: estado.latitude && !Number.isFinite(numeroOuNull(estado.latitude)) ? "Número inválido." : undefined,
     longitude: estado.longitude && !Number.isFinite(numeroOuNull(estado.longitude)) ? "Número inválido." : undefined,
   };
@@ -114,7 +139,7 @@ function Formulario({ colonia }: { colonia?: ColoniaDetalhada | undefined }) {
     mutationFn: () => (colonia ? coloniasApi.atualizar(colonia.id, paraPayload(estado)) : coloniasApi.criar(paraPayload(estado))),
     onSuccess: (salva) => {
       queryClient.invalidateQueries({ queryKey: chaves.colonias });
-      navegar(`/colonias/${salva.id}`, { replace: true });
+      navegar(`/app/colonias/${salva.id}`, { replace: true });
     },
   });
 
@@ -137,13 +162,36 @@ function Formulario({ colonia }: { colonia?: ColoniaDetalhada | undefined }) {
     );
   };
 
-  const maesPossiveis = (colonias ?? []).filter((c) => c.id !== colonia?.id);
+  // Mãe possível: mesma espécie (ou sem espécie identificada) e fora da própria
+  // descendência — a filha de uma colônia não pode ser a mãe dela.
+  const descendentes = new Set<string>(colonia ? [colonia.id] : []);
+  for (let novos = true; novos; ) {
+    novos = false;
+    for (const c of colonias ?? []) {
+      if (c.coloniaMaeId && descendentes.has(c.coloniaMaeId) && !descendentes.has(c.id)) {
+        descendentes.add(c.id);
+        novos = true;
+      }
+    }
+  }
+  const maesPossiveis = (colonias ?? []).filter(
+    (c) =>
+      !descendentes.has(c.id) &&
+      (!estado.especieId || !c.especieId || c.especieId === estado.especieId || c.id === estado.coloniaMaeId)
+  );
+  // Doadora: mesmas condições da mãe, mas outra colônia que não a mãe.
+  const doadorasPossiveis = (colonias ?? []).filter(
+    (c) =>
+      !descendentes.has(c.id) &&
+      c.id !== estado.coloniaMaeId &&
+      (!estado.especieId || !c.especieId || c.especieId === estado.especieId || c.id === estado.coloniaDoadoraId)
+  );
 
   return (
     <>
       <CabecalhoPagina
         voltar={
-          <Link to={colonia ? `/colonias/${colonia.id}` : "/colonias"} className="inline-flex items-center gap-1 text-sm text-stone-500 hover:text-stone-800">
+          <Link to={colonia ? `/app/colonias/${colonia.id}` : "/app/colonias"} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
             <ArrowLeft className="size-4" aria-hidden /> Voltar
           </Link>
         }
@@ -153,10 +201,19 @@ function Formulario({ colonia }: { colonia?: ColoniaDetalhada | undefined }) {
 
       <form onSubmit={enviar} className="space-y-4" noValidate>
         <Cartao className="space-y-4">
-          <h2 className="font-semibold text-stone-800">Identificação</h2>
-          <Campo rotulo="Espécie" ajuda="Deixe em branco se ainda não identificou — o código fica COL-NNN.">
+          <h2 className="font-semibold text-foreground">Identificação</h2>
+          <Campo
+            rotulo="Espécie"
+            ajuda={
+              especieTravada
+                ? "A espécie não pode ser alterada depois de definida."
+                : colonia
+                  ? "Ao identificar, o código passa a ser o da espécie (ex.: TETRANGU-004). Depois disso, não pode mais ser alterada."
+                  : "Não poderá ser alterada depois. Deixe em branco se ainda não identificou — o código fica COL-NNN."
+            }
+          >
             {(id) => (
-              <Selecao id={id} value={estado.especieId} onChange={(e) => alterar("especieId", e.target.value)}>
+              <Selecao id={id} value={estado.especieId} disabled={especieTravada} onChange={(e) => alterar("especieId", e.target.value)}>
                 <option value="">Não identificada</option>
                 {especies?.map((esp) => (
                   <option key={esp.id} value={esp.id}>
@@ -166,11 +223,6 @@ function Formulario({ colonia }: { colonia?: ColoniaDetalhada | undefined }) {
               </Selecao>
             )}
           </Campo>
-          {colonia && colonia.especieId !== (estado.especieId || null) && (
-            <p className="rounded-xl bg-mel-50 px-3 py-2 text-sm text-mel-900">
-              O código <b className="font-mono">{colonia.codigo}</b> não muda ao trocar a espécie.
-            </p>
-          )}
           <div className="grid gap-4 sm:grid-cols-2">
             <Campo rotulo="Data de entrada" obrigatorio erro={erro("dataEntrada")}>
               {(id) => (
@@ -192,7 +244,7 @@ function Formulario({ colonia }: { colonia?: ColoniaDetalhada | undefined }) {
         </Cartao>
 
         <Cartao className="space-y-4">
-          <h2 className="font-semibold text-stone-800">Origem</h2>
+          <h2 className="font-semibold text-foreground">Origem</h2>
           <fieldset>
             <legend className="sr-only">Tipo de origem</legend>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -200,7 +252,7 @@ function Formulario({ colonia }: { colonia?: ColoniaDetalhada | undefined }) {
                 <label
                   key={o}
                   className={`flex cursor-pointer items-center justify-center rounded-xl border px-3 py-3 text-sm font-medium ${
-                    estado.origem === o ? "border-mel-700 bg-mel-50 text-mel-900" : "border-stone-300 text-stone-600"
+                    estado.origem === o ? "border-sidebar bg-sidebar text-sidebar-primary" : "border-input text-muted-foreground"
                   }`}
                 >
                   <input type="radio" name="origem" value={o} checked={estado.origem === o} onChange={() => alterar("origem", o)} className="sr-only" />
@@ -209,12 +261,39 @@ function Formulario({ colonia }: { colonia?: ColoniaDetalhada | undefined }) {
               ))}
             </div>
           </fieldset>
-          {estado.origem === "divisao" && (
+          {divisao && (
             <Campo rotulo="Colônia-mãe" obrigatorio erro={erro("coloniaMaeId")} ajuda="Registra a genealogia (linhagem mãe → filha).">
               {(id) => (
-                <Selecao id={id} value={estado.coloniaMaeId} onChange={(e) => alterar("coloniaMaeId", e.target.value)}>
+                <Selecao
+                  id={id}
+                  value={estado.coloniaMaeId}
+                  onChange={(e) => {
+                    const maeId = e.target.value;
+                    // a mãe não pode ser também a doadora
+                    setEstado((s) => ({ ...s, coloniaMaeId: maeId, coloniaDoadoraId: s.coloniaDoadoraId === maeId ? "" : s.coloniaDoadoraId }));
+                  }}
+                >
                   <option value="">Selecione…</option>
                   {maesPossiveis.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.codigo}
+                      {c.especie ? ` — ${c.especie.nomePopular}` : ""}
+                    </option>
+                  ))}
+                </Selecao>
+              )}
+            </Campo>
+          )}
+          {divisao && (
+            <Campo
+              rotulo="Colônia doadora de campeiras"
+              erro={erro("coloniaDoadoraId")}
+              ajuda="Opcional: preencha se outra colônia doou campeiras para fortalecer esta divisão."
+            >
+              {(id) => (
+                <Selecao id={id} value={estado.coloniaDoadoraId} onChange={(e) => alterar("coloniaDoadoraId", e.target.value)}>
+                  <option value="">Nenhuma</option>
+                  {doadorasPossiveis.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.codigo}
                       {c.especie ? ` — ${c.especie.nomePopular}` : ""}
@@ -227,7 +306,7 @@ function Formulario({ colonia }: { colonia?: ColoniaDetalhada | undefined }) {
         </Cartao>
 
         <Cartao className="space-y-4">
-          <h2 className="font-semibold text-stone-800">Caixa e localização</h2>
+          <h2 className="font-semibold text-foreground">Caixa e localização</h2>
           <Campo rotulo="Tipo de caixa">
             {(id) => (
               <Selecao id={id} value={estado.tipoCaixa} onChange={(e) => alterar("tipoCaixa", e.target.value as TipoCaixa)}>
@@ -264,9 +343,9 @@ function Formulario({ colonia }: { colonia?: ColoniaDetalhada | undefined }) {
               <Botao type="button" variante="secundario" tamanho="sm" onClick={usarLocalizacao} carregando={gps === "buscando"}>
                 <LocateFixed className="size-4" aria-hidden /> Usar localização atual
               </Botao>
-              {gps === "erro" && <span className="text-sm text-red-600">Não foi possível obter a localização.</span>}
+              {gps === "erro" && <span className="text-sm text-destructive">Não foi possível obter a localização.</span>}
             </div>
-            <p className="mt-2 text-sm text-stone-500">
+            <p className="mt-2 text-sm text-muted-foreground">
               Opcional. Com coordenadas, o clima de cada avaliação é preenchido automaticamente (sem coordenada da colônia,
               usa-se a do meliponário).
             </p>
@@ -280,7 +359,7 @@ function Formulario({ colonia }: { colonia?: ColoniaDetalhada | undefined }) {
         </Cartao>
 
         <MensagemErro erro={salvar.error} />
-        {tentou && !valido && <p className="text-sm text-red-600">Corrija os campos destacados.</p>}
+        {tentou && !valido && <p className="text-sm text-destructive">Corrija os campos destacados.</p>}
         <div className="flex gap-3">
           <Botao type="submit" tamanho="lg" className="flex-1 sm:flex-none" carregando={salvar.isPending}>
             {colonia ? "Salvar alterações" : "Cadastrar colônia"}

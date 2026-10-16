@@ -10,7 +10,7 @@ import { classesBotao } from "../ui/Botao";
 import { MensagemErro } from "../ui/Estados";
 
 // Galeria + upload opcional. Foto nunca é obrigatória (claude.md §8).
-export function GaleriaFotos({ vinculo }: { vinculo: { coloniaId: string } | { avaliacaoId: string } }) {
+export function GaleriaFotos({ vinculo }: { vinculo: { coloniaId: string } | { avaliacaoId: string } | { producaoId: string } }) {
   const queryClient = useQueryClient();
   const input = useRef<HTMLInputElement>(null);
   const { data: fotos } = useFotos(vinculo);
@@ -25,7 +25,7 @@ export function GaleriaFotos({ vinculo }: { vinculo: { coloniaId: string } | { a
       {fotos && fotos.length > 0 ? (
         <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4">
           {fotos.map((f) => (
-            <li key={f.id} className="overflow-hidden rounded-xl bg-stone-100">
+            <li key={f.id} className="overflow-hidden rounded-xl bg-muted">
               <a href={urlArquivo(f.url)} target="_blank" rel="noreferrer">
                 <img src={urlArquivo(f.url)} alt={f.legenda ?? `Foto de ${formatarData(f.createdAt)}`} loading="lazy" className="aspect-square w-full object-cover" />
               </a>
@@ -33,7 +33,7 @@ export function GaleriaFotos({ vinculo }: { vinculo: { coloniaId: string } | { a
           ))}
         </ul>
       ) : (
-        <p className="flex items-center gap-2 text-sm text-stone-500">
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
           <ImageOff className="size-4" aria-hidden /> Nenhuma foto.
         </p>
       )}

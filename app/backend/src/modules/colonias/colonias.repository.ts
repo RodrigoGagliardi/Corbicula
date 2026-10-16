@@ -32,6 +32,13 @@ const INCLUDE_DETALHADO = {
     select: { id: true, codigo: true, status: true },
     orderBy: { codigo: "asc" as const },
   },
+  coloniaDoadoraCampeiras: {
+    select: { id: true, codigo: true },
+  },
+  coloniasReceptorasCampeiras: {
+    select: { id: true, codigo: true, status: true },
+    orderBy: { codigo: "asc" as const },
+  },
   _count: {
     select: { avaliacoes: true, producoes: true },
   },
@@ -93,6 +100,7 @@ export const coloniasRepository = {
         observacoes: data.observacoes ?? null,
         especieId: data.especieId ?? null,
         coloniaMaeId: data.coloniaMaeId ?? null,
+        coloniaDoadoraCampeirasId: data.coloniaDoadoraCampeirasId ?? null,
         status: data.status,
       },
       include: INCLUDE_DETALHADO,
@@ -101,7 +109,7 @@ export const coloniasRepository = {
   // Conditional spreads: undefined = não alterar o campo; null = zerar o campo.
   // A checagem de propriedade (userId) no where é segunda linha de defesa —
   // a primeira é a validação de propriedade feita no service antes de chamar aqui.
-  atualizar: (id: string, userId: string, data: AtualizarColoniaInput) =>
+  atualizar: (id: string, userId: string, data: AtualizarColoniaInput & { codigo?: string }) =>
     prisma.colonia.update({
       where: { id, userId },
       data: {
@@ -117,6 +125,10 @@ export const coloniasRepository = {
         ...(data.observacoes !== undefined && { observacoes: data.observacoes }),
         ...(data.especieId !== undefined && { especieId: data.especieId }),
         ...(data.coloniaMaeId !== undefined && { coloniaMaeId: data.coloniaMaeId }),
+        ...(data.coloniaDoadoraCampeirasId !== undefined && {
+          coloniaDoadoraCampeirasId: data.coloniaDoadoraCampeirasId,
+        }),
+        ...(data.codigo !== undefined && { codigo: data.codigo }),
         ...(data.status !== undefined && { status: data.status }),
       },
       include: INCLUDE_DETALHADO,

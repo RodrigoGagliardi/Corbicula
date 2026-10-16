@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 export function Cartao({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <section className={`rounded-2xl border border-stone-200 bg-white p-4 md:p-5 ${className}`}>{children}</section>;
+  return <section className={`rounded-2xl border border-border bg-card p-4 md:p-5 ${className}`}>{children}</section>;
 }
 
 export function CabecalhoPagina({
@@ -20,8 +20,8 @@ export function CabecalhoPagina({
       {voltar}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold tracking-tight text-stone-900 md:text-3xl">{titulo}</h1>
-          {subtitulo && <p className="mt-1 text-stone-500">{subtitulo}</p>}
+          <h1 className="text-2xl font-bold tracking-tight text-foreground md:text-3xl">{titulo}</h1>
+          {subtitulo && <p className="mt-1 text-muted-foreground">{subtitulo}</p>}
         </div>
         {acoes && <div className="flex flex-wrap gap-2">{acoes}</div>}
       </div>

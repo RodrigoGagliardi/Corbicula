@@ -1,34 +1,182 @@
 @import "tailwindcss";
 
-/* Paleta "mel": âmbar para ações, marrom-cera para texto/estrutura.
-   Cores de status seguem as faixas do score (docs/exportacao.md). */
-@theme {
+/* Modo escuro por classe (.dark no <html>), controlado por store/tema.ts. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Design system "Natureza & Científico" + identidade Corbicula.
+   Todas as cores da interface são tokens semânticos (HSL) definidos aqui e
+   usados como `bg-primary`, `text-muted-foreground` etc. — nunca hex nos
+   componentes.
+   - Verde floresta (primary) → botões, links ativos, gráficos.
+   - Amarelo do logo #fff000 (accent / mel-400) → destaques e CTAs, item ativo
+     da sidebar, sublinhado de links. Amarelo sobre fundo claro é ilegível
+     (contraste ~1,1:1): ele entra como preenchimento, com texto preto
+     (`text-accent-foreground`), nunca como cor de texto no tema claro.
+   - Sidebar verde-escura, onde o logo amarelo/preto aparece bem.
+   Cores de status seguem as faixas do score (docs/exportacao.md) e não mudam. */
+:root {
+  --background: 45 25% 97%; /* creme claro */
+  --foreground: 150 30% 15%; /* verde-escuro */
+  --card: 0 0% 100%;
+  --card-foreground: 150 30% 15%;
+  --primary: 142 45% 28%; /* verde floresta */
+  --primary-foreground: 45 25% 97%;
+  --secondary: 35 30% 88%; /* terroso claro */
+  --secondary-foreground: 150 30% 15%;
+  --muted: 140 15% 92%; /* sálvia suave */
+  --muted-foreground: 150 10% 38%;
+  --accent: 56 100% 50%; /* amarelo do logo #fff000 */
+  --accent-foreground: 0 0% 0%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 140 15% 85%;
+  --input: 140 15% 80%;
+  --ring: 142 45% 28%;
+
+  --sidebar-background: 142 30% 18%;
+  --sidebar-foreground: 45 25% 95%;
+  --sidebar-primary: 56 100% 50%;
+  --sidebar-primary-foreground: 0 0% 0%;
+  --sidebar-accent: 142 25% 25%;
+  --sidebar-border: 142 25% 24%;
+
+  --chart-1: 142 45% 28%; /* verde */
+  --chart-2: 56 100% 50%; /* amarelo do logo */
+  --chart-3: 30 40% 35%; /* marrom */
+  --chart-4: 175 55% 32%; /* teal */
+  --chart-5: 25 90% 52%; /* laranja */
+
+  --radius: 0.625rem;
+}
+
+.dark {
+  --background: 150 25% 8%;
+  --foreground: 45 25% 92%;
+  --card: 150 22% 11%;
+  --card-foreground: 45 25% 92%;
+  --primary: 142 50% 45%;
+  --primary-foreground: 150 30% 8%;
+  --secondary: 35 15% 20%;
+  --secondary-foreground: 45 25% 92%;
+  --muted: 150 15% 16%;
+  --muted-foreground: 140 10% 65%;
+  --accent: 56 100% 50%;
+  --accent-foreground: 0 0% 0%;
+  --destructive: 0 65% 55%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 150 15% 20%;
+  --input: 150 15% 26%;
+  --ring: 142 50% 45%;
+
+  --sidebar-background: 150 28% 6%;
+  --sidebar-foreground: 45 25% 92%;
+  --sidebar-primary: 56 100% 50%;
+  --sidebar-primary-foreground: 0 0% 0%;
+  --sidebar-accent: 150 20% 13%;
+  --sidebar-border: 150 18% 14%;
+
+  --chart-1: 142 50% 45%;
+  --chart-3: 30 35% 55%;
+  --chart-4: 175 50% 45%;
+}
+
+@theme inline {
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Plus Jakarta Sans", "Inter", ui-sans-serif, system-ui, sans-serif;
 
-  --color-mel-50: #fffbeb;
-  --color-mel-100: #fef3c7;
-  --color-mel-200: #fde68a;
-  --color-mel-300: #fcd34d;
-  --color-mel-400: #fbbf24;
-  --color-mel-500: #f59e0b;
-  --color-mel-600: #d97706;
-  --color-mel-700: #b45309;
-  --color-mel-800: #92400e;
-  --color-mel-900: #78350f;
-  --color-mel-950: #451a03;
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
 
-  --color-excelente: #15803d;
-  --color-boa: #65a30d;
+  --color-sidebar: hsl(var(--sidebar-background));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar-primary: hsl(var(--sidebar-primary));
+  --color-sidebar-primary-foreground: hsl(var(--sidebar-primary-foreground));
+  --color-sidebar-accent: hsl(var(--sidebar-accent));
+  --color-sidebar-border: hsl(var(--sidebar-border));
+
+  --color-chart-1: hsl(var(--chart-1));
+  --color-chart-2: hsl(var(--chart-2));
+  --color-chart-3: hsl(var(--chart-3));
+  --color-chart-4: hsl(var(--chart-4));
+  --color-chart-5: hsl(var(--chart-5));
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+}
+
+/* Escala "mel": tons do amarelo da marca (400 = cor exata do logo). */
+@theme {
+  --color-mel-50: #fffde6;
+  --color-mel-100: #fffbbf;
+  --color-mel-200: #fff78a;
+  --color-mel-300: #fff452;
+  --color-mel-400: #fff000;
+  --color-mel-500: #e6d800;
+  --color-mel-600: #ccc000;
+
+  --color-excelente: #00ff08;
+  --color-boa: #16b900;
   --color-atencao: #d97706;
   --color-critica: #dc2626;
+
+  --animate-fade-in: fade-in 0.3s ease-out;
+  --animate-slide-in: slide-in 0.25s ease-out;
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes slide-in {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: none;
+    }
+  }
 }
 
-html {
-  -webkit-tap-highlight-color: transparent;
-}
-
-body {
-  @apply bg-stone-50 text-stone-900 antialiased;
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    -webkit-tap-highlight-color: transparent;
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-background font-sans text-foreground antialiased;
+  }
+  h1,
+  h2,
+  h3 {
+    @apply font-display;
+  }
 }
 
 /* Espaço para a barra inferior do mobile + área segura do iPhone */
@@ -39,4 +187,10 @@ body {
   .pb-nav {
     padding-bottom: 0;
   }
+}
+
+/* Scrollbar discreta, nos tons do tema */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) transparent;
 }

@@ -96,10 +96,167 @@ describe("colônias — genealogia", () => {
 
   it("remover a mãe com null desfaz o vínculo", async () => {
     const mae = await criarColonia(api);
-    const filha = await criarColonia(api, { coloniaMaeId: mae.id });
+    const filha = await criarColonia(api, { origem: "divisao", coloniaMaeId: mae.id });
     const res = await api.patch(`/colonias/${filha.id}`, { coloniaMaeId: null });
     expect(res.status).toBe(200);
     expect(res.body.coloniaMae).toBeNull();
+  });
+
+  it("filha sem espécie informada herda a espécie (e o código) da mãe", async () => {
+    const jatai = await idEspecie(api, "TETRANGU");
+    const mae = await criarColonia(api, { especieId: jatai });
+    const filha = await criarColonia(api, { origem: "divisao", coloniaMaeId: mae.id });
+    expect(filha.especieId).toBe(jatai);
+    expect(filha.codigo).toMatch(/^TETRANGU-/);
+  });
+
+  it("divisão não muda de espécie: recusa filha de espécie diferente da mãe (409)", async () => {
+    const jatai = await idEspecie(api, "TETRANGU");
+    const mandacaia = await idEspecie(api, "MELIQUAD");
+    const mae = await criarColonia(api, { especieId: jatai });
+
+    const res = await api.post("/colonias", {
+      dataEntrada: "2026-01-10T12:00:00.000Z",
+      origem: "divisao",
+      tipoCaixa: "INPA",
+      especieId: mandacaia,
+      coloniaMaeId: mae.id,
+    });
+    expect(res.status).toBe(409);
+
+    const filha = await criarColonia(api, { origem: "divisao", coloniaMaeId: mae.id });
+    expect((await api.patch(`/colonias/${filha.id}`, { especieId: mandacaia })).status).toBe(409);
+    expect((await api.patch(`/colonias/${mae.id}`, { especieId: mandacaia })).status).toBe(409);
+
+    const outra = await criarColonia(api, { especieId: mandacaia });
+    expect((await api.patch(`/colonias/${outra.id}`, { origem: "divisao", coloniaMaeId: mae.id })).status).toBe(409);
+  });
+
+  it("colônia sem espécie identificada não restringe a da mãe/filha", async () => {
+    const jatai = await idEspecie(api, "TETRANGU");
+    const mae = await criarColonia(api);
+    const filha = await criarColonia(api, { origem: "divisao", especieId: jatai, coloniaMaeId: mae.id });
+    expect(filha.especieId).toBe(jatai);
+    // identificar a mãe com a mesma espécie da filha é permitido
+    expect((await api.patch(`/colonias/${mae.id}`, { especieId: jatai })).status).toBe(200);
+  });
+
+  it("recusa ciclos na genealogia (409)", async () => {
+    const avo = await criarColonia(api);
+    const mae = await criarColonia(api, { origem: "divisao", coloniaMaeId: avo.id });
+    const filha = await criarColonia(api, { origem: "divisao", coloniaMaeId: mae.id });
+    expect((await api.patch(`/colonias/${avo.id}`, { origem: "divisao", coloniaMaeId: filha.id })).status).toBe(409);
+    expect((await api.patch(`/colonias/${mae.id}`, { coloniaMaeId: filha.id })).status).toBe(409);
+  });
+
+  it("só colônia de origem divisão tem mãe (409)", async () => {
+    const mae = await criarColonia(api);
+    const comprada = await api.post("/colonias", {
+      dataEntrada: "2026-01-10T12:00:00.000Z",
+      origem: "compra",
+      tipoCaixa: "INPA",
+      coloniaMaeId: mae.id,
+    });
+    expect(comprada.status).toBe(409);
+
+    const filha = await criarColonia(api, { origem: "divisao", coloniaMaeId: mae.id });
+    // trocar a origem exige desfazer o vínculo na mesma edição
+    expect((await api.patch(`/colonias/${filha.id}`, { origem: "captura" })).status).toBe(409);
+    const res = await api.patch(`/colonias/${filha.id}`, { origem: "captura", coloniaMaeId: null });
+    expect(res.status).toBe(200);
+    expect(res.body.coloniaMae).toBeNull();
+  });
+
+  it("filha não pode ter entrado antes da mãe (409); mesmo dia vale", async () => {
+    const mae = await criarColonia(api, { dataEntrada: "2026-03-10T12:00:00.000Z" });
+    const antes = await api.post("/colonias", {
+      dataEntrada: "2026-03-09T12:00:00.000Z",
+      origem: "divisao",
+      tipoCaixa: "INPA",
+      coloniaMaeId: mae.id,
+    });
+    expect(antes.status).toBe(409);
+
+    const filha = await criarColonia(api, {
+      dataEntrada: "2026-03-10T08:00:00.000Z",
+      origem: "divisao",
+      coloniaMaeId: mae.id,
+    });
+    // nem recuando a filha, nem adiantando a mãe
+    expect((await api.patch(`/colonias/${filha.id}`, { dataEntrada: "2026-03-01T12:00:00.000Z" })).status).toBe(409);
+    expect((await api.patch(`/colonias/${mae.id}`, { dataEntrada: "2026-03-20T12:00:00.000Z" })).status).toBe(409);
+    expect((await api.patch(`/colonias/${mae.id}`, { dataEntrada: "2026-02-01T12:00:00.000Z" })).status).toBe(200);
+  });
+});
+
+describe("colônias — espécie imutável", () => {
+  let api: Cliente;
+  beforeAll(async () => {
+    ({ api } = await novoUsuario(app));
+  });
+
+  it("não permite trocar nem apagar a espécie depois de definida (409)", async () => {
+    const jatai = await idEspecie(api, "TETRANGU");
+    const mandacaia = await idEspecie(api, "MELIQUAD");
+    const c = await criarColonia(api, { especieId: jatai });
+    expect((await api.patch(`/colonias/${c.id}`, { especieId: mandacaia })).status).toBe(409);
+    expect((await api.patch(`/colonias/${c.id}`, { especieId: null })).status).toBe(409);
+    // reenviar a mesma espécie (formulário completo) não é troca
+    expect((await api.patch(`/colonias/${c.id}`, { especieId: jatai, status: "inativa" })).status).toBe(200);
+  });
+
+  it("colônia sem espécie pode ser identificada uma vez e ganha o código da espécie", async () => {
+    const jatai = await idEspecie(api, "TETRANGU");
+    const mandacaia = await idEspecie(api, "MELIQUAD");
+    const c = await criarColonia(api);
+    expect(c.codigo).toMatch(/^COL-/);
+
+    const res = await api.patch(`/colonias/${c.id}`, { especieId: jatai });
+    expect(res.status).toBe(200);
+    expect(res.body.codigo).toMatch(/^TETRANGU-\d{3}$/);
+    expect((await api.patch(`/colonias/${c.id}`, { especieId: mandacaia })).status).toBe(409);
+  });
+});
+
+describe("colônias — doadora de campeiras", () => {
+  let api: Cliente;
+  let jatai: string;
+  beforeAll(async () => {
+    ({ api } = await novoUsuario(app));
+    jatai = await idEspecie(api, "TETRANGU");
+  });
+
+  const divisao = (dados: Record<string, unknown>) =>
+    api.post("/colonias", { dataEntrada: "2026-05-10T12:00:00.000Z", origem: "divisao", tipoCaixa: "INPA", ...dados });
+
+  it("registra a doadora e mostra os dois lados da relação", async () => {
+    const mae = await criarColonia(api, { especieId: jatai });
+    const doadora = await criarColonia(api, { especieId: jatai });
+    const res = await divisao({ coloniaMaeId: mae.id, coloniaDoadoraCampeirasId: doadora.id });
+    expect(res.status).toBe(201);
+    expect(res.body.coloniaDoadoraCampeiras).toMatchObject({ id: doadora.id, codigo: doadora.codigo });
+
+    const detalhe = await api.get(`/colonias/${doadora.id}`);
+    expect(detalhe.body.coloniasReceptorasCampeiras.map((c: { id: string }) => c.id)).toEqual([res.body.id]);
+  });
+
+  it("é opcional e só vale para divisão, com outra colônia que não a mãe (409)", async () => {
+    const mae = await criarColonia(api, { especieId: jatai });
+    const doadora = await criarColonia(api, { especieId: jatai });
+    expect((await divisao({ coloniaMaeId: mae.id })).status).toBe(201);
+    expect((await divisao({ coloniaMaeId: mae.id, coloniaDoadoraCampeirasId: mae.id })).status).toBe(409);
+    expect((await divisao({ origem: "captura", coloniaDoadoraCampeirasId: doadora.id })).status).toBe(409);
+  });
+
+  it("segue as regras da mãe: mesma espécie, já presente na data e do mesmo usuário", async () => {
+    const mae = await criarColonia(api, { especieId: jatai });
+    const mandacaia = await criarColonia(api, { especieId: await idEspecie(api, "MELIQUAD") });
+    const posterior = await criarColonia(api, { especieId: jatai, dataEntrada: "2026-06-01T12:00:00.000Z" });
+    const alheia = await criarColonia((await novoUsuario(app)).api);
+
+    expect((await divisao({ coloniaMaeId: mae.id, coloniaDoadoraCampeirasId: mandacaia.id })).status).toBe(409);
+    expect((await divisao({ coloniaMaeId: mae.id, coloniaDoadoraCampeirasId: posterior.id })).status).toBe(409);
+    expect((await divisao({ coloniaMaeId: mae.id, coloniaDoadoraCampeirasId: alheia.id })).status).toBe(404);
   });
 });
 

@@ -73,6 +73,7 @@ export interface Colonia {
   status: StatusColonia;
   especieId: string | null;
   coloniaMaeId: string | null;
+  coloniaDoadoraCampeirasId: string | null;
   especie: EspecieResumo | null;
   ultimaAvaliacao: AvaliacaoResumo | null;
   _count: { avaliacoes: number; producoes: number };
@@ -83,6 +84,8 @@ export interface Colonia {
 export interface ColoniaDetalhada extends Colonia {
   coloniaMae: { id: string; codigo: string } | null;
   coloniasFilhas: { id: string; codigo: string; status: StatusColonia }[];
+  coloniaDoadoraCampeiras: { id: string; codigo: string } | null;
+  coloniasReceptorasCampeiras: { id: string; codigo: string; status: StatusColonia }[];
 }
 
 export interface CriterioEspecie {
@@ -151,6 +154,73 @@ export interface Foto {
   createdAt: string;
 }
 
+// ─── Produção ─────────────────────────────────────────────────────────────────
+
+export type TipoProduto = "mel" | "polen" | "propolis" | "cera";
+export type Unidade = "ml" | "g";
+
+export interface Caracteristicas {
+  cor?: string;
+  aroma?: string;
+  sabor?: string;
+}
+
+export interface Producao {
+  id: string;
+  coloniaId: string;
+  dataColheita: string;
+  tipoProduto: TipoProduto;
+  quantidade: number;
+  unidade: Unidade;
+  caracteristicas: Caracteristicas | null;
+  observacoes: string | null;
+  colonia: { id: string; codigo: string; especie: EspecieResumo | null };
+  _count: { fotos: number };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FiltrosProducao {
+  coloniaId?: string;
+  tipoProduto?: TipoProduto;
+  desde?: string; // YYYY-MM-DD
+  ate?: string;
+}
+
+export interface ColoniaRanking {
+  coloniaId: string;
+  codigo: string;
+  total: number;
+  colheitas: number;
+}
+
+// Um grupo por (tipoProduto, unidade): unidades diferentes nunca são somadas.
+export interface GrupoProducao {
+  tipoProduto: TipoProduto;
+  unidade: Unidade;
+  total: number;
+  colheitas: number;
+  mediaPorColheita: number;
+  coloniasProdutoras: number;
+  mediaPorColonia: number;
+  melhorProdutora: ColoniaRanking | null;
+  piorProdutora: ColoniaRanking | null;
+  rankingColonias: ColoniaRanking[];
+  porEspecie: {
+    especieCodigo: string | null;
+    nomeCientifico: string | null;
+    total: number;
+    colheitas: number;
+    colonias: number;
+    mediaPorColonia: number;
+  }[];
+}
+
+export interface ResumoProducao {
+  metodologia: string;
+  grupos: GrupoProducao[];
+}
+
 // ─── Payloads ─────────────────────────────────────────────────────────────────
 
 export interface ColoniaInput {
@@ -159,6 +229,7 @@ export interface ColoniaInput {
   tipoCaixa: TipoCaixa;
   especieId?: string | null;
   coloniaMaeId?: string | null;
+  coloniaDoadoraCampeirasId?: string | null;
   status?: StatusColonia;
   dimensoesCaixa?: DimensoesCaixa | null;
   localizacao?: string | null;
@@ -182,4 +253,14 @@ export interface ParametroInput {
   criterioMedio: string;
   criterioRuim: string;
   ativo?: boolean;
+}
+
+export interface ProducaoInput {
+  coloniaId: string;
+  dataColheita: string;
+  tipoProduto: TipoProduto;
+  quantidade: number;
+  unidade: Unidade;
+  caracteristicas?: Caracteristicas | null;
+  observacoes?: string | null;
 }

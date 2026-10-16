@@ -15,7 +15,7 @@ export function SeloScore({ score, status }: { score: number; status: StatusAval
 export function BarraScore({ score, status }: { score: number; status: StatusAvaliacao }) {
   return (
     <div
-      className="h-2 w-full overflow-hidden rounded-full bg-stone-100"
+      className="h-2 w-full overflow-hidden rounded-full bg-muted"
       role="meter"
       aria-valuemin={0}
       aria-valuemax={100}

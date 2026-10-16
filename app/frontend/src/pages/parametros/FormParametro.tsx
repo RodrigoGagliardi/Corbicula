@@ -57,7 +57,7 @@ function Formulario({ parametro, proximaOrdem }: { parametro?: Parametro | undef
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: chaves.parametros });
-      navegar("/parametros", { replace: true });
+      navegar("/app/parametros", { replace: true });
     },
   });
 
@@ -71,7 +71,7 @@ function Formulario({ parametro, proximaOrdem }: { parametro?: Parametro | undef
     <>
       <CabecalhoPagina
         voltar={
-          <Link to="/parametros" className="inline-flex items-center gap-1 text-sm text-stone-500 hover:text-stone-800">
+          <Link to="/app/parametros" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
             <ArrowLeft className="size-4" aria-hidden /> Parâmetros
           </Link>
         }
@@ -102,7 +102,7 @@ function Formulario({ parametro, proximaOrdem }: { parametro?: Parametro | undef
             </Campo>
           </Cartao>
           {parametro && parametro._count.avaliacoesParametros > 0 && (
-            <p className="rounded-xl bg-mel-50 px-3 py-2 text-sm text-mel-900">
+            <p className="rounded-xl bg-accent/25 px-3 py-2 text-sm text-foreground">
               Este parâmetro já foi usado em {parametro._count.avaliacoesParametros} avaliação(ões). Mudar os critérios
               afeta a interpretação das avaliações futuras — para mudanças grandes, prefira criar um parâmetro novo e
               desativar este.
@@ -115,9 +115,9 @@ function Formulario({ parametro, proximaOrdem }: { parametro?: Parametro | undef
         </form>
 
         <div>
-          <p className="mb-2 text-sm font-medium text-stone-500">Prévia na avaliação</p>
+          <p className="mb-2 text-sm font-medium text-muted-foreground">Prévia na avaliação</p>
           <Cartao className="space-y-3">
-            <h2 className="font-semibold text-stone-900">{dados.nome || "Nome do parâmetro"}</h2>
+            <h2 className="font-semibold text-foreground">{dados.nome || "Nome do parâmetro"}</h2>
             <SeletorClassificacao rotulo="Prévia" valor={undefined} onChange={() => {}} />
             <dl className="space-y-1 text-sm">
               {[
@@ -126,8 +126,8 @@ function Formulario({ parametro, proximaOrdem }: { parametro?: Parametro | undef
                 ["Ruim", dados.criterioRuim],
               ].map(([r, t]) => (
                 <div key={r} className="flex gap-2">
-                  <dt className="w-12 shrink-0 font-medium text-stone-500">{r}</dt>
-                  <dd className="text-stone-700">{t || "—"}</dd>
+                  <dt className="w-12 shrink-0 font-medium text-muted-foreground">{r}</dt>
+                  <dd className="text-foreground">{t || "—"}</dd>
                 </div>
               ))}
             </dl>

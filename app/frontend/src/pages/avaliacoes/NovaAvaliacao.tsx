@@ -38,7 +38,7 @@ export function NovaAvaliacao() {
           icone={<SlidersHorizontal className="size-10" />}
           titulo="Nenhum parâmetro ativo"
           descricao="Defina o que você observa em cada inspeção (ex.: fluxo de entrada, potes de mel) antes de avaliar."
-          acao={<LinkBotao to="/parametros">Configurar parâmetros</LinkBotao>}
+          acao={<LinkBotao to="/app/parametros">Configurar parâmetros</LinkBotao>}
         />
       </>
     );
@@ -71,7 +71,7 @@ function EscolherColonia({ colonias, onEscolher }: { colonias: Colonia[]; onEsco
         <EstadoVazio
           icone={<Search className="size-10" />}
           titulo="Nenhuma colônia ativa"
-          acao={<LinkBotao to="/colonias/nova">Cadastrar colônia</LinkBotao>}
+          acao={<LinkBotao to="/app/colonias/nova">Cadastrar colônia</LinkBotao>}
         />
       ) : (
         <>
@@ -88,16 +88,16 @@ function EscolherColonia({ colonias, onEscolher }: { colonias: Colonia[]; onEsco
               <li key={c.id}>
                 <button
                   onClick={() => onEscolher(c.id)}
-                  className="flex w-full items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-white p-4 text-left hover:border-mel-300 hover:bg-mel-50"
+                  className="flex w-full items-center justify-between gap-3 rounded-2xl border border-border bg-card p-4 text-left hover:border-primary hover:bg-muted"
                 >
                   <div className="min-w-0">
-                    <p className="font-mono font-semibold text-stone-900">{c.codigo}</p>
-                    <p className="truncate text-sm text-stone-500">
+                    <p className="font-mono font-semibold text-foreground">{c.codigo}</p>
+                    <p className="truncate text-sm text-muted-foreground">
                       {c.especie?.nomePopular ?? "Espécie não identificada"}
                       {c.localizacao && ` · ${c.localizacao}`}
                     </p>
                   </div>
-                  <span className="shrink-0 text-right text-xs text-stone-500">
+                  <span className="shrink-0 text-right text-xs text-muted-foreground">
                     {c.ultimaAvaliacao ? `Avaliada ${tempoRelativo(c.ultimaAvaliacao.dataAvaliacao)}` : "Nunca avaliada"}
                   </span>
                 </button>
@@ -162,7 +162,7 @@ function Formulario({ colonia, parametros }: { colonia: Colonia; parametros: Par
     onSuccess: ({ avaliacao, fotoFalhou }) => {
       queryClient.invalidateQueries({ queryKey: chaves.colonias });
       queryClient.invalidateQueries({ queryKey: ["fotos"] });
-      navegar(`/colonias/${colonia.id}/avaliacoes/${avaliacao.id}`, { replace: true, state: { nova: true, fotoFalhou } });
+      navegar(`/app/colonias/${colonia.id}/avaliacoes/${avaliacao.id}`, { replace: true, state: { nova: true, fotoFalhou } });
     },
   });
 
@@ -170,7 +170,7 @@ function Formulario({ colonia, parametros }: { colonia: Colonia; parametros: Par
     <>
       <CabecalhoPagina
         voltar={
-          <Link to="/avaliacoes/nova" className="inline-flex items-center gap-1 text-sm text-stone-500 hover:text-stone-800">
+          <Link to="/app/avaliacoes/nova" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
             <ArrowLeft className="size-4" aria-hidden /> Trocar colônia
           </Link>
         }
@@ -179,15 +179,15 @@ function Formulario({ colonia, parametros }: { colonia: Colonia; parametros: Par
       />
 
       {/* Progresso + prévia do score, sempre visível no topo durante a rolagem */}
-      <div className="sticky top-[57px] z-10 -mx-4 mb-4 border-b border-stone-200 bg-stone-50/95 px-4 py-3 backdrop-blur md:top-0 md:mx-0 md:rounded-2xl md:border">
+      <div className="sticky top-[57px] z-10 -mx-4 mb-4 border-b border-border bg-background/95 px-4 py-3 backdrop-blur md:top-0 md:mx-0 md:rounded-2xl md:border">
         <div className="flex items-center justify-between gap-3">
-          <span className="text-sm font-medium text-stone-700">
+          <span className="text-sm font-medium text-foreground">
             {avaliados.length} de {parametros.length} parâmetros
           </span>
-          {previa ? <SeloScore score={previa.score} status={previa.status} /> : <span className="text-sm text-stone-400">Score: —</span>}
+          {previa ? <SeloScore score={previa.score} status={previa.status} /> : <span className="text-sm text-muted-foreground">Score: —</span>}
         </div>
-        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-stone-200">
-          <div className="h-full rounded-full bg-mel-600 transition-all" style={{ width: `${(avaliados.length / parametros.length) * 100}%` }} />
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+          <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${(avaliados.length / parametros.length) * 100}%` }} />
         </div>
       </div>
 
@@ -197,8 +197,8 @@ function Formulario({ colonia, parametros }: { colonia: Colonia; parametros: Par
           const escolhido = classificacoes[p.id];
           return (
             <Cartao key={p.id} className="space-y-3">
-              <h2 className="font-semibold text-stone-900">
-                <span className="mr-1 text-stone-400">{i + 1}.</span> {p.nome}
+              <h2 className="font-semibold text-foreground">
+                <span className="mr-1 text-muted-foreground">{i + 1}.</span> {p.nome}
               </h2>
               <SeletorClassificacao
                 rotulo={p.nome}
@@ -210,8 +210,8 @@ function Formulario({ colonia, parametros }: { colonia: Colonia; parametros: Par
                   const texto = c === "bom" ? crit.criterioBom : c === "medio" ? crit.criterioMedio : crit.criterioRuim;
                   return (
                     <div key={c} className={`flex gap-2 ${escolhido && escolhido !== c ? "opacity-40" : ""}`}>
-                      <dt className="w-12 shrink-0 font-medium text-stone-500">{c === "bom" ? "Bom" : c === "medio" ? "Médio" : "Ruim"}</dt>
-                      <dd className="text-stone-700">{texto}</dd>
+                      <dt className="w-12 shrink-0 font-medium text-muted-foreground">{c === "bom" ? "Bom" : c === "medio" ? "Médio" : "Ruim"}</dt>
+                      <dd className="text-foreground">{texto}</dd>
                     </div>
                   );
                 })}
@@ -229,7 +229,7 @@ function Formulario({ colonia, parametros }: { colonia: Colonia; parametros: Par
                 <button
                   type="button"
                   onClick={() => setNotaAberta((n) => ({ ...n, [p.id]: true }))}
-                  className="inline-flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-800"
+                  className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
                 >
                   <MessageSquarePlus className="size-4" aria-hidden /> Observação
                 </button>
@@ -239,7 +239,7 @@ function Formulario({ colonia, parametros }: { colonia: Colonia; parametros: Par
         })}
 
         <Cartao className="space-y-4">
-          <h2 className="font-semibold text-stone-900">Finalizar</h2>
+          <h2 className="font-semibold text-foreground">Finalizar</h2>
 
           <Campo rotulo="Observações gerais">
             {(id) => (
@@ -251,7 +251,7 @@ function Formulario({ colonia, parametros }: { colonia: Colonia; parametros: Par
                       key={s}
                       type="button"
                       onClick={() => setObservacoes((o) => (o.trim() ? `${o.trim()}. ${s}` : s))}
-                      className="rounded-full border border-stone-300 px-2.5 py-1 text-xs text-stone-600 hover:bg-stone-100"
+                      className="rounded-full border border-input px-2.5 py-1 text-xs text-muted-foreground hover:bg-muted"
                     >
                       + {s}
                     </button>
@@ -262,13 +262,13 @@ function Formulario({ colonia, parametros }: { colonia: Colonia; parametros: Par
           </Campo>
 
           <fieldset>
-            <legend className="mb-2 text-sm font-medium text-stone-700">Ações tomadas</legend>
+            <legend className="mb-2 text-sm font-medium text-foreground">Ações tomadas</legend>
             <div className="grid gap-1.5 sm:grid-cols-2">
               {ACOES.map((a) => (
-                <label key={a} className="flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm hover:bg-stone-50">
+                <label key={a} className="flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm hover:bg-background">
                   <input
                     type="checkbox"
-                    className="size-5 accent-mel-700"
+                    className="size-5 accent-primary"
                     checked={acoes.includes(a)}
                     onChange={(e) => setAcoes((l) => (e.target.checked ? [...l, a] : l.filter((x) => x !== a)))}
                   />
@@ -279,7 +279,7 @@ function Formulario({ colonia, parametros }: { colonia: Colonia; parametros: Par
           </fieldset>
 
           <div>
-            <p className="mb-2 text-sm font-medium text-stone-700">Foto da inspeção (opcional)</p>
+            <p className="mb-2 text-sm font-medium text-foreground">Foto da inspeção (opcional)</p>
             <input
               ref={inputFoto}
               type="file"
@@ -291,7 +291,7 @@ function Formulario({ colonia, parametros }: { colonia: Colonia; parametros: Par
             {foto ? (
               <div className="flex items-center gap-3">
                 <PreviaFoto arquivo={foto} />
-                <button type="button" onClick={() => setFoto(null)} className="inline-flex items-center gap-1 text-sm text-stone-500 hover:text-red-700">
+                <button type="button" onClick={() => setFoto(null)} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-destructive">
                   <X className="size-4" aria-hidden /> Remover
                 </button>
               </div>
@@ -322,12 +322,13 @@ function Formulario({ colonia, parametros }: { colonia: Colonia; parametros: Par
         </Cartao>
 
         {faltam > 0 && avaliados.length > 0 && (
-          <p className="text-sm text-mel-800">
+          <p className="text-sm text-foreground">
             {faltam} parâmetro{faltam > 1 ? "s" : ""} sem classificação — {faltam > 1 ? "ficarão" : "ficará"} fora desta avaliação e do score.
           </p>
         )}
         <MensagemErro erro={salvar.error} />
         <Botao
+          variante="destaque"
           tamanho="lg"
           className="w-full"
           disabled={avaliados.length === 0}

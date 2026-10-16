@@ -9,7 +9,7 @@
 > de encerrar a tarefa. Se encontrar divergência entre este documento e o disco,
 > o disco é a verdade — corrija o documento para refletir o real.
 
-**Última sincronização (25/09/2026):** backend do MVP completo (inclui fotos, produções, exportação e sync offline) com suíte de testes automatizados (Vitest) e CI no GitHub Actions.
+**Última sincronização (01/10/2026):** backend do MVP completo (inclui fotos, produções, exportação e sync offline) com suíte de testes automatizados (Vitest) e CI no GitHub Actions. Frontend criado em `app/frontend/` (React + Vite + PWA) com as primeiras telas do MVP; a camada offline de dados ainda não existe.
 
 ---
 
@@ -20,17 +20,20 @@ orquestração, licença e contexto ficam na raiz.
 
 ```
 CORBICULA/
-├── .claude/                   # config do Claude Code
+├── .claude/                   # config do Claude Code (ignorado no git)
+├── .husky/                    # git hooks (pre-commit + commitlint no commit-msg)
 ├── .github/
 │   └── workflows/
 │       └── backend-tests.yml  # CI: typecheck + testes do backend (Postgres como service)
-├── claude.md                  # contexto vivo do projeto (lido pelo Claude Code)
-├── handoff_doc.md             # registro histórico de contexto (legado)
+├── CLAUDE.md                  # contexto vivo do projeto (lido pelo Claude Code; ignorado no git)
 ├── README.md
 ├── CHANGELOG.md
 ├── CODE_OF_CONDUCT.md
 ├── LICENSE                    # Apache 2.0
 ├── makefile
+├── package.json               # tooling da raiz: husky, commitlint, release-it
+├── commitlint.config.js       # Conventional Commits
+├── .release-it.json           # versionamento + CHANGELOG
 ├── docker-compose.yml         # ambiente de desenvolvimento
 ├── docker-compose.prod.yml    # ambiente de produção
 ├── .env / .env.example
@@ -45,7 +48,7 @@ CORBICULA/
 │   └── estrutura-pastas.md    # este arquivo
 └── app/
     ├── backend/               # Node.js + Fastify + Prisma  [EXISTE]
-    ├── frontend/              # React + Vite + PWA          [A CRIAR]
+    ├── frontend/              # React + Vite + PWA          [EXISTE]
     └── analytics/             # Python + FastAPI (Fase 2)   [A CRIAR]
 ```
 
@@ -154,38 +157,75 @@ Notas:
 
 ---
 
-## app/frontend — React + PWA [A CRIAR]
+## app/frontend — React + PWA [EXISTE]
 
-Estrutura planejada (ajustar quando criada):
+SPA em React 19 + TypeScript, servida pelo Vite. Estado do servidor com TanStack Query, sessão com Zustand (persistida no localStorage), estilos com Tailwind CSS v4, rotas com React Router v7. O PWA é gerado pelo `vite-plugin-pwa` (manifest + Service Worker com o app shell em cache). Os nomes de componentes e páginas seguem o idioma do projeto (português).
 
 ```
 app/frontend/
 ├── public/
-│   ├── icons/                 # ícones PWA
-│   └── manifest.json
+│   └── icons/                 # logos oficiais (Logo Corbicula*.png) + favicon.svg e ícones PWA gerados
+├── scripts/
+│   └── gerar-icones.mjs       # gera favicon.svg + PNGs do PWA a partir da geometria do logo (npm run icones)
 ├── src/
-│   ├── assets/
 │   ├── components/
-│   │   ├── ui/                # componentes base (Button, Card, Modal...)
-│   │   ├── layout/            # Header, Sidebar, Navigation
-│   │   ├── charts/            # gráficos (Recharts)
-│   │   └── features/          # ColonyCard, EvaluationForm, GenealogyTree...
-│   ├── pages/                 # as telas (ver docs/telas.md)
-│   ├── hooks/                 # useColonies, useOffline, useSync...
+│   │   ├── ui/                # Botao, Campo, Cartao, Estados (carregando/erro/vazio)
+│   │   ├── layout/
+│   │   │   ├── AppLayout.tsx      # /app: sidebar verde recolhível (desktop) ↔ barra inferior + "Mais" (mobile)
+│   │   │   ├── LayoutPublico.tsx  # páginas públicas: cabeçalho + rodapé + <Outlet/>
+│   │   │   ├── CartaoAutenticacao.tsx  # cartão de login/cadastro/recuperar senha
+│   │   │   ├── Marca.tsx          # logo do favo + nome
+│   │   │   └── navegacao.ts       # fonte única dos itens de navegação dos dois layouts
+│   │   ├── charts/
+│   │   │   └── GraficoScore.tsx   # evolução do score de uma colônia
+│   │   └── features/          # CartaoColonia, GaleriaFotos, SeletorClassificacao, SeloScore
+│   ├── pages/
+│   │   ├── Landing.tsx, Login.tsx, Cadastro.tsx, RecuperarSenha.tsx, Sobre.tsx, NaoEncontrado.tsx
+│   │   ├── Dashboard.tsx
+│   │   ├── EmConstrucao.tsx   # tela "em construção" das rotas ainda não implementadas
+│   │   ├── telasPlanejadas.ts # rotas /app pendentes + o que cada tela vai mostrar (docs/telas.md)
+│   │   ├── colonias/          # ListaColonias, DetalheColonia, FormColonia (criar/editar)
+│   │   ├── avaliacoes/        # NovaAvaliacao (fluxo rápido), DetalheAvaliacao
+│   │   ├── parametros/        # ListaParametros, FormParametro (criar/editar)
+│   │   └── producao/          # HistoricoProducao, FormColheita (registrar/editar), RelatorioProducao
+│   ├── hooks/
+│   │   ├── useDados.ts        # queries do TanStack Query + chaves de cache centralizadas
+│   │   └── useOnline.ts       # estado de conexão do navegador
 │   ├── services/
-│   │   ├── api/               # cliente HTTP para o backend
-│   │   └── offline/           # IndexedDB, sync, fila
-│   ├── store/                 # Zustand
+│   │   └── api/
+│   │       ├── client.ts      # fetch com JWT, ErroApi (status + mensagens do backend)
+│   │       └── endpoints.ts   # funções por recurso (colônias, avaliações, parâmetros, fotos...)
+│   ├── store/
+│   │   ├── auth.ts            # sessão (token + usuário) em Zustand persistido
+│   │   └── preferencias.ts    # tema (claro/escuro/sistema) e sidebar recolhida
 │   ├── types/
+│   │   └── api.ts             # tipos das respostas da API
 │   ├── utils/
-│   ├── App.tsx
-│   ├── main.tsx
-│   └── router.tsx
-├── Dockerfile
-├── package.json
+│   │   ├── colonias.ts        # colônias que pedem atenção (nunca avaliada, score baixo, inspeção atrasada)
+│   │   ├── format.ts          # datas e números em pt-BR
+│   │   ├── imagem.ts          # compressão de foto no cliente (canvas, ~500 KB)
+│   │   ├── parametrosSugeridos.ts  # sugestões de parâmetros para começar
+│   │   ├── producao.ts        # rótulos/unidades dos produtos e períodos dos filtros
+│   │   └── score.ts           # faixas do score (Excelente/Boa/Atenção/Crítica)
+│   ├── index.css              # Tailwind + tokens do tema (claro/escuro): verde floresta + amarelo do logo
+│   ├── main.tsx               # entry point: QueryClient + RouterProvider
+│   ├── router.tsx             # rotas públicas + /app/* privadas, guardas e redirecionamento dos endereços antigos
+│   └── test-setup.ts          # jest-dom para o Vitest (ainda sem testes escritos)
+├── node_modules/              # volume Docker frontend_modules
+├── Dockerfile                 # targets: development (Vite) → builder → production (nginx)
+├── .dockerignore
+├── .gitignore                 # node_modules, dist, dev-dist
+├── index.html
+├── package.json               # scripts: dev, build, typecheck, test, icones
 ├── tsconfig.json
-└── vite.config.ts
+└── vite.config.ts             # React, Tailwind, PWA (manifest + workbox), Vitest, polling p/ Docker no Windows
 ```
+
+Notas:
+- `VITE_API_URL` é a URL da API vista pelo **navegador** (padrão `http://localhost:3000`), não pela rede Docker.
+- `/` redireciona para `/dashboard` (logado) ou `/login`; ainda não existe landing page.
+- Ainda não existem: `services/offline/` (IndexedDB + fila usando `/sync`) e as telas de produção, análises, exportação e configurações.
+- `watch.usePolling` no Vite é necessário para o hot reload funcionar com bind mount do Windows dentro do Docker.
 
 ---
 
@@ -252,3 +292,19 @@ Notas:
   helpers), `vitest.config.mts`, `tsconfig.test.json` e `.github/workflows/backend-tests.yml`.
   `src/server.ts` dividido: a montagem da aplicação foi para `src/app.ts` (`buildApp()`),
   usada pelos testes via `app.inject`. `tsconfig.json` passou a incluir só `src/` e `prisma/`.
+
+- **[2026-10-01 — frontend]** — Criado `app/frontend/` (React + Vite + PWA) com
+  `components/{ui,layout,charts,features}`, `pages/` (colonias, avaliacoes, parametros),
+  `hooks/`, `services/api/`, `store/`, `types/`, `utils/`, `public/icons/` e
+  `scripts/gerar-icones.mjs`. Serviço `frontend` ativado no `docker-compose.yml` (volume
+  `frontend_modules`). Árvore da raiz corrigida para o disco: `handoff_doc.md` não existe mais;
+  adicionados `.husky/`, `package.json`, `commitlint.config.js` e `.release-it.json`.
+
+- **[2026-10-14 — frontend: tema e rotas]** — Rotas privadas passaram para `/app/*` (endereços
+  antigos redirecionam); `/` virou landing page. Criados `components/layout/{LayoutPublico,
+  CartaoAutenticacao,Marca}.tsx` (o antigo `LayoutPublico` virou `CartaoAutenticacao`),
+  `pages/{Landing,RecuperarSenha,EmConstrucao}.tsx`, `pages/telasPlanejadas.ts` e
+  `store/preferencias.ts`. Cores migradas para tokens semânticos em `index.css` (tema
+  "Natureza & Científico" + amarelo do logo, com modo escuro).
+
+- **[2026-10-14 — frontend: produção]** — Criados `pages/producao/` e `utils/producao.ts`; as rotas `/app/producao*` deixaram de ser "em construção".

@@ -6,13 +6,25 @@ import type {
   ColoniaDetalhada,
   ColoniaInput,
   Especie,
+  FiltrosProducao,
   Foto,
   Parametro,
   ParametroInput,
+  Producao,
+  ProducaoInput,
   RespostaAuth,
+  ResumoProducao,
   Usuario,
 } from "../../types/api";
-import { api } from "./client";
+import { api, baixarArquivo } from "./client";
+
+// Query string só com os filtros preenchidos.
+const consulta = (filtros: object) => {
+  const qs = new URLSearchParams(
+    Object.entries(filtros).filter(([, v]) => v !== undefined && v !== "") as [string, string][]
+  ).toString();
+  return qs ? `?${qs}` : "";
+};
 
 export const authApi = {
   entrar: (email: string, password: string) => api.post<RespostaAuth>("/auth/login", { email, password }),
@@ -50,7 +62,7 @@ export const parametrosApi = {
 };
 
 export const fotosApi = {
-  listar: (filtro: { coloniaId?: string; avaliacaoId?: string }) => {
+  listar: (filtro: { coloniaId?: string; avaliacaoId?: string; producaoId?: string }) => {
     const qs = new URLSearchParams(filtro as Record<string, string>).toString();
     return api.get<Foto[]>(`/fotos?${qs}`);
   },
@@ -61,4 +73,18 @@ export const fotosApi = {
     form.append("arquivo", arquivo, "foto.jpg");
     return api.post<Foto>("/fotos", form);
   },
+};
+
+export const producoesApi = {
+  listar: (filtros: FiltrosProducao = {}) => api.get<Producao[]>(`/producoes${consulta(filtros)}`),
+  resumo: (filtros: FiltrosProducao = {}) => api.get<ResumoProducao>(`/producoes/resumo${consulta(filtros)}`),
+  buscar: (id: string) => api.get<Producao>(`/producoes/${id}`),
+  criar: (dados: ProducaoInput) => api.post<Producao>("/producoes", dados),
+  atualizar: (id: string, dados: Partial<Omit<ProducaoInput, "coloniaId">>) => api.patch<Producao>(`/producoes/${id}`, dados),
+  excluir: (id: string) => api.delete(`/producoes/${id}`),
+};
+
+export const exportacaoApi = {
+  producoes: (filtros: FiltrosProducao, formato: "csv" | "json" = "csv") =>
+    baixarArquivo(`/exportacao/producoes${consulta({ ...filtros, formato })}`, `corbicula_producoes.${formato}`),
 };

@@ -60,5 +60,26 @@ export const api = {
   delete: (caminho: string) => requisicao<void>("DELETE", caminho),
 };
 
+// Download autenticado (exportações): baixa o arquivo e dispara o "salvar" do
+// navegador com o nome enviado pelo servidor.
+export async function baixarArquivo(caminho: string, nomePadrao: string): Promise<void> {
+  const token = useAuth.getState().token;
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${caminho}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  } catch {
+    throw new ErroApi(0, "Sem conexão com o servidor.");
+  }
+  if (!res.ok) {
+    const dados = (await res.json().catch(() => null)) as { error?: string } | null;
+    throw new ErroApi(res.status, dados?.error ?? `Erro ${res.status}`);
+  }
+  const nome = /filename="?([^";]+)"?/.exec(res.headers.get("Content-Disposition") ?? "")?.[1] ?? nomePadrao;
+  const url = URL.createObjectURL(await res.blob());
+  const link = Object.assign(document.createElement("a"), { href: url, download: nome });
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 // URLs de arquivos servidos pelo backend (ex.: /uploads/fotos/<uuid>.jpg).
 export const urlArquivo = (caminho: string) => `${API_URL}${caminho}`;

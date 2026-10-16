@@ -67,6 +67,7 @@ descrição de como foi calculado.
 | localizacao | texto | Descrição livre da posição |
 | latitude / longitude | número | Graus decimais (WGS84) |
 | colonia_mae_id / colonia_mae_codigo | UUID / texto | Genealogia (divisão) |
+| colonia_doadora_campeiras_id / colonia_doadora_campeiras_codigo | UUID / texto | Divisão: outra colônia que doou campeiras (opcional) |
 | n_avaliacoes / n_producoes | inteiro | Contagens |
 | observacoes | texto | Livre |
 | registrado_em / atualizado_em | data-hora | Auditoria |

@@ -1,7 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
-import { LayoutPublico } from "../components/layout/LayoutPublico";
+import { CartaoAutenticacao } from "../components/layout/CartaoAutenticacao";
 import { Botao } from "../components/ui/Botao";
 import { Campo, Entrada } from "../components/ui/Campo";
 import { MensagemErro } from "../components/ui/Estados";
@@ -11,7 +11,7 @@ import { useAuth } from "../store/auth";
 export function Login() {
   const entrar = useAuth((s) => s.entrar);
   const navegar = useNavigate();
-  const destino = (useLocation().state as { de?: string } | null)?.de ?? "/dashboard";
+  const destino = (useLocation().state as { de?: string } | null)?.de ?? "/app";
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
 
@@ -29,7 +29,7 @@ export function Login() {
   };
 
   return (
-    <LayoutPublico titulo="Entrar" subtitulo="Acesse seu meliponário.">
+    <CartaoAutenticacao titulo="Entrar" subtitulo="Acesse seu meliponário.">
       <form onSubmit={enviar} className="space-y-4" noValidate>
         <Campo rotulo="E-mail">
           {(id) => (
@@ -56,17 +56,22 @@ export function Login() {
             />
           )}
         </Campo>
+        <p className="-mt-2 text-right text-sm">
+          <Link to="/recuperar-senha" className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
+            Esqueci minha senha
+          </Link>
+        </p>
         <MensagemErro erro={login.error} />
         <Botao type="submit" className="w-full" carregando={login.isPending} disabled={!email || !senha}>
           Entrar
         </Botao>
       </form>
-      <p className="mt-6 text-center text-sm text-stone-600">
+      <p className="mt-6 text-center text-sm text-muted-foreground">
         Ainda não tem conta?{" "}
-        <Link to="/cadastro" className="font-medium text-mel-800 hover:underline">
+        <Link to="/cadastro" className="font-medium text-foreground underline decoration-accent decoration-2 underline-offset-4 hover:decoration-foreground">
           Criar conta
         </Link>
       </p>
-    </LayoutPublico>
+    </CartaoAutenticacao>
   );
 }
