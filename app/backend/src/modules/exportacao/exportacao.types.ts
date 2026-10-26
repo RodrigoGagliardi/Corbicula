@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { STATUS_AVALIACAO } from "../avaliacoes/avaliacoes.types";
 import { STATUS_COLONIA } from "../colonias/colonias.types";
 import { TIPOS_PRODUTO } from "../producoes/producoes.types";
 
@@ -14,6 +15,7 @@ export const exportarColoniasSchema = z.object({
 export const exportarAvaliacoesSchema = z.object({
   formato,
   coloniaId: z.uuid().optional(),
+  status: z.enum(STATUS_AVALIACAO).optional(),
   desde: z.coerce.date().optional(),
   ate: z.coerce.date().optional(),
 });

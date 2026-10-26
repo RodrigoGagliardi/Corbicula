@@ -2,7 +2,7 @@ import { prisma } from "../../config/database";
 import { enriquecerComClima } from "../../services/weather.service";
 import { apagarArquivos, listarArquivosDe } from "../fotos/fotos.service";
 import { avaliacoesRepository } from "./avaliacoes.repository";
-import type { CriarAvaliacaoInput, AtualizarAvaliacaoInput } from "./avaliacoes.types";
+import type { CriarAvaliacaoInput, AtualizarAvaliacaoInput, FiltrosAvaliacoes } from "./avaliacoes.types";
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -52,9 +52,19 @@ function dentroDoLimiteEdicao(createdAt: Date): boolean {
 }
 
 // Garante que todos os parametroIds pertencem ao usuário e estão ativos.
-async function validarParametros(parametroIds: string[], userId: string): Promise<void> {
+// Na edição, parâmetros que já estavam na avaliação continuam aceitos mesmo
+// que tenham sido desativados depois (jaAvaliados).
+async function validarParametros(
+  parametroIds: string[],
+  userId: string,
+  jaAvaliados: string[] = []
+): Promise<void> {
   const encontrados = await prisma.parametro.findMany({
-    where: { id: { in: parametroIds }, userId, ativo: true },
+    where: {
+      id: { in: parametroIds },
+      userId,
+      OR: [{ ativo: true }, { id: { in: jaAvaliados } }],
+    },
     select: { id: true },
   });
 
@@ -97,6 +107,12 @@ export const avaliacoesService = {
   async listar(coloniaId: string, userId: string) {
     await validarPropriedadeColonia(coloniaId, userId);
     const avaliacoes = await avaliacoesRepository.listar(coloniaId);
+    return avaliacoes.map(mapearSaida);
+  },
+
+  // Histórico de todas as colônias do usuário, com filtros.
+  async listarDoUsuario(userId: string, filtros: FiltrosAvaliacoes) {
+    const avaliacoes = await avaliacoesRepository.listarDoUsuario(userId, filtros);
     return avaliacoes.map(mapearSaida);
   },
 
@@ -153,7 +169,8 @@ export const avaliacoesService = {
     if (data.parametros) {
       await validarParametros(
         data.parametros.map((p) => p.parametroId),
-        userId
+        userId,
+        existente.parametros.map((p) => p.parametroId)
       );
       ({ scoreGeral, statusGeral } = calcularScore(data.parametros));
     }

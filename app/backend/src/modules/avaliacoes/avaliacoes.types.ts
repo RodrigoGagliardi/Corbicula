@@ -51,5 +51,17 @@ export const atualizarAvaliacaoSchema = z.object({
     .optional(),
 });
 
+// Histórico de todas as colônias do usuário (GET /avaliacoes).
+// parametroId + classificacao: avaliações em que aquele parâmetro recebeu a classificação.
+export const filtrosAvaliacoesSchema = z.object({
+  coloniaId: z.uuid().optional(),
+  status: z.enum(STATUS_AVALIACAO).optional(),
+  parametroId: z.uuid().optional(),
+  classificacao: z.enum(CLASSIFICACOES).optional(),
+  desde: z.coerce.date().optional(),
+  ate: z.coerce.date().optional(),
+});
+
+export type FiltrosAvaliacoes = z.infer<typeof filtrosAvaliacoesSchema>;
 export type CriarAvaliacaoInput = z.infer<typeof criarAvaliacaoSchema>;
 export type AtualizarAvaliacaoInput = z.infer<typeof atualizarAvaliacaoSchema>;

@@ -120,6 +120,7 @@ async function linhasAvaliacoes(userId: string, f: ExportarAvaliacoesInput): Pro
     where: {
       colonia: { userId },
       ...(f.coloniaId !== undefined && { coloniaId: f.coloniaId }),
+      ...(f.status !== undefined && { statusGeral: f.status }),
       ...(periodo && { dataAvaliacao: periodo }),
     },
     include: {

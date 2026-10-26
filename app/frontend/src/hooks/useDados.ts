@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { avaliacoesApi, coloniasApi, especiesApi, fotosApi, parametrosApi, producoesApi } from "../services/api/endpoints";
-import type { FiltrosProducao } from "../types/api";
+import type { FiltrosAvaliacoes, FiltrosProducao } from "../types/api";
 
 // Chaves de cache centralizadas — usadas também para invalidar após mutações.
 export const chaves = {
@@ -8,6 +8,9 @@ export const chaves = {
   colonia: (id: string) => ["colonias", id] as const,
   avaliacoes: (coloniaId: string) => ["colonias", coloniaId, "avaliacoes"] as const,
   avaliacao: (coloniaId: string, id: string) => ["colonias", coloniaId, "avaliacoes", id] as const,
+  // Sob "colonias" de propósito: toda mutação que invalida as colônias
+  // (nova avaliação, edição, exclusão, código da colônia) atualiza o histórico.
+  historicoAvaliacoes: (filtros: FiltrosAvaliacoes) => ["colonias", "historico-avaliacoes", filtros] as const,
   parametros: ["parametros"] as const,
   especies: ["especies"] as const,
   fotos: (filtro: object) => ["fotos", filtro] as const,
@@ -28,6 +31,9 @@ export const useAvaliacoes = (coloniaId: string) =>
     queryFn: () => avaliacoesApi.listar(coloniaId),
     enabled: Boolean(coloniaId),
   });
+
+export const useHistoricoAvaliacoes = (filtros: FiltrosAvaliacoes = {}) =>
+  useQuery({ queryKey: chaves.historicoAvaliacoes(filtros), queryFn: () => avaliacoesApi.historico(filtros) });
 
 export const useAvaliacao = (coloniaId: string, id: string) =>
   useQuery({ queryKey: chaves.avaliacao(coloniaId, id), queryFn: () => avaliacoesApi.buscar(coloniaId, id) });

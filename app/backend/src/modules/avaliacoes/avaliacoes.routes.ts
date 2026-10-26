@@ -1,6 +1,27 @@
 import type { FastifyPluginAsync } from "fastify/types/plugin";
+import { authenticate } from "../../shared/middleware/authenticate";
 import { avaliacoesService } from "./avaliacoes.service";
-import { criarAvaliacaoSchema, atualizarAvaliacaoSchema } from "./avaliacoes.types";
+import { criarAvaliacaoSchema, atualizarAvaliacaoSchema, filtrosAvaliacoesSchema } from "./avaliacoes.types";
+
+// Registrado com prefix "/avaliacoes": histórico de todas as colônias do usuário.
+// Criação, edição e exclusão continuam sob /colonias/:coloniaId/avaliacoes.
+export const historicoAvaliacoesRoutes: FastifyPluginAsync = async (app) => {
+  app.addHook("preHandler", authenticate);
+
+  app.get("/", {
+    schema: {
+      tags: ["avaliacoes"],
+      summary: "Histórico de avaliações de todas as colônias",
+      description:
+        "Filtros: coloniaId, status (excelente/boa/atencao/critica), parametroId e/ou " +
+        "classificacao (avaliações em que o parâmetro recebeu essa classificação), " +
+        "desde, ate (datas ISO). Ordenado da mais recente para a mais antiga.",
+    },
+  }, async (request) => {
+    const filtros = filtrosAvaliacoesSchema.parse(request.query);
+    return avaliacoesService.listarDoUsuario(request.userId, filtros);
+  });
+};
 
 // Registrado com prefix "/:coloniaId/avaliacoes" dentro de coloniasRoutes.
 // O hook de autenticação e o userId já estão disponíveis pelo escopo pai.

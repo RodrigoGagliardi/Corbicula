@@ -12,6 +12,8 @@ import { RecuperarSenha } from "./pages/RecuperarSenha";
 import { Sobre } from "./pages/Sobre";
 import { TELAS_PLANEJADAS } from "./pages/telasPlanejadas";
 import { DetalheAvaliacao } from "./pages/avaliacoes/DetalheAvaliacao";
+import { EditarAvaliacao } from "./pages/avaliacoes/EditarAvaliacao";
+import { HistoricoAvaliacoes } from "./pages/avaliacoes/HistoricoAvaliacoes";
 import { NovaAvaliacao } from "./pages/avaliacoes/NovaAvaliacao";
 import { DetalheColonia } from "./pages/colonias/DetalheColonia";
 import { FormColonia } from "./pages/colonias/FormColonia";
@@ -84,6 +86,8 @@ export const router = createBrowserRouter([
       { path: "colonias/:id", element: <DetalheColonia /> },
       { path: "colonias/:id/editar", element: <FormColonia /> },
       { path: "colonias/:coloniaId/avaliacoes/:id", element: <DetalheAvaliacao /> },
+      { path: "colonias/:coloniaId/avaliacoes/:id/editar", element: <EditarAvaliacao /> },
+      { path: "avaliacoes", element: <HistoricoAvaliacoes /> },
       { path: "avaliacoes/nova", element: <NovaAvaliacao /> },
       { path: "parametros", element: <ListaParametros /> },
       { path: "parametros/novo", element: <FormParametro /> },

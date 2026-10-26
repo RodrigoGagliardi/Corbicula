@@ -1,17 +1,17 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, ArrowLeft, ArrowUp, CheckCircle2, CloudSun, Minus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, CheckCircle2, CloudSun, Minus, Pencil, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { GaleriaFotos } from "../../components/features/GaleriaFotos";
 import { BarraScore } from "../../components/features/SeloScore";
-import { Botao } from "../../components/ui/Botao";
+import { Botao, LinkBotao } from "../../components/ui/Botao";
 import { CabecalhoPagina, Cartao, Selo } from "../../components/ui/Cartao";
 import { Carregando, ErroCarregamento, MensagemErro } from "../../components/ui/Estados";
 import { chaves, useAvaliacao, useAvaliacoes, useColonia } from "../../hooks/useDados";
 import { avaliacoesApi } from "../../services/api/endpoints";
 import type { Classificacao } from "../../types/api";
-import { formatarDataHora, ROTULO_CLIMA } from "../../utils/format";
-import { COR_STATUS, ROTULO_CLASSIFICACAO, ROTULO_STATUS } from "../../utils/score";
+import { formatarData, formatarDataHora, ROTULO_CLIMA } from "../../utils/format";
+import { COR_STATUS, fimDaEdicao, podeEditar, ROTULO_CLASSIFICACAO, ROTULO_STATUS } from "../../utils/score";
 
 const COR_CLASSIFICACAO: Record<Classificacao, string> = {
   bom: "bg-green-100 text-green-800 dark:bg-green-950/60 dark:text-green-300",
@@ -23,7 +23,7 @@ export function DetalheAvaliacao() {
   const { coloniaId = "", id = "" } = useParams();
   const navegar = useNavigate();
   const queryClient = useQueryClient();
-  const estado = useLocation().state as { nova?: boolean; fotoFalhou?: boolean } | null;
+  const estado = useLocation().state as { nova?: boolean; editada?: boolean; fotoFalhou?: boolean } | null;
   const { data: avaliacao, isLoading, error, refetch } = useAvaliacao(coloniaId, id);
   const { data: colonia } = useColonia(coloniaId);
   const { data: historico } = useAvaliacoes(coloniaId);
@@ -70,7 +70,24 @@ export function DetalheAvaliacao() {
         }
         titulo="Avaliação"
         subtitulo={formatarDataHora(avaliacao.dataAvaliacao)}
+        acoes={
+          podeEditar(avaliacao.createdAt) && (
+            <LinkBotao
+              to={`/app/colonias/${coloniaId}/avaliacoes/${id}/editar`}
+              variante="secundario"
+              title={`Editável até ${formatarData(fimDaEdicao(avaliacao.createdAt).toISOString())}`}
+            >
+              <Pencil className="size-4" aria-hidden /> Editar
+            </LinkBotao>
+          )
+        }
       />
+
+      {estado?.editada && (
+        <p className="mb-4 flex items-center gap-2 rounded-xl bg-green-50 px-4 py-3 text-sm text-green-800 dark:bg-green-950/50 dark:text-green-300" role="status">
+          <CheckCircle2 className="size-4" aria-hidden /> Alterações salvas. O score foi recalculado.
+        </p>
+      )}
 
       {estado?.nova && (
         <p className="mb-4 flex items-center gap-2 rounded-xl bg-green-50 px-4 py-3 text-sm text-green-800 dark:bg-green-950/50 dark:text-green-300" role="status">

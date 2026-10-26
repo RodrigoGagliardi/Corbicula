@@ -91,7 +91,7 @@ app/backend/
 │   │   │   ├── parametros.repository.ts  # inclui upsertCriterioEspecie
 │   │   │   └── parametros.types.ts
 │   │   ├── avaliacoes/
-│   │   │   ├── avaliacoes.routes.ts   # montado em /:coloniaId/avaliacoes
+│   │   │   ├── avaliacoes.routes.ts   # /:coloniaId/avaliacoes (CRUD) + /avaliacoes (histórico geral)
 │   │   │   ├── avaliacoes.service.ts  # dispara enriquecerComClima após criar
 │   │   │   ├── avaliacoes.repository.ts  # upsert de parâmetros (preserva fotos vinculadas)
 │   │   │   └── avaliacoes.types.ts
@@ -148,7 +148,7 @@ app/backend/
 
 Notas:
 - O código da colônia é **auto-gerado** pelo serviço (`[KEW_CODIGO]-[NNN]`), nunca digitado pelo usuário.
-- `avaliacoesRoutes` é registrado como plugin filho dentro de `coloniasRoutes` para herdar o hook de autenticação.
+- `avaliacoesRoutes` é registrado como plugin filho dentro de `coloniasRoutes` para herdar o hook de autenticação. `historicoAvaliacoesRoutes` (mesmo arquivo) fica em `/avaliacoes`, só leitura, com o próprio hook.
 - `especies.routes.ts` acessa o Prisma diretamente (sem camada de service/repository) por ser somente-leitura.
 - `weather.service.ts` implementa a integração Open-Meteo com cache em memória (ver `docs/fluxo-fotoclima.md`).
 - Fotos são servidas estaticamente em `/uploads/fotos/<uuid>.<ext>`; excluir foto/colônia/avaliação/colheita remove também os arquivos.
@@ -185,7 +185,7 @@ app/frontend/
 │   │   ├── EmConstrucao.tsx   # tela "em construção" das rotas ainda não implementadas
 │   │   ├── telasPlanejadas.ts # rotas /app pendentes + o que cada tela vai mostrar (docs/telas.md)
 │   │   ├── colonias/          # ListaColonias, DetalheColonia, FormColonia (criar/editar)
-│   │   ├── avaliacoes/        # NovaAvaliacao (fluxo rápido), DetalheAvaliacao
+│   │   ├── avaliacoes/        # HistoricoAvaliacoes, NovaAvaliacao (fluxo rápido; formulário também usado na edição), EditarAvaliacao, DetalheAvaliacao
 │   │   ├── parametros/        # ListaParametros, FormParametro (criar/editar)
 │   │   └── producao/          # HistoricoProducao, FormColheita (registrar/editar), RelatorioProducao
 │   ├── hooks/
@@ -205,8 +205,9 @@ app/frontend/
 │   │   ├── format.ts          # datas e números em pt-BR
 │   │   ├── imagem.ts          # compressão de foto no cliente (canvas, ~500 KB)
 │   │   ├── parametrosSugeridos.ts  # sugestões de parâmetros para começar
-│   │   ├── producao.ts        # rótulos/unidades dos produtos e períodos dos filtros
-│   │   └── score.ts           # faixas do score (Excelente/Boa/Atenção/Crítica)
+│   │   ├── periodo.ts         # atalhos de período dos filtros (produção, avaliações)
+│   │   ├── producao.ts        # rótulos/unidades dos produtos
+│   │   └── score.ts           # faixas do score (Excelente/Boa/Atenção/Crítica) e prazo de edição (7 dias)
 │   ├── index.css              # Tailwind + tokens do tema (claro/escuro): verde floresta + amarelo do logo
 │   ├── main.tsx               # entry point: QueryClient + RouterProvider
 │   ├── router.tsx             # rotas públicas + /app/* privadas, guardas e redirecionamento dos endereços antigos
@@ -308,3 +309,5 @@ Notas:
   "Natureza & Científico" + amarelo do logo, com modo escuro).
 
 - **[2026-10-14 — frontend: produção]** — Criados `pages/producao/` e `utils/producao.ts`; as rotas `/app/producao*` deixaram de ser "em construção".
+
+- **[2026-10-15 — histórico e edição de avaliações]** — Backend: `GET /avaliacoes` (histórico geral com filtros) em `avaliacoes.routes.ts`. Frontend: `pages/avaliacoes/{HistoricoAvaliacoes,EditarAvaliacao}.tsx`; os atalhos de período saíram de `utils/producao.ts` para `utils/periodo.ts`; `/app/avaliacoes` deixou de ser "em construção".

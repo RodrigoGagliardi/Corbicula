@@ -58,7 +58,7 @@ export const exportacaoRoutes: FastifyPluginAsync = async (app) => {
     schema: {
       tags: ["exportacao"],
       summary: "Exporta avaliações em formato longo (uma linha por avaliação × parâmetro)",
-      description: "Query: formato=csv|json, coloniaId, desde, ate (datas ISO).",
+      description: "Query: formato=csv|json, coloniaId, status, desde, ate (datas ISO).",
     },
   }, async (request, reply) => {
     const { formato, ...filtros } = exportarAvaliacoesSchema.parse(request.query);

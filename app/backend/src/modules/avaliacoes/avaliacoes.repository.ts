@@ -1,11 +1,24 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
-import type { CriarAvaliacaoInput, AtualizarAvaliacaoInput } from "./avaliacoes.types";
+import type { CriarAvaliacaoInput, AtualizarAvaliacaoInput, FiltrosAvaliacoes } from "./avaliacoes.types";
 
 // ─── Includes ─────────────────────────────────────────────────────────────────
 
 // Lista: leve — sem parametros detalhados, só contagem.
 const INCLUDE_LISTA = {
   _count: { select: { parametros: true } },
+} as const;
+
+// Histórico geral: lista leve + identificação da colônia.
+const INCLUDE_HISTORICO = {
+  ...INCLUDE_LISTA,
+  colonia: {
+    select: {
+      id: true,
+      codigo: true,
+      especie: { select: { codigo: true, nomePopular: true } },
+    },
+  },
 } as const;
 
 // Detalhe: completo — parametros com nome e ordem do parâmetro pai.
@@ -31,6 +44,25 @@ function serializarParametros(
   }));
 }
 
+function filtrosParaWhere(userId: string, f: FiltrosAvaliacoes): Prisma.AvaliacaoWhereInput {
+  const parametro = {
+    ...(f.parametroId !== undefined && { parametroId: f.parametroId }),
+    ...(f.classificacao !== undefined && { classificacao: f.classificacao }),
+  };
+  return {
+    colonia: { userId },
+    ...(f.coloniaId !== undefined && { coloniaId: f.coloniaId }),
+    ...(f.status !== undefined && { statusGeral: f.status }),
+    ...(Object.keys(parametro).length > 0 && { parametros: { some: parametro } }),
+    ...((f.desde !== undefined || f.ate !== undefined) && {
+      dataAvaliacao: {
+        ...(f.desde !== undefined && { gte: f.desde }),
+        ...(f.ate !== undefined && { lte: f.ate }),
+      },
+    }),
+  };
+}
+
 // ─── Repositório ─────────────────────────────────────────────────────────────
 
 export const avaliacoesRepository = {
@@ -38,6 +70,13 @@ export const avaliacoesRepository = {
     prisma.avaliacao.findMany({
       where: { coloniaId },
       include: INCLUDE_LISTA,
+      orderBy: { dataAvaliacao: "desc" },
+    }),
+
+  listarDoUsuario: (userId: string, filtros: FiltrosAvaliacoes) =>
+    prisma.avaliacao.findMany({
+      where: filtrosParaWhere(userId, filtros),
+      include: INCLUDE_HISTORICO,
       orderBy: { dataAvaliacao: "desc" },
     }),
 

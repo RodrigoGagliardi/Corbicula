@@ -10,9 +10,9 @@ import { CabecalhoPagina, Cartao } from "../../components/ui/Cartao";
 import { Carregando, ErroCarregamento, EstadoVazio, MensagemErro } from "../../components/ui/Estados";
 import { chaves, useColonias, useParametros } from "../../hooks/useDados";
 import { avaliacoesApi, fotosApi } from "../../services/api/endpoints";
-import type { Classificacao, Colonia, Parametro } from "../../types/api";
+import type { AvaliacaoDetalhada, Classificacao, Colonia, Parametro } from "../../types/api";
 import { correspondeBusca } from "../../utils/colonias";
-import { paraInputDataHora, tempoRelativo } from "../../utils/format";
+import { formatarData, paraInputDataHora, tempoRelativo } from "../../utils/format";
 import { comprimirImagem } from "../../utils/imagem";
 import { calcularScore } from "../../utils/score";
 
@@ -55,7 +55,7 @@ export function NovaAvaliacao() {
   }
 
   // key: trocar de colônia reinicia o formulário
-  return <Formulario key={colonia.id} colonia={colonia} parametros={ativos} />;
+  return <FormularioAvaliacao key={colonia.id} colonia={colonia} parametros={ativos} />;
 }
 
 // ─── Passo 1: escolher a colônia ─────────────────────────────────────────────
@@ -118,17 +118,48 @@ function criteriosPara(p: Parametro, especieId: string | null) {
   return especifico ?? p;
 }
 
-function Formulario({ colonia, parametros }: { colonia: Colonia; parametros: Parametro[] }) {
+// Valores iniciais: vazios na criação; os da avaliação na edição.
+function estadoInicial(avaliacao: AvaliacaoDetalhada | undefined) {
+  const classificacoes: Record<string, Classificacao> = {};
+  const notas: Record<string, string> = {};
+  for (const p of avaliacao?.parametros ?? []) {
+    classificacoes[p.parametroId] = p.classificacao;
+    if (p.observacoes) notas[p.parametroId] = p.observacoes;
+  }
+  return {
+    classificacoes,
+    notas,
+    notaAberta: Object.fromEntries(Object.keys(notas).map((id) => [id, true])),
+    dataHora: paraInputDataHora(avaliacao ? new Date(avaliacao.dataAvaliacao) : new Date()),
+    observacoes: avaliacao?.observacoesGerais ?? "",
+    acoes: avaliacao?.acoesTomadas ?? [],
+  };
+}
+
+// Criação (sem `avaliacao`) ou edição de uma avaliação existente (até 7 dias).
+export function FormularioAvaliacao({
+  colonia,
+  parametros,
+  avaliacao,
+}: {
+  colonia: Colonia;
+  parametros: Parametro[];
+  avaliacao?: AvaliacaoDetalhada;
+}) {
   const navegar = useNavigate();
   const queryClient = useQueryClient();
-  const [classificacoes, setClassificacoes] = useState<Record<string, Classificacao>>({});
-  const [notas, setNotas] = useState<Record<string, string>>({});
-  const [notaAberta, setNotaAberta] = useState<Record<string, boolean>>({});
-  const [dataHora, setDataHora] = useState(() => paraInputDataHora(new Date()));
-  const [observacoes, setObservacoes] = useState("");
-  const [acoes, setAcoes] = useState<string[]>([]);
+  const [inicial] = useState(() => estadoInicial(avaliacao));
+  const [classificacoes, setClassificacoes] = useState(inicial.classificacoes);
+  const [notas, setNotas] = useState(inicial.notas);
+  const [notaAberta, setNotaAberta] = useState<Record<string, boolean>>(inicial.notaAberta);
+  const [dataHora, setDataHora] = useState(inicial.dataHora);
+  const [observacoes, setObservacoes] = useState(inicial.observacoes);
+  const [acoes, setAcoes] = useState<string[]>(inicial.acoes);
   const [foto, setFoto] = useState<File | null>(null);
   const inputFoto = useRef<HTMLInputElement>(null);
+  const editando = Boolean(avaliacao);
+  // Ações personalizadas de avaliações antigas continuam visíveis e marcáveis.
+  const opcoesAcoes = [...ACOES, ...inicial.acoes.filter((a) => !ACOES.includes(a))];
 
   const avaliados = parametros.filter((p) => classificacoes[p.id]);
   const previa = useMemo(() => calcularScore(Object.values(classificacoes)), [classificacoes]);
@@ -136,7 +167,7 @@ function Formulario({ colonia, parametros }: { colonia: Colonia; parametros: Par
 
   const salvar = useMutation({
     mutationFn: async () => {
-      const avaliacao = await avaliacoesApi.criar(colonia.id, {
+      const dados = {
         dataAvaliacao: new Date(dataHora).toISOString(),
         parametros: avaliados.map((p) => ({
           parametroId: p.id,
@@ -145,24 +176,33 @@ function Formulario({ colonia, parametros }: { colonia: Colonia; parametros: Par
         })),
         observacoesGerais: observacoes.trim() || null,
         acoesTomadas: acoes.length ? acoes : null,
-      });
+      };
+      if (avaliacao) {
+        // Edição: o servidor recalcula o score com o conjunto enviado. Fotos são
+        // gerenciadas no detalhe da avaliação.
+        return { avaliacao: await avaliacoesApi.atualizar(colonia.id, avaliacao.id, dados), fotoFalhou: false };
+      }
+      const criada = await avaliacoesApi.criar(colonia.id, dados);
 
       // A foto é enviada depois e nunca desfaz a avaliação: se falhar, a
       // avaliação continua salva e o aviso aparece no detalhe.
       let fotoFalhou = false;
       if (foto) {
         try {
-          await fotosApi.enviar(await comprimirImagem(foto), { avaliacaoId: avaliacao.id });
+          await fotosApi.enviar(await comprimirImagem(foto), { avaliacaoId: criada.id });
         } catch {
           fotoFalhou = true;
         }
       }
-      return { avaliacao, fotoFalhou };
+      return { avaliacao: criada, fotoFalhou };
     },
-    onSuccess: ({ avaliacao, fotoFalhou }) => {
+    onSuccess: ({ avaliacao: salva, fotoFalhou }) => {
       queryClient.invalidateQueries({ queryKey: chaves.colonias });
       queryClient.invalidateQueries({ queryKey: ["fotos"] });
-      navegar(`/app/colonias/${colonia.id}/avaliacoes/${avaliacao.id}`, { replace: true, state: { nova: true, fotoFalhou } });
+      navegar(`/app/colonias/${colonia.id}/avaliacoes/${salva.id}`, {
+        replace: true,
+        state: editando ? { editada: true } : { nova: true, fotoFalhou },
+      });
     },
   });
 
@@ -170,12 +210,19 @@ function Formulario({ colonia, parametros }: { colonia: Colonia; parametros: Par
     <>
       <CabecalhoPagina
         voltar={
-          <Link to="/app/avaliacoes/nova" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-            <ArrowLeft className="size-4" aria-hidden /> Trocar colônia
+          <Link
+            to={avaliacao ? `/app/colonias/${colonia.id}/avaliacoes/${avaliacao.id}` : "/app/avaliacoes/nova"}
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="size-4" aria-hidden /> {avaliacao ? "Cancelar edição" : "Trocar colônia"}
           </Link>
         }
         titulo={<span className="font-mono">{colonia.codigo}</span>}
-        subtitulo={colonia.especie?.nomePopular ?? "Espécie não identificada"}
+        subtitulo={
+          avaliacao
+            ? `Editando a avaliação de ${formatarData(avaliacao.dataAvaliacao)}`
+            : (colonia.especie?.nomePopular ?? "Espécie não identificada")
+        }
       />
 
       {/* Progresso + prévia do score, sempre visível no topo durante a rolagem */}
@@ -264,7 +311,7 @@ function Formulario({ colonia, parametros }: { colonia: Colonia; parametros: Par
           <fieldset>
             <legend className="mb-2 text-sm font-medium text-foreground">Ações tomadas</legend>
             <div className="grid gap-1.5 sm:grid-cols-2">
-              {ACOES.map((a) => (
+              {opcoesAcoes.map((a) => (
                 <label key={a} className="flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm hover:bg-background">
                   <input
                     type="checkbox"
@@ -278,29 +325,31 @@ function Formulario({ colonia, parametros }: { colonia: Colonia; parametros: Par
             </div>
           </fieldset>
 
-          <div>
-            <p className="mb-2 text-sm font-medium text-foreground">Foto da inspeção (opcional)</p>
-            <input
-              ref={inputFoto}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="sr-only"
-              onChange={(e) => setFoto(e.target.files?.[0] ?? null)}
-            />
-            {foto ? (
-              <div className="flex items-center gap-3">
-                <PreviaFoto arquivo={foto} />
-                <button type="button" onClick={() => setFoto(null)} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-destructive">
-                  <X className="size-4" aria-hidden /> Remover
-                </button>
-              </div>
-            ) : (
-              <Botao type="button" variante="secundario" tamanho="sm" onClick={() => inputFoto.current?.click()}>
-                <Camera className="size-4" aria-hidden /> Adicionar foto
-              </Botao>
-            )}
-          </div>
+          {!editando && (
+            <div>
+              <p className="mb-2 text-sm font-medium text-foreground">Foto da inspeção (opcional)</p>
+              <input
+                ref={inputFoto}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="sr-only"
+                onChange={(e) => setFoto(e.target.files?.[0] ?? null)}
+              />
+              {foto ? (
+                <div className="flex items-center gap-3">
+                  <PreviaFoto arquivo={foto} />
+                  <button type="button" onClick={() => setFoto(null)} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-destructive">
+                    <X className="size-4" aria-hidden /> Remover
+                  </button>
+                </div>
+              ) : (
+                <Botao type="button" variante="secundario" tamanho="sm" onClick={() => inputFoto.current?.click()}>
+                  <Camera className="size-4" aria-hidden /> Adicionar foto
+                </Botao>
+              )}
+            </div>
+          )}
 
           <Campo rotulo="Data e hora da inspeção">
             {(id) => (
@@ -314,10 +363,11 @@ function Formulario({ colonia, parametros }: { colonia: Colonia; parametros: Par
             )}
           </Campo>
 
-          <p className="flex items-start gap-2 rounded-xl bg-sky-50 px-3 py-2 text-sm text-sky-900">
+          <p className="flex items-start gap-2 rounded-xl bg-sky-50 px-3 py-2 text-sm text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
             <CloudSun className="mt-0.5 size-4 shrink-0" aria-hidden />
-            Temperatura, umidade e condição do tempo são preenchidas automaticamente pela Open-Meteo, a partir das
-            coordenadas da colônia ou do meliponário.
+            {editando
+              ? "O clima registrado na inspeção é mantido. Fotos podem ser adicionadas na página da avaliação."
+              : "Temperatura, umidade e condição do tempo são preenchidas automaticamente pela Open-Meteo, a partir das coordenadas da colônia ou do meliponário."}
           </p>
         </Cartao>
 
@@ -335,7 +385,7 @@ function Formulario({ colonia, parametros }: { colonia: Colonia; parametros: Par
           carregando={salvar.isPending}
           onClick={() => salvar.mutate()}
         >
-          Salvar avaliação
+          {editando ? "Salvar alterações" : "Salvar avaliação"}
         </Botao>
       </div>
     </>

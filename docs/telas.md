@@ -503,6 +503,15 @@ Para cada parâmetro configurado:
 
 **Objetivo:** Ver todas as avaliações
 
+> **Implementada (15/10/2026).** Usa `GET /avaliacoes`. Filtros na URL: período (mesmos atalhos da
+> produção), status, colônia (uma por vez) e parâmetro + classificação recebida ("Fluxo de entrada
+> avaliado como Ruim"). Resumo do filtro (nº de inspeções, score médio simples, distribuição por
+> status), linha do tempo por mês e exportação CSV/JSON (colônia, status e período; o filtro por
+> parâmetro vale só para a lista). O gráfico mostra a evolução de **uma** colônia escolhida no filtro,
+> com todas as inspeções dela no período. Pendente: multi-seleção de colônias, período
+> personalizado, miniatura da foto e linhas de várias colônias no gráfico (fica para a Análise
+> Comparativa).
+
 **Filtros:**
 - Colônia (multi-select)
 - Período (última semana, mês, 3 meses, custom)
@@ -537,7 +546,7 @@ Novembro 2024
 
 ---
 
-### **14. Detalhes da Avaliação** `/app/avaliacoes/:id`
+### **14. Detalhes da Avaliação** `/app/colonias/:coloniaId/avaliacoes/:id`
 
 **Objetivo:** Ver avaliação completa
 
@@ -578,9 +587,14 @@ Novembro 2024
 
 ---
 
-### **15. Editar Avaliação** `/app/avaliacoes/:id/editar`
+### **15. Editar Avaliação** `/app/colonias/:coloniaId/avaliacoes/:id/editar`
 
 **Objetivo:** Corrigir avaliação
+
+> **Implementada (15/10/2026)** reaproveitando o formulário da Nova Avaliação, pré-preenchido. O
+> prazo de 7 dias conta a partir do registro (`createdAt`), igual ao servidor. Parâmetros
+> desativados depois da inspeção continuam editáveis nela. O score é recalculado; o clima registrado
+> é mantido; fotos são geridas no detalhe. Ainda **não** há histórico de edições.
 
 **Regras:**
 - Só pode editar avaliações dos últimos 7 dias

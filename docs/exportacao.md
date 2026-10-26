@@ -16,7 +16,7 @@ os dados do usuário autenticado. Respostas vêm como anexo
 | Endpoint | Filtros (query) | Conteúdo |
 |----------|-----------------|----------|
 | `GET /exportacao/colonias` | `formato`, `status` | Uma linha por colônia |
-| `GET /exportacao/avaliacoes` | `formato`, `coloniaId`, `desde`, `ate` | Uma linha por **avaliação × parâmetro** (formato longo) |
+| `GET /exportacao/avaliacoes` | `formato`, `coloniaId`, `status`, `desde`, `ate` | Uma linha por **avaliação × parâmetro** (formato longo) |
 | `GET /exportacao/producoes` | `formato`, `coloniaId`, `tipoProduto`, `desde`, `ate` | Uma linha por colheita |
 | `GET /exportacao/backup` | — | JSON estruturado com todos os dados do usuário |
 

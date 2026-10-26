@@ -141,6 +141,10 @@ describe("exportação — avaliações (formato longo)", () => {
 
     const porColonia = lerCsv((await api.get(`/exportacao/avaliacoes?coloniaId=${colA.id}`)).texto);
     expect(new Set(porColonia.map((l) => l["colonia_id"]))).toEqual(new Set([colA.id]));
+
+    const criticas = lerCsv((await api.get("/exportacao/avaliacoes?status=critica")).texto);
+    expect(criticas).toHaveLength(1);
+    expect(criticas[0]).toMatchObject({ colonia_id: colB.id, status_geral: "critica" });
   });
 
   it("JSON traz metadados, filtros e a metodologia do score", async () => {

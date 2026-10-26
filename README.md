@@ -30,10 +30,12 @@ O que o frontend já tem:
 - **Dashboard** — visão geral das colônias e do score
 - **Colônias** — lista, detalhes, cadastro e edição
 - **Avaliação rápida** — fluxo mobile-first de Bom/Médio/Ruim, com foto-resumo opcional
+- **Histórico de avaliações** — linha do tempo por mês com filtros (período, status, colônia, parâmetro), evolução do score, exportação CSV/JSON e edição nos primeiros 7 dias
+- **Produção** — histórico de colheitas, registro com foto opcional e relatório com ranking e exportação
 - **Parâmetros** — lista, criação e edição dos critérios de avaliação
 - **Layout responsivo** — sidebar no desktop e barra de navegação inferior no mobile, com a mesma base de código; instalável como PWA
 
-A fila de sincronização offline no cliente (IndexedDB + `/sync`) e as telas de produção, análises e exportação ainda estão por vir.
+A fila de sincronização offline no cliente (IndexedDB + `/sync`), as configurações (perfil, meliponário, exportação completa) e as análises ainda estão por vir.
 
 ## Começando
 

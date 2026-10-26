@@ -32,6 +32,16 @@ export const ROTULO_CLASSIFICACAO: Record<Classificacao, string> = {
   ruim: "Ruim",
 };
 
+// Mesmo limite do servidor (avaliacoes.service.ts): edição nos primeiros 7 dias
+// após o registro (createdAt), não após a data da inspeção.
+export const LIMITE_EDICAO_DIAS = 7;
+const LIMITE_EDICAO_MS = LIMITE_EDICAO_DIAS * 24 * 60 * 60 * 1000;
+
+export const fimDaEdicao = (createdAt: string) => new Date(new Date(createdAt).getTime() + LIMITE_EDICAO_MS);
+export const podeEditar = (createdAt: string, agora: Date = new Date()) => agora < fimDaEdicao(createdAt);
+
+export const STATUS_AVALIACAO: StatusAvaliacao[] = ["excelente", "boa", "atencao", "critica"];
+
 // Classes Tailwind por status (cores definidas em index.css).
 export const COR_STATUS: Record<StatusAvaliacao, { fundo: string; texto: string; barra: string }> = {
   excelente: { fundo: "bg-green-50 dark:bg-green-950/50", texto: "text-excelente", barra: "bg-excelente" },

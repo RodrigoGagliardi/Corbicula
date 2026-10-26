@@ -162,9 +162,99 @@ describe("avaliações — edição e exclusão", () => {
     ]);
   });
 
+  it("na edição, aceita parâmetro que já estava na avaliação mesmo se desativado depois", async () => {
+    // Usuário próprio: criarParametros repete os nomes, que são únicos por usuário.
+    const { api: u } = await novoUsuario(app);
+    const [p1, p2, p3] = await criarParametros(u, 3);
+    const col = (await criarColonia(u)).id;
+    const criada = await criarAvaliacao(u, col, [
+      { parametroId: p1!, classificacao: bom },
+      { parametroId: p2!, classificacao: bom },
+    ]);
+    expect((await u.patch(`/parametros/${p2}`, { ativo: false })).status).toBe(200);
+
+    const res = await u.patch(`/colonias/${col}/avaliacoes/${criada.body.id}`, {
+      parametros: [
+        { parametroId: p1!, classificacao: bom },
+        { parametroId: p2!, classificacao: ruim },
+      ],
+    });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ scoreGeral: 50, statusGeral: "atencao" });
+
+    // Um parâmetro inativo que não estava na avaliação continua recusado.
+    await u.patch(`/parametros/${p3}`, { ativo: false });
+    const recusada = await u.patch(`/colonias/${col}/avaliacoes/${criada.body.id}`, {
+      parametros: [{ parametroId: p3!, classificacao: bom }],
+    });
+    expect(recusada.status).toBe(409);
+  });
+
   it("exclui a avaliação", async () => {
     const criada = await criarAvaliacao(api, coloniaId, [{ parametroId: params[0]!, classificacao: bom }]);
     expect((await api.delete(`/colonias/${coloniaId}/avaliacoes/${criada.body.id}`)).status).toBe(204);
     expect((await api.get(`/colonias/${coloniaId}/avaliacoes/${criada.body.id}`)).status).toBe(404);
+  });
+});
+
+describe("avaliações — histórico geral (GET /avaliacoes)", () => {
+  // Usuário próprio para controlar exatamente o que aparece no histórico.
+  let u: Cliente;
+  let ps: string[];
+  let colA: string;
+  let colB: string;
+
+  beforeAll(async () => {
+    ({ api: u } = await novoUsuario(app));
+    ps = await criarParametros(u, 2);
+    colA = (await criarColonia(u)).id;
+    colB = (await criarColonia(u)).id;
+    // colA: jan (excelente), mar (crítica, p1 ruim); colB: fev (atenção, p1 médio)
+    await criarAvaliacao(u, colA, [
+      { parametroId: ps[0]!, classificacao: bom },
+      { parametroId: ps[1]!, classificacao: bom },
+    ], { dataAvaliacao: "2026-01-15T10:00:00.000Z" });
+    await criarAvaliacao(u, colA, [
+      { parametroId: ps[0]!, classificacao: ruim },
+      { parametroId: ps[1]!, classificacao: ruim },
+    ], { dataAvaliacao: "2026-03-15T10:00:00.000Z" });
+    await criarAvaliacao(u, colB, [
+      { parametroId: ps[0]!, classificacao: medio },
+    ], { dataAvaliacao: "2026-02-15T10:00:00.000Z" });
+  });
+
+  const datas = (body: { dataAvaliacao: string }[]) => body.map((a) => a.dataAvaliacao.slice(0, 7));
+
+  it("lista as avaliações de todas as colônias, da mais recente para a mais antiga, com a colônia", async () => {
+    const res = await u.get("/avaliacoes");
+    expect(res.status).toBe(200);
+    expect(datas(res.body)).toEqual(["2026-03", "2026-02", "2026-01"]);
+    expect(res.body[0]).toMatchObject({
+      coloniaId: colA,
+      colonia: { id: colA, codigo: expect.any(String) },
+      _count: { parametros: 2 },
+      acoesTomadas: [],
+    });
+  });
+
+  it("filtra por colônia, status e período", async () => {
+    expect(datas((await u.get(`/avaliacoes?coloniaId=${colB}`)).body)).toEqual(["2026-02"]);
+    expect(datas((await u.get("/avaliacoes?status=excelente")).body)).toEqual(["2026-01"]);
+    expect(datas((await u.get("/avaliacoes?desde=2026-02-01&ate=2026-02-28")).body)).toEqual(["2026-02"]);
+  });
+
+  it("filtra por parâmetro e classificação recebida", async () => {
+    expect(datas((await u.get(`/avaliacoes?parametroId=${ps[1]}`)).body)).toEqual(["2026-03", "2026-01"]);
+    expect(datas((await u.get(`/avaliacoes?parametroId=${ps[0]}&classificacao=medio`)).body)).toEqual(["2026-02"]);
+  });
+
+  it("não mostra avaliações de outros usuários e valida os filtros", async () => {
+    expect((await api.get("/avaliacoes")).body.some((a: { coloniaId: string }) => a.coloniaId === colA)).toBe(false);
+    expect((await u.get("/avaliacoes?status=otima")).status).toBe(400);
+    expect((await u.get("/avaliacoes?coloniaId=nao-e-uuid")).status).toBe(400);
+  });
+
+  it("exige autenticação (401)", async () => {
+    expect((await app.inject({ method: "GET", url: "/avaliacoes" })).statusCode).toBe(401);
   });
 });

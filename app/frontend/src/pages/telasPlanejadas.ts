@@ -2,7 +2,6 @@ import {
   Bell,
   CalendarDays,
   ChartLine,
-  ClipboardList,
   Database,
   GitBranch,
   LayoutTemplate,
@@ -23,12 +22,6 @@ export const TELAS_PLANEJADAS: Record<string, TelaPlanejada> = {
     descricao: "Localização das colônias e do meliponário.",
     icone: Map,
     previsto: ["Mapa (Leaflet/OpenStreetMap) com as colônias que têm coordenadas", "Cor do marcador pelo status do último score", "Filtros por espécie e status"],
-  },
-  avaliacoes: {
-    titulo: "Histórico de avaliações",
-    descricao: "Todas as inspeções registradas.",
-    icone: ClipboardList,
-    previsto: ["Linha do tempo agrupada por mês", "Filtros por colônia, período, status e parâmetro", "Gráfico de evolução do score por colônia", "Editar avaliações com menos de 7 dias"],
   },
   "parametros/templates": {
     titulo: "Templates de parâmetros",

@@ -9,15 +9,8 @@ import { chaves, useColonias, useProducoes, useResumoProducao } from "../../hook
 import { producoesApi } from "../../services/api/endpoints";
 import type { FiltrosProducao, GrupoProducao, Producao, TipoProduto } from "../../types/api";
 import { formatarData } from "../../utils/format";
-import {
-  COR_PRODUTO,
-  formatarQuantidade,
-  inicioDoPeriodo,
-  ROTULO_PERIODO,
-  ROTULO_PRODUTO,
-  TIPOS_PRODUTO,
-  type Periodo,
-} from "../../utils/producao";
+import { inicioDoPeriodo, ROTULO_PERIODO, type Periodo } from "../../utils/periodo";
+import { COR_PRODUTO, formatarQuantidade, ROTULO_PRODUTO, TIPOS_PRODUTO } from "../../utils/producao";
 
 // Filtros guardados na URL (sobrevivem ao voltar de uma edição).
 export function useFiltrosProducao() {

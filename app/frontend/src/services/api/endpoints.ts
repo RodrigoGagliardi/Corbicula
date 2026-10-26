@@ -1,11 +1,13 @@
 import type {
   AvaliacaoDetalhada,
+  AvaliacaoHistorico,
   AvaliacaoInput,
   AvaliacaoLista,
   Colonia,
   ColoniaDetalhada,
   ColoniaInput,
   Especie,
+  FiltrosAvaliacoes,
   FiltrosProducao,
   Foto,
   Parametro,
@@ -46,11 +48,15 @@ export const coloniasApi = {
 };
 
 export const avaliacoesApi = {
+  historico: (filtros: FiltrosAvaliacoes = {}) => api.get<AvaliacaoHistorico[]>(`/avaliacoes${consulta(filtros)}`),
   listar: (coloniaId: string) => api.get<AvaliacaoLista[]>(`/colonias/${coloniaId}/avaliacoes`),
   buscar: (coloniaId: string, id: string) =>
     api.get<AvaliacaoDetalhada>(`/colonias/${coloniaId}/avaliacoes/${id}`),
   criar: (coloniaId: string, dados: AvaliacaoInput) =>
     api.post<AvaliacaoDetalhada>(`/colonias/${coloniaId}/avaliacoes`, dados),
+  // Só nos primeiros 7 dias após o registro (o servidor responde 409 depois).
+  atualizar: (coloniaId: string, id: string, dados: Partial<AvaliacaoInput>) =>
+    api.patch<AvaliacaoDetalhada>(`/colonias/${coloniaId}/avaliacoes/${id}`, dados),
   excluir: (coloniaId: string, id: string) => api.delete(`/colonias/${coloniaId}/avaliacoes/${id}`),
 };
 
@@ -85,6 +91,9 @@ export const producoesApi = {
 };
 
 export const exportacaoApi = {
+  // A exportação aceita colônia, status e período (não o filtro por parâmetro).
+  avaliacoes: ({ parametroId: _p, classificacao: _c, ...filtros }: FiltrosAvaliacoes, formato: "csv" | "json" = "csv") =>
+    baixarArquivo(`/exportacao/avaliacoes${consulta({ ...filtros, formato })}`, `corbicula_avaliacoes.${formato}`),
   producoes: (filtros: FiltrosProducao, formato: "csv" | "json" = "csv") =>
     baixarArquivo(`/exportacao/producoes${consulta({ ...filtros, formato })}`, `corbicula_producoes.${formato}`),
 };

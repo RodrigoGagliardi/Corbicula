@@ -10,6 +10,7 @@ import swaggerUi from "@fastify/swagger-ui";
 import { ZodError } from "zod";
 import { swaggerOptions, swaggerUiOptions } from "./config/swagger";
 import { authRoutes } from "./modules/auth/auth.routes";
+import { historicoAvaliacoesRoutes } from "./modules/avaliacoes/avaliacoes.routes";
 import { coloniasRoutes } from "./modules/colonias/colonias.routes";
 import { especiesRoutes } from "./modules/especies/especies.routes";
 import { exportacaoRoutes } from "./modules/exportacao/exportacao.routes";
@@ -69,6 +70,7 @@ export async function buildApp(opts: { logger?: boolean } = {}): Promise<Fastify
   await app.register(authRoutes, { prefix: "/auth" });
   await app.register(usersRoutes, { prefix: "/users" });
   await app.register(coloniasRoutes, { prefix: "/colonias" });
+  await app.register(historicoAvaliacoesRoutes, { prefix: "/avaliacoes" });
   await app.register(especiesRoutes, { prefix: "/especies" });
   await app.register(parametrosRoutes, { prefix: "/parametros" });
   await app.register(producoesRoutes, { prefix: "/producoes" });

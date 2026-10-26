@@ -8,9 +8,7 @@ import { useColonias } from "../hooks/useDados";
 import { useAuth } from "../store/auth";
 import type { StatusAvaliacao } from "../types/api";
 import { precisaAtencao } from "../utils/colonias";
-import { COR_STATUS, ROTULO_STATUS } from "../utils/score";
-
-const ORDEM_STATUS: StatusAvaliacao[] = ["excelente", "boa", "atencao", "critica"];
+import { COR_STATUS, ROTULO_STATUS, STATUS_AVALIACAO as ORDEM_STATUS } from "../utils/score";
 
 export function Dashboard() {
   const usuario = useAuth((s) => s.usuario);

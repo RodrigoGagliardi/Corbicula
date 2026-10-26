@@ -142,6 +142,20 @@ export interface AvaliacaoLista extends Avaliacao {
   _count: { parametros: number };
 }
 
+// Item do histórico geral (GET /avaliacoes): inclui a colônia.
+export interface AvaliacaoHistorico extends AvaliacaoLista {
+  colonia: { id: string; codigo: string; especie: { codigo: string; nomePopular: string } | null };
+}
+
+export interface FiltrosAvaliacoes {
+  coloniaId?: string;
+  status?: StatusAvaliacao;
+  parametroId?: string;
+  classificacao?: Classificacao;
+  desde?: string; // YYYY-MM-DD
+  ate?: string;
+}
+
 export interface Foto {
   id: string;
   url: string;
