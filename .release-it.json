@@ -1,0 +1,32 @@
+{
+  "git": {
+    "commitMessage": "chore(release): v${version}",
+    "tagName": "v${version}",
+    "tagAnnotation": "Release v${version}"
+  },
+  "github": {
+    "release": false
+  },
+  "npm": {
+    "publish": false
+  },
+  "plugins": {
+    "@release-it/conventional-changelog": {
+      "preset": {
+        "name": "conventionalcommits",
+        "types": [
+          { "type": "feat",     "section": "Funcionalidades" },
+          { "type": "fix",      "section": "Correções" },
+          { "type": "perf",     "section": "Performance" },
+          { "type": "refactor", "section": "Refatorações" },
+          { "type": "docs",     "section": "Documentação" },
+          { "type": "chore",    "hidden": true },
+          { "type": "style",    "hidden": true },
+          { "type": "test",     "hidden": true }
+        ]
+      },
+      "infile": "CHANGELOG.md",
+      "header": "# Changelog\n\nTodas as mudanças relevantes do projeto são documentadas aqui.\nFormato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).\nVersões seguem [Semantic Versioning](https://semver.org/lang/pt-BR/).\n"
+    }
+  }
+}

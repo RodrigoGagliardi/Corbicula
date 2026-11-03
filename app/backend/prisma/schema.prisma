@@ -1,0 +1,316 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+
+// USUÁRIOS E AUTENTICAÇÃO
+
+
+model User {
+  id        String   @id @default(uuid()) @db.Uuid
+  email     String   @unique
+  password  String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relações
+  meliponario Meliponario?
+  colonias    Colonia[]
+  parametros  Parametro[]
+  syncQueue   SyncQueue[]
+
+  @@map("users")
+}
+
+
+// MELIPONÁRIO
+
+
+model Meliponario {
+  id        String      @id @default(uuid()) @db.Uuid
+  nome      String
+  endereco  String?
+  cidade    String?
+  estado    String?
+  latitude  Float?
+  longitude Float?
+  bioma     String?
+  areaTotal Float?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relações
+  userId String  @unique @db.Uuid
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("meliponarios")
+}
+
+
+// COLÔNIAS
+
+
+model Colonia {
+  id             String    @id @default(uuid()) @db.Uuid
+  codigo         String
+  dataEntrada    DateTime
+  origem         String    // captura, compra, divisao, resgate
+  tipoCaixa      String    // INPA, PNN, Schenck, tronco, outro
+  dimensoesCaixa String?   @db.Text // JSON: {altura, largura, profundidade}
+  localizacao    String?
+  latitude       Float?
+  longitude      Float?
+  observacoes    String?   @db.Text
+  status         String    @default("ativa") // ativa, inativa, morta
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // Relações
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  especieId String?   @db.Uuid
+  especie   Especie?  @relation(fields: [especieId], references: [id], onDelete: SetNull)
+
+  avaliacoes Avaliacao[]
+  fotos      Foto[]
+  producoes  Producao[]
+
+  // Genealogia
+  coloniaMaeId   String?   @db.Uuid
+  coloniaMae     Colonia?  @relation("Genealogia", fields: [coloniaMaeId], references: [id], onDelete: SetNull)
+  coloniasFilhas Colonia[] @relation("Genealogia")
+
+  // Divisão: colônia (opcional, diferente da mãe) que doou campeiras à filha
+  coloniaDoadoraCampeirasId   String?   @db.Uuid
+  coloniaDoadoraCampeiras     Colonia?  @relation("DoacaoCampeiras", fields: [coloniaDoadoraCampeirasId], references: [id], onDelete: SetNull)
+  coloniasReceptorasCampeiras Colonia[] @relation("DoacaoCampeiras")
+
+  @@unique([userId, codigo])
+  @@index([userId])
+  @@index([status])
+  @@index([especieId])
+  @@map("colonias")
+}
+
+// PARÂMETROS PERSONALIZÁVEIS
+
+model Parametro {
+  id            String      @id @default(uuid()) @db.Uuid
+  nome          String   // "População", "Potes de Mel"
+  ordem         Int      @default(0)
+  criterioBom   String   @db.Text
+  criterioMedio String @db.Text
+  criterioRuim  String  @db.Text
+  ativo         Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relações
+  userId String  @db.Uuid
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  avaliacoesParametros AvaliacaoParametro[]
+  criteriosEspecie     ParametroEspecie[]
+
+  @@unique([userId, nome])
+  @@index([userId, ativo])
+  @@map("parametros")
+}
+
+// Critérios específicos por espécie para um parâmetro.
+// Sobrescreve os critérios padrão do Parametro quando a colônia
+// tem espécie identificada. O Parametro mantém os critérios genéricos
+// como fallback para colônias sem espécie ou sem override configurado.
+model ParametroEspecie {
+  id            String   @id @default(uuid()) @db.Uuid
+  criterioBom   String   @db.Text
+  criterioMedio String   @db.Text
+  criterioRuim  String   @db.Text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  parametroId String    @db.Uuid
+  parametro   Parametro @relation(fields: [parametroId], references: [id], onDelete: Cascade)
+
+  especieId String  @db.Uuid
+  especie   Especie @relation(fields: [especieId], references: [id], onDelete: Cascade)
+
+  @@unique([parametroId, especieId])
+  @@index([parametroId])
+  @@index([especieId])
+  @@map("parametros_especies")
+}
+
+// AVALIAÇÕES
+
+model Avaliacao {
+  id                String      @id @default(uuid()) @db.Uuid
+  dataAvaliacao     DateTime
+  duracaoMinutos    Int?
+  temperatura       Float?
+  umidade           Float?
+  condicaoClimatica String?  // ensolarado, nublado, chuvoso
+  observacoesGerais String?  @db.Text
+  acoesTomadas      String?  @db.Text // JSON array
+  scoreGeral        Int      // 0-100
+  statusGeral       String   // excelente, boa, atencao, critica
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relações
+  coloniaId String  @db.Uuid
+  colonia   Colonia @relation(fields: [coloniaId], references: [id], onDelete: Cascade)
+
+  parametros AvaliacaoParametro[]
+  fotos      Foto[]
+
+  @@index([coloniaId])
+  @@index([dataAvaliacao])
+  @@map("avaliacoes")
+}
+
+// AVALIAÇÃO DE PARÂMETROS (N:N)
+
+model AvaliacaoParametro {
+  id            String      @id @default(uuid()) @db.Uuid
+  classificacao String   // bom, medio, ruim
+  valorNumerico Int?     // Opcional: valor numérico se houver
+  observacoes   String?  @db.Text
+  createdAt     DateTime @default(now())
+
+  // Relações
+  avaliacaoId String  @db.Uuid
+  avaliacao   Avaliacao @relation(fields: [avaliacaoId], references: [id], onDelete: Cascade)
+
+  parametroId String  @db.Uuid
+  parametro   Parametro @relation(fields: [parametroId], references: [id], onDelete: Cascade)
+
+  fotos Foto[]
+
+  @@unique([avaliacaoId, parametroId])
+  @@index([avaliacaoId])
+  @@index([parametroId])
+  @@map("avaliacoes_parametros")
+}
+
+// FOTOS
+
+model Foto {
+  id          String      @id @default(uuid()) @db.Uuid
+  url         String
+  legenda     String?
+  tamanhoKb   Int?
+  createdAt   DateTime @default(now())
+
+  // Relações (pode estar associada a colônia, avaliação, parâmetro ou colheita).
+  // Regra de integridade (validada em fotos.service.ts, não no banco):
+  // pelo menos uma FK preenchida — nenhuma foto órfã.
+  coloniaId String?  @db.Uuid
+  colonia   Colonia? @relation(fields: [coloniaId], references: [id], onDelete: Cascade)
+
+  avaliacaoId String?  @db.Uuid
+  avaliacao   Avaliacao? @relation(fields: [avaliacaoId], references: [id], onDelete: Cascade)
+
+  avaliacaoParametroId String?  @db.Uuid
+  // SetNull: se o parâmetro sair da avaliação, a foto continua vinculada à avaliação.
+  avaliacaoParametro   AvaliacaoParametro? @relation(fields: [avaliacaoParametroId], references: [id], onDelete: SetNull)
+
+  producaoId String?   @db.Uuid
+  producao   Producao? @relation(fields: [producaoId], references: [id], onDelete: Cascade)
+
+  @@index([coloniaId])
+  @@index([avaliacaoId])
+  @@index([avaliacaoParametroId])
+  @@index([producaoId])
+  @@map("fotos")
+}
+
+// PRODUÇÃO E COLHEITAS
+
+model Producao {
+  id             String   @id @default(uuid()) @db.Uuid
+  dataColheita   DateTime
+  tipoProduto    String   // mel, polen, propolis, cera
+  // Mel é medido em volume; pólen/própolis/cera normalmente em massa.
+  // Unidades diferentes nunca são somadas entre si nos relatórios.
+  quantidade     Float
+  unidade        String   // ml, g
+  caracteristicas String? @db.Text // JSON: { cor, aroma, sabor }
+  observacoes    String?  @db.Text
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relações
+  coloniaId String  @db.Uuid
+  colonia   Colonia @relation(fields: [coloniaId], references: [id], onDelete: Cascade)
+
+  fotos Foto[]
+
+  @@index([coloniaId])
+  @@index([tipoProduto])
+  @@index([dataColheita])
+  @@map("producoes")
+}
+
+// ESPÉCIES (catálogo fixo — seed-only, somente leitura no app)
+
+model Especie {
+  id                String   @id @default(uuid()) @db.Uuid
+  codigo            String   @unique // padrão Kew: TETRANGU
+  nomePopular       String
+  nomeCientifico    String   @unique
+  genero            String
+  especie           String   // epíteto específico
+  subespecie        String?
+  nomesAlternativos String?  @db.Text // JSON array
+  caracteristicas   String?  @db.Text // JSON: tamanho, cor, comportamento, entrada, populacao
+  ocorrenciaBiomas  String?  @db.Text // JSON array
+  statusConservacao String?            // LC, VU, EN
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  colonias         Colonia[]
+  criteriosParametro ParametroEspecie[]
+
+  @@index([codigo])
+  @@index([genero])
+  @@map("especies")
+}
+
+// SINCRONIZAÇÃO OFFLINE
+// A fila "viva" fica no cliente (IndexedDB). Esta tabela é o registro, no
+// servidor, de cada operação recebida via POST /sync. O `id` é o UUID gerado
+// pelo cliente para a operação — reenviar a mesma operação é idempotente.
+
+model SyncQueue {
+  id           String   @id @db.Uuid
+  tipo         String   // colonia, avaliacao, producao
+  operacao     String   // create, update, delete
+  entidadeId   String?  @db.Uuid
+  dados        String   @db.Text // JSON (payload recebido)
+  resultado    String   // aplicado, conflito, erro
+  tentativas   Int      @default(1)
+  ultimoErro   String?  @db.Text
+  sincronizado Boolean  @default(false)
+  criadoNoCliente DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, sincronizado])
+  @@map("sync_queue")
+}

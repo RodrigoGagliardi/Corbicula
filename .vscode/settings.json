@@ -1,0 +1,7 @@
+{
+  // Tailwind v4: o modo "tailwindcss" entende @theme/@import "tailwindcss"
+  // e mostra as cores e o autocomplete nos arquivos .css.
+  "files.associations": {
+    "*.css": "tailwindcss"
+  }
+}
