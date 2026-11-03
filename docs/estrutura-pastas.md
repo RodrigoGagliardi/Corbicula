@@ -9,7 +9,7 @@
 > de encerrar a tarefa. Se encontrar divergência entre este documento e o disco,
 > o disco é a verdade — corrija o documento para refletir o real.
 
-**Última sincronização (01/10/2026):** backend do MVP completo (inclui fotos, produções, exportação e sync offline) com suíte de testes automatizados (Vitest) e CI no GitHub Actions. Frontend criado em `app/frontend/` (React + Vite + PWA) com as primeiras telas do MVP; a camada offline de dados ainda não existe.
+**Última sincronização (03/11/2026):** backend do MVP completo (inclui fotos, produções, exportação, sync offline e histórico geral de avaliações) com 132 testes automatizados (Vitest) e CI no GitHub Actions. Frontend em `app/frontend/` (React + Vite + PWA) com as telas centrais do MVP (colônias, avaliações, parâmetros, produção e páginas públicas); configurações, mapa, calendário e a camada offline de dados ainda não existem.
 
 ---
 
@@ -25,6 +25,8 @@ CORBICULA/
 ├── .github/
 │   └── workflows/
 │       └── backend-tests.yml  # CI: typecheck + testes do backend (Postgres como service)
+├── .vscode/
+│   └── settings.json          # associa *.css ao modo Tailwind (autocomplete do Tailwind v4)
 ├── CLAUDE.md                  # contexto vivo do projeto (lido pelo Claude Code; ignorado no git)
 ├── README.md
 ├── CHANGELOG.md
@@ -63,7 +65,7 @@ app/backend/
 ├── prisma/
 │   ├── schema.prisma          # 11 tabelas (ver docs/prisma-setup.md)
 │   ├── seed.ts                # 19 espécies + usuário de teste + parâmetros + colônia exemplo
-│   └── migrations/            # geradas por prisma migrate (<timestamp>_init/)
+│   └── migrations/            # geradas por prisma migrate: <timestamp>_init/, <timestamp>_colonia_doadora_campeiras/
 ├── src/
 │   ├── config/
 │   │   ├── database.ts        # singleton do PrismaClient (driver adapter @prisma/adapter-pg)
@@ -80,7 +82,7 @@ app/backend/
 │   │   │   └── users.types.ts
 │   │   ├── colonias/
 │   │   │   ├── colonias.routes.ts    # registra avaliacoesRoutes como sub-recurso
-│   │   │   ├── colonias.service.ts   # inclui geração de código (prefixo Kew + sequencial)
+│   │   │   ├── colonias.service.ts   # geração de código (prefixo Kew + sequencial) e regras de genealogia
 │   │   │   ├── colonias.repository.ts
 │   │   │   └── colonias.types.ts
 │   │   ├── especies/
@@ -224,8 +226,9 @@ app/frontend/
 
 Notas:
 - `VITE_API_URL` é a URL da API vista pelo **navegador** (padrão `http://localhost:3000`), não pela rede Docker.
-- `/` redireciona para `/dashboard` (logado) ou `/login`; ainda não existe landing page.
-- Ainda não existem: `services/offline/` (IndexedDB + fila usando `/sync`) e as telas de produção, análises, exportação e configurações.
+- Rotas públicas ficam na raiz (`/` é a landing page) dentro de `LayoutPublico`; as privadas ficam sob `/app/*` dentro de `AppLayout`. Endereços antigos sem `/app` redirecionam.
+- Telas planejadas e ainda não implementadas têm rota e mostram `EmConstrucao` com o conteúdo de `telasPlanejadas.ts`. A situação de cada tela está em `docs/telas.md`.
+- Ainda não existem: `services/offline/` (IndexedDB + fila usando `/sync`), as telas de configurações, mapa, templates de parâmetros, calendário, alertas e análises, e testes do frontend.
 - `watch.usePolling` no Vite é necessário para o hot reload funcionar com bind mount do Windows dentro do Docker.
 
 ---
@@ -300,6 +303,11 @@ Notas:
   `scripts/gerar-icones.mjs`. Serviço `frontend` ativado no `docker-compose.yml` (volume
   `frontend_modules`). Árvore da raiz corrigida para o disco: `handoff_doc.md` não existe mais;
   adicionados `.husky/`, `package.json`, `commitlint.config.js` e `.release-it.json`.
+
+- **[2026-10-06 — colônia doadora de campeiras]** — Migration
+  `prisma/migrations/<timestamp>_colonia_doadora_campeiras/` (FK opcional
+  `colonia_doadora_campeiras_id` em `colonias`). Regras de genealogia centralizadas em
+  `colonias.service.ts`.
 
 - **[2026-10-14 — frontend: tema e rotas]** — Rotas privadas passaram para `/app/*` (endereços
   antigos redirecionam); `/` virou landing page. Criados `components/layout/{LayoutPublico,

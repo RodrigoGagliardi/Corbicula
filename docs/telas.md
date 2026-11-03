@@ -4,6 +4,32 @@
 
 > Rotas públicas ficam na raiz (`/`, `/login`...). As privadas ficam sob `/app` (ex.: `/app/colonias`); o dashboard é `/app`. Telas ainda não implementadas já têm rota e mostram uma página "em construção" (`pages/telasPlanejadas.ts`). Configurações usam `/app/configuracoes/dados` e `/app/configuracoes/sync`.
 
+### Situação de implementação (03/11/2026)
+
+Legenda: ✅ pronta · ◐ parcial · 🚧 rota com página "em construção" · ⚪ sem rota ainda
+
+| # | Tela | Situação |
+|---|------|----------|
+| 1 | Landing Page | ✅ |
+| 2 | Login | ✅ |
+| 3 | Cadastro | ✅ |
+| 4 | Recuperar Senha | ◐ só explica que o envio por e-mail ainda não existe (o backend não tem esse endpoint) |
+| 5 | Sobre o Projeto | ✅ inclui a atribuição da Open-Meteo |
+| 6 | Dashboard Principal | ✅ |
+| 7–10 | Colônias: lista, detalhes, criar, editar | ✅ |
+| 11 | Mapa de Colônias | 🚧 |
+| 12 | Nova Avaliação (Quick) | ✅ |
+| 13 | Histórico de Avaliações | ✅ (pendências na seção da tela) |
+| 14 | Detalhes da Avaliação | ✅ |
+| 15 | Editar Avaliação | ✅ |
+| 16–17 | Parâmetros: gerenciar, criar/editar | ✅ |
+| 18 | Templates de Parâmetros | 🚧 |
+| 19–23 | Análises: dashboard, individual, comparativa, correlações, genealogia | 🚧 Fase 2 |
+| 24–25 | Análise Comportamental, Predições (ML) | ⚪ Fase 2 / Fase 4 |
+| 26–28 | Produção: registrar, histórico, relatório | ✅ |
+| 29–30 | Calendário, Central de Alertas | 🚧 |
+| 31–35 | Configurações: perfil, meliponário, preferências, dados, sincronização | 🚧 (o tema claro/escuro/sistema já fica no menu do usuário) |
+
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                    PÚBLICAS (Sem Login)                  │
@@ -1144,5 +1170,5 @@ MAND-005
 
 - Telas 1–24 estão detalhadas em nível de implementação.
 - Telas 25–35 estão em nível **provisório** — a intenção, os campos principais e as rotas estão definidos, mas o detalhamento fino (validações, edge cases, microinterações) será refinado quando cada uma entrar em desenvolvimento.
-- A ordem de construção segue o roadmap: dashboard, colônias, avaliações e parâmetros primeiro (MVP); análises, produção, calendário e configurações avançadas depois.
+- A ordem de construção segue o roadmap: dashboard, colônias, avaliações e parâmetros primeiro (MVP); análises, produção, calendário e configurações avançadas depois. A produção acabou entrando antes, porque o backend já estava pronto. A situação atual de cada tela está na tabela do início deste documento.
 - Qualquer tela pode ser repensada — este documento é um guia, não um contrato.

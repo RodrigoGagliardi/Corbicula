@@ -11,13 +11,14 @@ Voltado a abelhas sem ferrão (Meliponini), o sistema permite avaliações perso
 | Parte | Estado |
 |-------|--------|
 | **Backend** (Node.js + Fastify + Prisma) | ✅ MVP completo, com testes automatizados e CI |
-| **Frontend** (React + Vite + PWA) | 🚧 Primeiras telas do MVP prontas; modo offline ainda não implementado |
+| **Frontend** (React + Vite + PWA) | 🚧 Telas centrais do MVP prontas (colônias, avaliações, parâmetros, produção); configurações, mapa, calendário e modo offline por fazer |
 | **Analytics** (Python + FastAPI) | 📋 Planejado (Fase 2): análises, correlações, genealogia |
 
 O que o backend já faz:
 
-- **Colônias** — cadastro com código automático no padrão Kew (`TETRANGU-001`), genealogia mãe/filha e catálogo fixo das 19 espécies de meliponíneos do RS
-- **Avaliações** — parâmetros de saúde personalizáveis (Bom/Médio/Ruim), score automático de 0 a 100 e edição permitida por 7 dias
+- **Colônias** — cadastro com código automático no padrão Kew (`TETRANGU-001`) e catálogo fixo das 19 espécies de meliponíneos do RS
+- **Genealogia** — divisões registram a colônia-mãe e, opcionalmente, a colônia doadora de campeiras. O servidor garante a consistência: a espécie não muda depois de definida, mãe, filha e doadora são da mesma espécie, a filha não entra no meliponário antes da mãe e a árvore não tem ciclos
+- **Avaliações** — parâmetros de saúde personalizáveis (Bom/Médio/Ruim), score automático de 0 a 100, edição permitida por 7 dias e histórico geral com filtros por colônia, status, período e parâmetro + classificação
 - **Clima automático** — temperatura, umidade e condição do tempo buscados na [Open-Meteo](https://open-meteo.com/), sem digitação manual
 - **Fotos** — sempre opcionais; por colônia, inspeção, parâmetro ou colheita
 - **Produção** — registro de colheitas (mel, pólen, própolis, cera) com resumo e ranking por colônia e espécie
@@ -26,16 +27,16 @@ O que o backend já faz:
 
 O que o frontend já tem:
 
-- **Acesso** — login e cadastro
-- **Dashboard** — visão geral das colônias e do score
-- **Colônias** — lista, detalhes, cadastro e edição
-- **Avaliação rápida** — fluxo mobile-first de Bom/Médio/Ruim, com foto-resumo opcional
-- **Histórico de avaliações** — linha do tempo por mês com filtros (período, status, colônia, parâmetro), evolução do score, exportação CSV/JSON e edição nos primeiros 7 dias
+- **Páginas públicas** — landing page, login, cadastro e "Sobre" (com a atribuição da Open-Meteo)
+- **Dashboard** — visão geral das colônias e do score, com as colônias que pedem atenção
+- **Colônias** — lista, detalhes (com totais de produção), cadastro e edição, incluindo mãe e doadora de campeiras em divisões
+- **Avaliação rápida** — fluxo mobile-first de Bom/Médio/Ruim, com foto-resumo opcional comprimida no próprio aparelho
+- **Histórico de avaliações** — linha do tempo por mês com filtros (período, status, colônia, parâmetro), evolução do score, exportação CSV/JSON, detalhe de cada inspeção e edição nos primeiros 7 dias
 - **Produção** — histórico de colheitas, registro com foto opcional e relatório com ranking e exportação
 - **Parâmetros** — lista, criação e edição dos critérios de avaliação
-- **Layout responsivo** — sidebar no desktop e barra de navegação inferior no mobile, com a mesma base de código; instalável como PWA
+- **Layout responsivo** — sidebar no desktop e barra de navegação inferior no mobile, com a mesma base de código; tema claro, escuro ou do sistema; instalável como PWA
 
-A fila de sincronização offline no cliente (IndexedDB + `/sync`), as configurações (perfil, meliponário, exportação completa) e as análises ainda estão por vir.
+As telas que ainda não existem já têm rota e mostram uma página "em construção" que descreve o que está previsto. Ainda faltam: configurações (perfil, meliponário, preferências, exportar/importar), mapa de colônias, templates de parâmetros, calendário e alertas, a fila de sincronização offline no cliente (IndexedDB + `/sync`) e as análises da Fase 2. A recuperação de senha por e-mail também não existe ainda. A situação de cada tela está em [`docs/telas.md`](docs/telas.md).
 
 ## Começando
 
@@ -53,7 +54,7 @@ Git
 Opcionalmente, para rodar comandos fora dos containers:
 
 ```
-Node.js 20+
+Node.js 20.19+ (exigido pelo Vite 8)
 make (atalhos do makefile)
 ```
 
@@ -116,13 +117,14 @@ make down      # derruba os containers
 make logs      # acompanha os logs
 make seed      # roda o seed
 make test      # roda os testes do backend
+make migrate name=nome_da_migration   # cria uma migration a partir do schema
 make studio    # abre o Prisma Studio
 make reset     # apaga os volumes e recria tudo (CUIDADO: apaga o banco)
 ```
 
 ## Executando os testes
 
-O backend tem uma suíte de testes em [Vitest](https://vitest.dev/): testes unitários (cálculo de score, geração de CSV, integração com o clima) e testes de integração que exercitam a API completa (autenticação, colônias, avaliações, fotos, produção, exportação e sincronização).
+O backend tem uma suíte de 132 testes em [Vitest](https://vitest.dev/): testes unitários (cálculo de score, geração de CSV, integração com o clima) e testes de integração que exercitam a API completa (autenticação, colônias e genealogia, avaliações e histórico, fotos, produção, exportação e sincronização).
 
 ```
 docker compose exec backend npm test
@@ -145,6 +147,8 @@ docker compose exec frontend npm run typecheck
 docker compose exec frontend npm run build
 ```
 
+O frontend ainda não tem testes automatizados nem CI. O Vitest já está configurado (`jsdom` + Testing Library).
+
 ## Dados e metodologia
 
 O Corbicula nasceu com propósito acadêmico, e por isso a exportação de dados e a transparência da metodologia fazem parte do projeto:
@@ -159,7 +163,7 @@ O Corbicula nasceu com propósito acadêmico, e por isso a exportação de dados
 | Documento | Conteúdo |
 |-----------|----------|
 | [`docs/escopo.md`](docs/escopo.md) | Escopo completo: personas, módulos e roadmap |
-| [`docs/telas.md`](docs/telas.md) | As 35 telas planejadas, com rotas |
+| [`docs/telas.md`](docs/telas.md) | As 35 telas planejadas, com rotas e situação de implementação |
 | [`docs/estrutura-pastas.md`](docs/estrutura-pastas.md) | Estrutura de pastas do projeto |
 | [`docs/prisma-setup.md`](docs/prisma-setup.md) | Schema do banco, seed e comandos do Prisma |
 | [`docs/especies.md`](docs/especies.md) | As 19 espécies do catálogo |
