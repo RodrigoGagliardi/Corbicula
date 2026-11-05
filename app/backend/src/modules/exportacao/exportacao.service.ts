@@ -55,7 +55,7 @@ export const COLUNAS_COLONIAS = [
   "especie_nome_popular", "data_entrada", "origem", "tipo_caixa", "caixa_altura",
   "caixa_largura", "caixa_profundidade", "localizacao", "latitude", "longitude",
   "colonia_mae_id", "colonia_mae_codigo", "colonia_doadora_campeiras_id",
-  "colonia_doadora_campeiras_codigo", "n_avaliacoes", "n_producoes", "observacoes",
+  "colonia_doadora_campeiras_codigo", "frequencia_inspecao_dias", "n_avaliacoes", "n_producoes", "observacoes",
   "registrado_em", "atualizado_em",
 ] as const;
 
@@ -93,6 +93,7 @@ async function linhasColonias(userId: string, f: ExportarColoniasInput): Promise
       colonia_mae_codigo: c.coloniaMae?.codigo,
       colonia_doadora_campeiras_id: c.coloniaDoadoraCampeirasId,
       colonia_doadora_campeiras_codigo: c.coloniaDoadoraCampeiras?.codigo,
+      frequencia_inspecao_dias: c.frequenciaInspecaoDias,
       n_avaliacoes: c._count.avaliacoes,
       n_producoes: c._count.producoes,
       observacoes: c.observacoes,

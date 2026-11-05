@@ -102,6 +102,7 @@ export const coloniasRepository = {
         coloniaMaeId: data.coloniaMaeId ?? null,
         coloniaDoadoraCampeirasId: data.coloniaDoadoraCampeirasId ?? null,
         status: data.status,
+        frequenciaInspecaoDias: data.frequenciaInspecaoDias ?? null,
       },
       include: INCLUDE_DETALHADO,
     }),
@@ -123,6 +124,7 @@ export const coloniasRepository = {
         ...(data.latitude !== undefined && { latitude: data.latitude }),
         ...(data.longitude !== undefined && { longitude: data.longitude }),
         ...(data.observacoes !== undefined && { observacoes: data.observacoes }),
+        ...(data.frequenciaInspecaoDias !== undefined && { frequenciaInspecaoDias: data.frequenciaInspecaoDias }),
         ...(data.especieId !== undefined && { especieId: data.especieId }),
         ...(data.coloniaMaeId !== undefined && { coloniaMaeId: data.coloniaMaeId }),
         ...(data.coloniaDoadoraCampeirasId !== undefined && {

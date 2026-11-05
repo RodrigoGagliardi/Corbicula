@@ -4,6 +4,14 @@ export const ORIGENS = ["captura", "compra", "divisao", "resgate"] as const;
 export const TIPOS_CAIXA = ["INPA", "PNN", "Schenck", "tronco", "outro"] as const;
 export const STATUS_COLONIA = ["ativa", "inativa", "morta"] as const;
 
+// Intervalo sugerido entre inspeções desta colônia, em dias (null = usa a
+// preferência geral do usuário). Usado no calendário e nos alertas.
+export const FREQUENCIA_INSPECAO = z
+  .number()
+  .int("Frequência deve ser um número inteiro de dias")
+  .min(1, "Frequência mínima: 1 dia")
+  .max(365, "Frequência máxima: 365 dias");
+
 export const dimensoesCaixaSchema = z.object({
   altura: z.number().positive().optional(),
   largura: z.number().positive().optional(),
@@ -30,6 +38,7 @@ export const criarColoniaSchema = z.object({
   // Só em divisão: outra colônia que doou campeiras à filha.
   coloniaDoadoraCampeirasId: z.uuid("ID de colônia doadora inválido").nullable().optional(),
   status: z.enum(STATUS_COLONIA).default("ativa"),
+  frequenciaInspecaoDias: FREQUENCIA_INSPECAO.nullable().optional(),
 });
 
 // No PATCH todos os campos são opcionais. Campos nullable permitem ser zerados
@@ -49,6 +58,7 @@ export const atualizarColoniaSchema = z.object({
   coloniaMaeId: z.uuid().nullable().optional(),
   coloniaDoadoraCampeirasId: z.uuid().nullable().optional(),
   status: z.enum(STATUS_COLONIA).optional(),
+  frequenciaInspecaoDias: FREQUENCIA_INSPECAO.nullable().optional(),
 });
 
 export const filtrosColoniaSchema = z.object({

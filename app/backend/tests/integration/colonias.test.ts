@@ -344,3 +344,20 @@ describe("colônias — CRUD e regras", () => {
     expect((await dono.api.get(`/colonias/${c.id}`)).body.status).toBe("ativa");
   });
 });
+
+describe("colônias — frequência de inspeção", () => {
+  it("é opcional, aceita 1–365 dias e pode ser zerada com null", async () => {
+    const { api } = await novoUsuario(app);
+    const semFrequencia = await criarColonia(api);
+    expect(semFrequencia.frequenciaInspecaoDias).toBeNull();
+
+    const c = await criarColonia(api, { frequenciaInspecaoDias: 15 });
+    expect(c.frequenciaInspecaoDias).toBe(15);
+    expect((await api.patch(`/colonias/${c.id}`, { frequenciaInspecaoDias: 30 })).body.frequenciaInspecaoDias).toBe(30);
+    expect((await api.patch(`/colonias/${c.id}`, { frequenciaInspecaoDias: null })).body.frequenciaInspecaoDias).toBeNull();
+
+    for (const invalido of [0, 366, 7.5, "15"]) {
+      expect((await api.patch(`/colonias/${c.id}`, { frequenciaInspecaoDias: invalido })).status).toBe(400);
+    }
+  });
+});

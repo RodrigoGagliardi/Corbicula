@@ -29,6 +29,7 @@ model User {
   colonias    Colonia[]
   parametros  Parametro[]
   syncQueue   SyncQueue[]
+  alertasResolvidos AlertaResolvido[]
 
   @@map("users")
 }
@@ -73,6 +74,8 @@ model Colonia {
   longitude      Float?
   observacoes    String?   @db.Text
   status         String    @default("ativa") // ativa, inativa, morta
+  // Intervalo sugerido entre inspeções (dias). null = usa a preferência geral do usuário.
+  frequenciaInspecaoDias Int?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
@@ -313,4 +316,22 @@ model SyncQueue {
 
   @@index([userId, sincronizado])
   @@map("sync_queue")
+}
+
+// ALERTAS RESOLVIDOS
+// Os alertas são calculados a partir das avaliações (GET /alertas); aqui fica só
+// o que o usuário marcou como resolvido. A chave identifica a ocorrência (ex.:
+// "score_baixo:<avaliacaoId>"), então um problema que reaparece numa nova
+// inspeção gera um alerta novo.
+
+model AlertaResolvido {
+  id          String   @id @default(uuid()) @db.Uuid
+  chave       String
+  resolvidoEm DateTime @default(now())
+
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, chave])
+  @@map("alertas_resolvidos")
 }

@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from "fastify/types/plugin";
 import { authenticate } from "../../shared/middleware/authenticate";
-import { meliponarioSchema, updateProfileSchema } from "./users.types";
+import { alterarSenhaSchema, excluirContaSchema, meliponarioSchema, updateProfileSchema } from "./users.types";
 import { usersService } from "./users.service";
 
 export const usersRoutes: FastifyPluginAsync = async (app) => {
@@ -37,5 +37,31 @@ export const usersRoutes: FastifyPluginAsync = async (app) => {
   }, async (request) => {
     const data = meliponarioSchema.parse(request.body);
     return usersService.upsertMeliponario(request.userId, data);
+  });
+
+  app.put("/me/senha", {
+    schema: {
+      tags: ["users"],
+      summary: "Altera a senha (exige a senha atual)",
+      description: "Body: { senhaAtual, novaSenha }. Senha atual errada → 400. Sucesso → 204.",
+    },
+  }, async (request, reply) => {
+    const data = alterarSenhaSchema.parse(request.body);
+    await usersService.alterarSenha(request.userId, data);
+    return reply.status(204).send();
+  });
+
+  app.delete("/me", {
+    schema: {
+      tags: ["users"],
+      summary: "Exclui a conta e todos os dados do usuário (LGPD)",
+      description:
+        "Body: { senha }. Apaga meliponário, colônias, avaliações, fotos (inclusive os arquivos), " +
+        "produções, parâmetros e registros de sync. Irreversível — exporte o backup antes. Sucesso → 204.",
+    },
+  }, async (request, reply) => {
+    const data = excluirContaSchema.parse(request.body);
+    await usersService.excluirConta(request.userId, data);
+    return reply.status(204).send();
   });
 };
