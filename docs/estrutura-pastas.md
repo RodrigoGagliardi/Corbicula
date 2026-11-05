@@ -20,7 +20,9 @@ orquestração, licença e contexto ficam na raiz.
 
 ```
 CORBICULA/
-├── .claude/                   # config do Claude Code (ignorado no git)
+├── .claude/                   # config do Claude Code + skills do BMAD (ignorado no git)
+├── _bmad/                     # BMAD Method v6: config, scripts e overrides em custom/ (ignorado no git)
+├── _bmad-output/              # artefatos do BMAD: PRD, specs, stories (ignorado no git)
 ├── .husky/                    # git hooks (pre-commit + commitlint no commit-msg)
 ├── .github/
 │   └── workflows/
@@ -339,3 +341,5 @@ Notas:
 - **[2026-11-03 — templates de parâmetros]** — Backend: `parametros.templates.ts` e `parametros.conjuntos.ts` (rotas `GET /parametros/templates`, `POST /parametros/templates/:id/aplicar`, `GET /parametros/exportar`, `POST /parametros/importar`); o seed passou a importar o template Iniciante; `tests/integration/parametros.test.ts`; `npm run dev` com `--poll` (hot reload do backend no Windows). Frontend: `pages/parametros/TemplatesParametros.tsx` e `utils/conjuntoParametros.ts`; removido `utils/parametrosSugeridos.ts` (duplicava o seed). `/app/parametros/templates` deixou de ser "em construção".
 
 - **[2026-11-04 — calendário e alertas]** — Migration `calendario_alertas`: `colonias.frequenciaInspecaoDias` (opcional) e tabela `alertas_resolvidos` (12 tabelas). Backend: módulo `src/modules/alertas/` e `tests/integration/alertas.test.ts`. Frontend: `pages/Alertas.tsx`, `pages/Calendario.tsx`, `utils/calendario.ts` (+ teste); contador de alertas no `AppLayout`; campo de frequência no formulário da colônia. `/app/alertas` e `/app/calendario` deixaram de ser "em construção".
+
+- **[2026-11-05 — BMAD Method]** — Instalado o BMAD Method v6.12.4 (módulo BMM, Claude Code) na branch `chore/bmad-setup`: `_bmad/` (config e scripts), `_bmad-output/` (artefatos) e 29 skills em `.claude/skills/bmad-*`. Tudo local, fora do git. Regras do projeto para os agentes em `_bmad/custom/regras-corbicula.md`, carregadas por `_bmad/custom/<skill>.toml` (`persistent_facts`).
