@@ -1,9 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
-import { avaliacoesApi, coloniasApi, especiesApi, fotosApi, parametrosApi, producoesApi } from "../services/api/endpoints";
+import { alertasApi, authApi, avaliacoesApi, coloniasApi, especiesApi, fotosApi, parametrosApi, producoesApi } from "../services/api/endpoints";
+import { useAuth } from "../store/auth";
+import { usePreferencias } from "../store/preferencias";
 import type { FiltrosAvaliacoes, FiltrosProducao } from "../types/api";
 
 // Chaves de cache centralizadas — usadas também para invalidar após mutações.
 export const chaves = {
+  eu: ["eu"] as const,
   colonias: ["colonias"] as const,
   colonia: (id: string) => ["colonias", id] as const,
   avaliacoes: (coloniaId: string) => ["colonias", coloniaId, "avaliacoes"] as const,
@@ -12,6 +15,9 @@ export const chaves = {
   // (nova avaliação, edição, exclusão, código da colônia) atualiza o histórico.
   historicoAvaliacoes: (filtros: FiltrosAvaliacoes) => ["colonias", "historico-avaliacoes", filtros] as const,
   parametros: ["parametros"] as const,
+  // Sob "colonias": nova avaliação, edição ou exclusão recalculam os alertas.
+  alertas: (filtros: object) => ["colonias", "alertas", filtros] as const,
+  templatesParametros: ["parametros", "templates"] as const,
   especies: ["especies"] as const,
   fotos: (filtro: object) => ["fotos", filtro] as const,
   producoes: ["producoes"] as const,
@@ -19,6 +25,18 @@ export const chaves = {
   resumoProducao: (filtros: FiltrosProducao) => ["producoes", "resumo", filtros] as const,
   producao: (id: string) => ["producoes", id] as const,
 };
+
+// Perfil + meliponário. Mantém a sessão (store) em dia, já que o layout e o
+// dashboard leem o nome do usuário e do meliponário de lá.
+export const useEu = () =>
+  useQuery({
+    queryKey: chaves.eu,
+    queryFn: async () => {
+      const usuario = await authApi.eu();
+      useAuth.getState().atualizarUsuario(usuario);
+      return usuario;
+    },
+  });
 
 export const useColonias = () => useQuery({ queryKey: chaves.colonias, queryFn: coloniasApi.listar });
 
@@ -40,6 +58,10 @@ export const useAvaliacao = (coloniaId: string, id: string) =>
 
 export const useParametros = () => useQuery({ queryKey: chaves.parametros, queryFn: parametrosApi.listar });
 
+// Templates são estáticos no servidor (mudam só com nova versão do app).
+export const useTemplatesParametros = () =>
+  useQuery({ queryKey: chaves.templatesParametros, queryFn: parametrosApi.templates, staleTime: Infinity });
+
 // Catálogo fixo: praticamente nunca muda durante a sessão.
 export const useEspecies = () =>
   useQuery({ queryKey: chaves.especies, queryFn: especiesApi.listar, staleTime: Infinity });
@@ -55,3 +77,11 @@ export const useResumoProducao = (filtros: FiltrosProducao = {}) =>
 
 export const useProducao = (id: string) =>
   useQuery({ queryKey: chaves.producao(id), queryFn: () => producoesApi.buscar(id), enabled: Boolean(id) });
+
+// Alertas calculados no servidor com a preferência de "inspeção atrasada"
+// deste navegador (a frequência de cada colônia tem prioridade).
+export const useAlertas = (incluirResolvidos = false) => {
+  const diasSemInspecao = usePreferencias((s) => s.diasInspecaoAtrasada);
+  const filtros = { diasSemInspecao, incluirResolvidos };
+  return useQuery({ queryKey: chaves.alertas(filtros), queryFn: () => alertasApi.listar(filtros) });
+};

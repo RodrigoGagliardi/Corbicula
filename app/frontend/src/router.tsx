@@ -2,7 +2,9 @@ import type { ReactNode } from "react";
 import { createBrowserRouter, Navigate, useLocation, useParams } from "react-router";
 import { AppLayout } from "./components/layout/AppLayout";
 import { LayoutPublico } from "./components/layout/LayoutPublico";
+import { Alertas } from "./pages/Alertas";
 import { Cadastro } from "./pages/Cadastro";
+import { Calendario } from "./pages/Calendario";
 import { Dashboard } from "./pages/Dashboard";
 import { EmConstrucao } from "./pages/EmConstrucao";
 import { Landing } from "./pages/Landing";
@@ -16,10 +18,17 @@ import { EditarAvaliacao } from "./pages/avaliacoes/EditarAvaliacao";
 import { HistoricoAvaliacoes } from "./pages/avaliacoes/HistoricoAvaliacoes";
 import { NovaAvaliacao } from "./pages/avaliacoes/NovaAvaliacao";
 import { DetalheColonia } from "./pages/colonias/DetalheColonia";
+import { Configuracoes } from "./pages/configuracoes/Configuracoes";
+import { Dados } from "./pages/configuracoes/Dados";
+import { PaginaMeliponario } from "./pages/configuracoes/Meliponario";
+import { Perfil } from "./pages/configuracoes/Perfil";
+import { Preferencias } from "./pages/configuracoes/Preferencias";
 import { FormColonia } from "./pages/colonias/FormColonia";
 import { ListaColonias } from "./pages/colonias/ListaColonias";
+import { MapaColonias } from "./pages/colonias/MapaColonias";
 import { FormParametro } from "./pages/parametros/FormParametro";
 import { ListaParametros } from "./pages/parametros/ListaParametros";
+import { TemplatesParametros } from "./pages/parametros/TemplatesParametros";
 import { FormColheita } from "./pages/producao/FormColheita";
 import { HistoricoProducao } from "./pages/producao/HistoricoProducao";
 import { RelatorioProducao } from "./pages/producao/RelatorioProducao";
@@ -83,6 +92,7 @@ export const router = createBrowserRouter([
       { index: true, element: <Dashboard /> },
       { path: "colonias", element: <ListaColonias /> },
       { path: "colonias/nova", element: <FormColonia /> },
+      { path: "colonias/mapa", element: <MapaColonias /> },
       { path: "colonias/:id", element: <DetalheColonia /> },
       { path: "colonias/:id/editar", element: <FormColonia /> },
       { path: "colonias/:coloniaId/avaliacoes/:id", element: <DetalheAvaliacao /> },
@@ -91,12 +101,20 @@ export const router = createBrowserRouter([
       { path: "avaliacoes/nova", element: <NovaAvaliacao /> },
       { path: "parametros", element: <ListaParametros /> },
       { path: "parametros/novo", element: <FormParametro /> },
+      { path: "parametros/templates", element: <TemplatesParametros /> },
       { path: "parametros/:id/editar", element: <FormParametro /> },
       { path: "producao", element: <HistoricoProducao /> },
       { path: "producao/nova", element: <FormColheita /> },
       { path: "producao/relatorio", element: <RelatorioProducao /> },
       { path: "producao/:id/editar", element: <FormColheita /> },
       { path: "analises/colonia/:id", element: <AnaliseColonia /> },
+      { path: "alertas", element: <Alertas /> },
+      { path: "calendario", element: <Calendario /> },
+      { path: "configuracoes", element: <Configuracoes /> },
+      { path: "configuracoes/perfil", element: <Perfil /> },
+      { path: "configuracoes/meliponario", element: <PaginaMeliponario /> },
+      { path: "configuracoes/preferencias", element: <Preferencias /> },
+      { path: "configuracoes/dados", element: <Dados /> },
       ...telasPlanejadas,
       { path: "*", element: <NaoEncontrado /> },
     ],

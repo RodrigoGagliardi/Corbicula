@@ -1,4 +1,6 @@
 import type {
+  ArquivoParametros,
+  RespostaAlertas,
   AvaliacaoDetalhada,
   AvaliacaoHistorico,
   AvaliacaoInput,
@@ -10,12 +12,17 @@ import type {
   FiltrosAvaliacoes,
   FiltrosProducao,
   Foto,
+  Meliponario,
+  MeliponarioInput,
+  ModoAplicacao,
   Parametro,
   ParametroInput,
   Producao,
   ProducaoInput,
   RespostaAuth,
+  ResumoAplicacao,
   ResumoProducao,
+  TemplateParametros,
   Usuario,
 } from "../../types/api";
 import { api, baixarArquivo } from "./client";
@@ -33,6 +40,15 @@ export const authApi = {
   cadastrar: (dados: { name: string; email: string; password: string; meliponario?: { nome: string } }) =>
     api.post<RespostaAuth>("/auth/register", dados),
   eu: () => api.get<Usuario>("/users/me"),
+};
+
+export const usuariosApi = {
+  atualizarPerfil: (dados: { name?: string; email?: string }) => api.patch<Usuario>("/users/me", dados),
+  // PUT: cria o meliponário na primeira vez, atualiza depois (relação 1:1).
+  salvarMeliponario: (dados: MeliponarioInput) => api.put<Meliponario>("/users/me/meliponario", dados),
+  alterarSenha: (senhaAtual: string, novaSenha: string) => api.put<void>("/users/me/senha", { senhaAtual, novaSenha }),
+  // Apaga a conta e todos os dados (LGPD). Senha errada → 400.
+  excluirConta: (senha: string) => api.delete("/users/me", { senha }),
 };
 
 export const especiesApi = {
@@ -65,6 +81,21 @@ export const parametrosApi = {
   criar: (dados: ParametroInput) => api.post<Parametro>("/parametros", dados),
   atualizar: (id: string, dados: Partial<ParametroInput>) => api.patch<Parametro>(`/parametros/${id}`, dados),
   excluir: (id: string) => api.delete(`/parametros/${id}`),
+  templates: () => api.get<TemplateParametros[]>("/parametros/templates"),
+  aplicarTemplate: (id: string, modo: ModoAplicacao) =>
+    api.post<ResumoAplicacao>(`/parametros/templates/${id}/aplicar`, { modo }),
+  importar: (dados: ArquivoParametros, modo: ModoAplicacao) =>
+    api.post<ResumoAplicacao>("/parametros/importar", { modo, dados }),
+  exportar: () => baixarArquivo("/parametros/exportar", "corbicula-parametros.json"),
+};
+
+export const alertasApi = {
+  listar: (filtros: { diasSemInspecao: number; incluirResolvidos?: boolean }) =>
+    api.get<RespostaAlertas>(
+      `/alertas?diasSemInspecao=${filtros.diasSemInspecao}${filtros.incluirResolvidos ? "&incluirResolvidos=true" : ""}`
+    ),
+  resolver: (chave: string) => api.post<void>("/alertas/resolvidos", { chave }),
+  reabrir: (chave: string) => api.delete("/alertas/resolvidos", { chave }),
 };
 
 export const fotosApi = {
@@ -91,6 +122,10 @@ export const producoesApi = {
 };
 
 export const exportacaoApi = {
+  colonias: (formato: "csv" | "json" = "csv") =>
+    baixarArquivo(`/exportacao/colonias?formato=${formato}`, `corbicula_colonias.${formato}`),
+  // Todos os dados do usuário em um JSON (sem os arquivos de fotos, só as URLs).
+  backup: () => baixarArquivo("/exportacao/backup", "corbicula_backup.json"),
   // A exportação aceita colônia, status e período (não o filtro por parâmetro).
   avaliacoes: ({ parametroId: _p, classificacao: _c, ...filtros }: FiltrosAvaliacoes, formato: "csv" | "json" = "csv") =>
     baixarArquivo(`/exportacao/avaliacoes${consulta({ ...filtros, formato })}`, `corbicula_avaliacoes.${formato}`),

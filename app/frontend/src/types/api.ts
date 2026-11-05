@@ -17,12 +17,25 @@ export interface Meliponario {
   latitude: number | null;
   longitude: number | null;
   bioma: string | null;
+  areaTotal: number | null;
+}
+
+export interface MeliponarioInput {
+  nome: string;
+  endereco?: string;
+  cidade?: string;
+  estado?: string;
+  latitude?: number;
+  longitude?: number;
+  bioma?: string;
+  areaTotal?: number;
 }
 
 export interface Usuario {
   id: string;
   email: string;
   name: string;
+  createdAt: string;
   meliponario: Meliponario | null;
 }
 
@@ -71,6 +84,8 @@ export interface Colonia {
   longitude: number | null;
   observacoes: string | null;
   status: StatusColonia;
+  // Intervalo sugerido entre inspeções (dias); null = preferência geral.
+  frequenciaInspecaoDias: number | null;
   especieId: string | null;
   coloniaMaeId: string | null;
   coloniaDoadoraCampeirasId: string | null;
@@ -250,6 +265,7 @@ export interface ColoniaInput {
   latitude?: number | null;
   longitude?: number | null;
   observacoes?: string | null;
+  frequenciaInspecaoDias?: number | null;
 }
 
 export interface AvaliacaoInput {
@@ -277,4 +293,67 @@ export interface ProducaoInput {
   unidade: Unidade;
   caracteristicas?: Caracteristicas | null;
   observacoes?: string | null;
+}
+
+// ─── Templates e importação de parâmetros (tela 18) ──────────────────────────
+
+export type ModoAplicacao = "mesclar" | "substituir";
+
+export interface CriteriosTexto {
+  criterioBom: string;
+  criterioMedio: string;
+  criterioRuim: string;
+}
+
+export interface TemplateParametros {
+  id: string;
+  nome: string;
+  versao: number;
+  descricao: string;
+  parametros: (CriteriosTexto & { nome: string })[];
+}
+
+// Formato de GET /parametros/exportar (aceito por POST /parametros/importar).
+export interface ArquivoParametros {
+  formato: "corbicula-parametros";
+  versao: 1;
+  exportadoEm?: string;
+  parametros: (CriteriosTexto & {
+    nome: string;
+    ativo?: boolean;
+    criteriosEspecie?: (CriteriosTexto & { especie: string })[];
+  })[];
+}
+
+export interface ResumoAplicacao {
+  criados: string[];
+  reativados: string[];
+  desativados: string[];
+  existentes: string[];
+  criteriosDiferentes: string[];
+  especiesIgnoradas: string[];
+}
+
+// ─── Central de Alertas (tela 30) ────────────────────────────────────────────
+
+export type TipoAlerta = "nunca_avaliada" | "sem_inspecao" | "score_baixo" | "queda_score" | "parametro_ruim";
+
+export interface Alerta {
+  chave: string;
+  tipo: TipoAlerta;
+  gravidade: "alta" | "media";
+  titulo: string;
+  detalhe: string;
+  desde: string;
+  colonia: { id: string; codigo: string; especie: { codigo: string; nomePopular: string } | null };
+  avaliacao: AvaliacaoResumo | null;
+  dados: Record<string, unknown>;
+  resolvido: boolean;
+  resolvidoEm: string | null;
+}
+
+export interface RespostaAlertas {
+  alertas: Alerta[];
+  totais: { abertos: number; alta: number; media: number; resolvidos: number };
+  criterios: { diasSemInspecao: number; diasSemInspecaoPadrao: number; quedaScoreMinima: number; descricao: string };
 }

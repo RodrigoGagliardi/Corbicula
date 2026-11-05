@@ -8,6 +8,7 @@ import { CabecalhoPagina, Cartao } from "../../components/ui/Cartao";
 import { Carregando, ErroCarregamento, MensagemErro } from "../../components/ui/Estados";
 import { chaves, useColonia, useColonias, useEspecies } from "../../hooks/useDados";
 import { coloniasApi } from "../../services/api/endpoints";
+import { usePreferencias } from "../../store/preferencias";
 import type { ColoniaDetalhada, ColoniaInput, Origem, StatusColonia, TipoCaixa } from "../../types/api";
 import { paraInputData, ROTULO_CAIXA, ROTULO_ORIGEM, ROTULO_STATUS_COLONIA } from "../../utils/format";
 
@@ -26,6 +27,7 @@ interface Estado {
   longitude: string;
   observacoes: string;
   status: StatusColonia;
+  frequencia: string;
 }
 
 function estadoInicial(colonia?: ColoniaDetalhada, maeSugerida?: string | null): Estado {
@@ -44,6 +46,7 @@ function estadoInicial(colonia?: ColoniaDetalhada, maeSugerida?: string | null):
     longitude: colonia?.longitude?.toString() ?? "",
     observacoes: colonia?.observacoes ?? "",
     status: colonia?.status ?? "ativa",
+    frequencia: colonia?.frequenciaInspecaoDias?.toString() ?? "",
   };
 }
 
@@ -67,6 +70,7 @@ function paraPayload(e: Estado): ColoniaInput {
     latitude: numeroOuNull(e.latitude),
     longitude: numeroOuNull(e.longitude),
     observacoes: textoOuNull(e.observacoes),
+    frequenciaInspecaoDias: e.frequencia.trim() === "" ? null : Number(e.frequencia),
   };
 }
 
@@ -87,6 +91,7 @@ function Formulario({ colonia }: { colonia?: ColoniaDetalhada | undefined }) {
   const { data: especies } = useEspecies();
   const { data: colonias } = useColonias();
   const [estado, setEstado] = useState(() => estadoInicial(colonia, params.get("mae")));
+  const frequenciaGeral = usePreferencias((s) => s.diasInspecaoAtrasada);
   const [tentou, setTentou] = useState(false);
   const [gps, setGps] = useState<"idle" | "buscando" | "erro">("idle");
 
@@ -131,6 +136,10 @@ function Formulario({ colonia }: { colonia?: ColoniaDetalhada | undefined }) {
     coloniaDoadoraId: !divisao ? undefined : conflitoOrigem(doadoraSelecionada, "doadora"),
     latitude: estado.latitude && !Number.isFinite(numeroOuNull(estado.latitude)) ? "Número inválido." : undefined,
     longitude: estado.longitude && !Number.isFinite(numeroOuNull(estado.longitude)) ? "Número inválido." : undefined,
+    frequencia:
+      estado.frequencia.trim() && !/^d+$/.test(estado.frequencia.trim()) ? "Use um número inteiro de dias."
+      : estado.frequencia.trim() && (Number(estado.frequencia) < 1 || Number(estado.frequencia) > 365) ? "Entre 1 e 365 dias."
+      : undefined,
   };
   const valido = !Object.values(erros).some(Boolean);
   const erro = (c: keyof typeof erros) => (tentou ? erros[c] : undefined);
@@ -350,6 +359,25 @@ function Formulario({ colonia }: { colonia?: ColoniaDetalhada | undefined }) {
               usa-se a do meliponário).
             </p>
           </div>
+        </Cartao>
+
+        <Cartao>
+          <Campo
+            rotulo="Frequência de inspeção (dias)"
+            erro={erro("frequencia")}
+            ajuda={`Opcional. Vazio = preferência geral (${frequenciaGeral} dias). Usada nas inspeções sugeridas do calendário e no alerta de inspeção atrasada.`}
+          >
+            {(id) => (
+              <Entrada
+                id={id}
+                inputMode="numeric"
+                placeholder={String(frequenciaGeral)}
+                value={estado.frequencia}
+                onChange={(e) => alterar("frequencia", e.target.value)}
+                className="max-w-40"
+              />
+            )}
+          </Campo>
         </Cartao>
 
         <Cartao>

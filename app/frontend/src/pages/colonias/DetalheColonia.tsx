@@ -10,6 +10,8 @@ import { CabecalhoPagina, Cartao, Selo } from "../../components/ui/Cartao";
 import { Carregando, ErroCarregamento, MensagemErro } from "../../components/ui/Estados";
 import { chaves, useAvaliacoes, useColonia, useResumoProducao } from "../../hooks/useDados";
 import { coloniasApi } from "../../services/api/endpoints";
+import { usePreferencias } from "../../store/preferencias";
+import { proximaInspecao } from "../../utils/calendario";
 import {
   formatarData,
   formatarDataHora,
@@ -27,6 +29,7 @@ export function DetalheColonia() {
   const queryClient = useQueryClient();
   const { data: colonia, isLoading, error, refetch } = useColonia(id);
   const { data: avaliacoes } = useAvaliacoes(id);
+  const frequenciaGeral = usePreferencias((s) => s.diasInspecaoAtrasada);
 
   const excluir = useMutation({
     mutationFn: () => coloniasApi.excluir(id),
@@ -39,6 +42,7 @@ export function DetalheColonia() {
   if (isLoading) return <Carregando />;
   if (error || !colonia) return <ErroCarregamento erro={error} tentarDeNovo={() => refetch()} />;
 
+  const proxima = proximaInspecao(colonia, frequenciaGeral);
   const dim = colonia.dimensoesCaixa;
   const dimensoes = dim && [dim.altura, dim.largura, dim.profundidade].some(Boolean)
     ? [dim.altura, dim.largura, dim.profundidade].map((v) => v ?? "?").join(" × ") + " cm"
@@ -104,6 +108,16 @@ export function DetalheColonia() {
             </Info>
             <Info rotulo="Entrada">{formatarData(colonia.dataEntrada)}</Info>
             <Info rotulo="Origem">{ROTULO_ORIGEM[colonia.origem]}</Info>
+            {proxima && (
+              <Info rotulo="Inspeção">
+                a cada {proxima.frequencia} dias{proxima.frequenciaDaColonia ? "" : " (preferência geral)"} ·{" "}
+                {proxima.atrasadaDesde ? (
+                  <span className="font-medium text-critica">atrasada há {proxima.diasAtraso} dia(s)</span>
+                ) : (
+                  <>próxima em {formatarData(proxima.dia + "T12:00:00")}</>
+                )}
+              </Info>
+            )}
             <Info rotulo="Caixa">
               {ROTULO_CAIXA[colonia.tipoCaixa]}
               {dimensoes && <span className="text-muted-foreground"> · {dimensoes}</span>}
@@ -112,6 +126,13 @@ export function DetalheColonia() {
             {colonia.latitude !== null && colonia.longitude !== null && (
               <Info rotulo="Coordenadas">
                 {colonia.latitude.toFixed(5)}, {colonia.longitude.toFixed(5)}
+                {" · "}
+                <Link
+                  to={`/app/colonias/mapa?status=todas&colonia=${colonia.id}`}
+                  className="font-medium text-foreground underline decoration-accent decoration-2 underline-offset-4 hover:decoration-foreground"
+                >
+                  Ver no mapa
+                </Link>
               </Info>
             )}
           </dl>

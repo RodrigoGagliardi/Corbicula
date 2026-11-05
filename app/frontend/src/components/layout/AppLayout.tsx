@@ -1,6 +1,7 @@
 import { Ellipsis, Info, LogOut, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Settings, Sun, User, Wifi, WifiOff, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router";
+import { useAlertas } from "../../hooks/useDados";
 import { useOnline } from "../../hooks/useOnline";
 import { useAuth } from "../../store/auth";
 import { usePreferencias, type Tema } from "../../store/preferencias";
@@ -144,6 +145,25 @@ function MenuUsuario({ recolhida }: { recolhida: boolean }) {
   );
 }
 
+// Contador de alertas abertos (Central de Alertas), mostrado na navegação.
+const ROTA_ALERTAS = "/app/alertas";
+function useAlertasAbertos() {
+  return useAlertas().data?.totais.abertos ?? 0;
+}
+
+function Contador({ valor, compacto = false }: { valor: number; compacto?: boolean }) {
+  if (valor <= 0) return null;
+  const texto = valor > 99 ? "99+" : String(valor);
+  if (compacto) {
+    return <span className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full border-2 border-sidebar bg-critica" aria-hidden />;
+  }
+  return (
+    <span className="ml-auto rounded-full bg-critica px-1.5 py-0.5 text-[11px] leading-none font-semibold text-white" aria-label={`${texto} alertas abertos`}>
+      {texto}
+    </span>
+  );
+}
+
 const classeItem = (ativo: boolean, recolhida: boolean) =>
   `flex items-center gap-3 rounded-xl py-2.5 text-sm font-medium transition-colors ${recolhida ? "justify-center px-0" : "px-3"} ${
     ativo ? "bg-sidebar-accent text-sidebar-primary" : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground"
@@ -152,6 +172,7 @@ const classeItem = (ativo: boolean, recolhida: boolean) =>
 function BarraLateral() {
   const usuario = useAuth((s) => s.usuario);
   const { sidebarRecolhida: recolhida, alternarSidebar } = usePreferencias();
+  const alertasAbertos = useAlertasAbertos();
   const { icone: IconeAcao } = ACAO_PRINCIPAL;
   return (
     <aside
@@ -187,12 +208,25 @@ function BarraLateral() {
       </NavLink>
 
       <nav className="mt-4 flex flex-1 flex-col gap-1 overflow-y-auto" aria-label="Principal">
-        {ITENS_NAV.map(({ rota, rotulo, icone: Icone, exata }) => (
-          <NavLink key={rota} to={rota} end={exata} title={recolhida ? rotulo : undefined} className={({ isActive }) => classeItem(isActive, recolhida)}>
-            <Icone className="size-5 shrink-0" aria-hidden />
-            {!recolhida && rotulo}
-          </NavLink>
-        ))}
+        {ITENS_NAV.map(({ rota, rotulo, icone: Icone, exata }) => {
+          const contador = rota === ROTA_ALERTAS ? alertasAbertos : 0;
+          return (
+            <NavLink
+              key={rota}
+              to={rota}
+              end={exata}
+              title={recolhida ? (contador ? `${rotulo} (${contador})` : rotulo) : undefined}
+              className={({ isActive }) => classeItem(isActive, recolhida)}
+            >
+              <span className="relative">
+                <Icone className="size-5 shrink-0" aria-hidden />
+                {recolhida && <Contador valor={contador} compacto />}
+              </span>
+              {!recolhida && rotulo}
+              {!recolhida && <Contador valor={contador} />}
+            </NavLink>
+          );
+        })}
       </nav>
 
       <div className="mt-3 space-y-2 border-t border-sidebar-border pt-3">
@@ -236,12 +270,13 @@ function BarraInferior() {
   const fixos = ITENS_NAV.filter((i) => ITENS_BARRA_INFERIOR.includes(i.rota));
   const restantes = ITENS_NAV.filter((i) => !ITENS_BARRA_INFERIOR.includes(i.rota));
   const restanteAtivo = restantes.some((i) => pathname.startsWith(i.rota));
+  const alertasAbertos = useAlertasAbertos();
   const [inicio, colonias, producao] = fixos;
   const { icone: IconeAcao } = ACAO_PRINCIPAL;
 
   return (
     <>
-      {maisAberto && <MenuMais itens={restantes} fechar={() => setMaisAberto(false)} />}
+      {maisAberto && <MenuMais itens={restantes} alertasAbertos={alertasAbertos} fechar={() => setMaisAberto(false)} />}
       <nav
         className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-card/95 backdrop-blur md:hidden"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
@@ -267,8 +302,14 @@ function BarraInferior() {
           </li>
           <li>
             <button type="button" onClick={() => setMaisAberto((a) => !a)} aria-expanded={maisAberto} className={classeAba(maisAberto || restanteAtivo)}>
-              <Ellipsis className="size-6" aria-hidden />
+              <span className="relative">
+                <Ellipsis className="size-6" aria-hidden />
+                {restantes.some((i) => i.rota === ROTA_ALERTAS) && alertasAbertos > 0 && (
+                  <span className="absolute -top-0.5 -right-1 size-2.5 rounded-full border-2 border-card bg-critica" aria-hidden />
+                )}
+              </span>
               Mais
+              {alertasAbertos > 0 && <span className="sr-only">({alertasAbertos} alertas abertos)</span>}
             </button>
           </li>
         </ul>
@@ -278,7 +319,7 @@ function BarraInferior() {
 }
 
 // Folha inferior do mobile com o restante da navegação, tema e sair.
-function MenuMais({ itens, fechar }: { itens: typeof ITENS_NAV; fechar: () => void }) {
+function MenuMais({ itens, alertasAbertos, fechar }: { itens: typeof ITENS_NAV; alertasAbertos: number; fechar: () => void }) {
   const sair = useSair();
   const usuario = useAuth((s) => s.usuario);
   return (
@@ -309,7 +350,14 @@ function MenuMais({ itens, fechar }: { itens: typeof ITENS_NAV; fechar: () => vo
                   }`
                 }
               >
-                <Icone className="size-6" aria-hidden />
+                <span className="relative">
+                  <Icone className="size-6" aria-hidden />
+                  {rota === ROTA_ALERTAS && alertasAbertos > 0 && (
+                    <span className="absolute -top-1.5 -right-3 rounded-full bg-critica px-1.5 py-0.5 text-[10px] leading-none font-semibold text-white">
+                      {alertasAbertos > 99 ? "99+" : alertasAbertos}
+                    </span>
+                  )}
+                </span>
                 {rotulo}
               </NavLink>
             </li>

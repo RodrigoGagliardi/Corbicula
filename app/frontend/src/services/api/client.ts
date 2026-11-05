@@ -57,7 +57,7 @@ export const api = {
   post: <T>(caminho: string, corpo?: Corpo) => requisicao<T>("POST", caminho, corpo),
   patch: <T>(caminho: string, corpo?: Corpo) => requisicao<T>("PATCH", caminho, corpo),
   put: <T>(caminho: string, corpo?: Corpo) => requisicao<T>("PUT", caminho, corpo),
-  delete: (caminho: string) => requisicao<void>("DELETE", caminho),
+  delete: (caminho: string, corpo?: Corpo) => requisicao<void>("DELETE", caminho, corpo),
 };
 
 // Download autenticado (exportações): baixa o arquivo e dispara o "salvar" do

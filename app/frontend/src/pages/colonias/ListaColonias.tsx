@@ -1,4 +1,4 @@
-import { Hexagon, Plus, Search } from "lucide-react";
+import { Hexagon, Map as MapIcon, Plus, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import { CartaoColonia } from "../../components/features/CartaoColonia";
@@ -48,9 +48,14 @@ export function ListaColonias() {
   );
 
   const acoes = (
-    <LinkBotao to="/app/colonias/nova">
-      <Plus className="size-4" aria-hidden /> Nova colônia
-    </LinkBotao>
+    <>
+      <LinkBotao to="/app/colonias/mapa" variante="secundario">
+        <MapIcon className="size-4" aria-hidden /> Mapa
+      </LinkBotao>
+      <LinkBotao to="/app/colonias/nova">
+        <Plus className="size-4" aria-hidden /> Nova colônia
+      </LinkBotao>
+    </>
   );
 
   if (isLoading) return <><CabecalhoPagina titulo="Colônias" acoes={acoes} /><Carregando /></>;
