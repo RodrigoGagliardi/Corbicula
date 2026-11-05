@@ -428,16 +428,25 @@ Classificação:
 - Mínimo 100MB
 - Otimizado até 500MB
 
-#### 9.2 Sincronização
-**Estratégias:**
-- Manual (botão "Sincronizar")
-- Automática (quando detecta internet)
-- Background Sync (quando app está fechado)
+**Persistência:**
+- Mudanças pendentes só saem do aparelho depois de o servidor confirmar ou de o usuário decidir
+- O app pede armazenamento persistente ao navegador; se for negado, avisa e recomenda instalar o app (nenhum app web consegue forçar a persistência, quem decide é o navegador)
+- Logout com pendências: aviso com as opções sincronizar agora, cancelar ou sair descartando; sair apaga a fila e os dados locais. Token expirado não é logout: a fila sobe no próximo login do mesmo usuário
 
-**Conflitos:**
-- Detecção de edições simultâneas
-- Interface para resolver conflitos
-- Last-write-wins para casos simples
+#### 9.2 Sincronização
+**Estratégias (o objetivo é manter os dados sincronizados sem ação do usuário):**
+- Automática: ao detectar internet, ao abrir o app e ao voltar para ele
+- Manual: botão "Sincronizar agora"
+- Background Sync (com o app fechado) como melhoria progressiva, onde o navegador oferece (Chrome/Android); nos demais, o resto funciona igual
+
+**Conflitos (o usuário só decide em último caso):**
+- Detecção de edições simultâneas (`baseUpdatedAt`)
+- Edições em campos diferentes são juntadas automaticamente; nunca há sobrescrita silenciosa
+- Mesmo campo alterado nos dois lados: o usuário escolhe entre a versão do servidor, a local ou editar manualmente
+- Falhas temporárias (rede, servidor) são retentadas sozinhas; mudança recusada pelo servidor vai para o usuário (editar manualmente ou descartar)
+
+**Incongruências:**
+- Antes de salvar, online ou offline, o app avisa e impede o que o servidor recusaria (genealogia, espécie já definida, janela de 7 dias), com a mesma mensagem do servidor
 
 #### 9.3 Indicadores
 **Interface:**
