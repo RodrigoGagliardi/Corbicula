@@ -9,7 +9,7 @@
 > de encerrar a tarefa. Se encontrar divergência entre este documento e o disco,
 > o disco é a verdade — corrija o documento para refletir o real.
 
-**Última sincronização (03/11/2026):** backend do MVP completo (inclui fotos, produções, exportação, sync offline e histórico geral de avaliações) com 132 testes automatizados (Vitest) e CI no GitHub Actions. Frontend em `app/frontend/` (React + Vite + PWA) com as telas centrais do MVP (colônias, avaliações, parâmetros, produção e páginas públicas); configurações, mapa, calendário e a camada offline de dados ainda não existem.
+**Última sincronização (03/11/2026):** backend do MVP completo (inclui fotos, produções, exportação, sync offline e histórico geral de avaliações) com 138 testes automatizados (Vitest) e CI no GitHub Actions. Frontend em `app/frontend/` (React + Vite + PWA) com as telas centrais do MVP (colônias com mapa, avaliações, parâmetros, produção, configurações e páginas públicas); calendário e a camada offline de dados ainda não existem.
 
 ---
 
@@ -76,8 +76,8 @@ app/backend/
 │   │   │   ├── auth.service.ts
 │   │   │   └── auth.types.ts
 │   │   ├── users/
-│   │   │   ├── users.routes.ts
-│   │   │   ├── users.service.ts
+│   │   │   ├── users.routes.ts       # /users/me (perfil, senha, exclusão da conta) e /users/me/meliponario
+│   │   │   ├── users.service.ts      # exclusão da conta apaga também os arquivos de fotos
 │   │   │   ├── users.repository.ts
 │   │   │   └── users.types.ts
 │   │   ├── colonias/
@@ -91,6 +91,8 @@ app/backend/
 │   │   │   ├── parametros.routes.ts
 │   │   │   ├── parametros.service.ts
 │   │   │   ├── parametros.repository.ts  # inclui upsertCriterioEspecie
+│   │   │   ├── parametros.templates.ts   # templates (Iniciante…Científico) — fonte única, usada também pelo seed
+│   │   │   ├── parametros.conjuntos.ts   # aplicar template/importar (transação), exportar
 │   │   │   └── parametros.types.ts
 │   │   ├── avaliacoes/
 │   │   │   ├── avaliacoes.routes.ts   # /:coloniaId/avaliacoes (CRUD) + /avaliacoes (histórico geral)
@@ -112,10 +114,15 @@ app/backend/
 │   │   │   ├── exportacao.service.ts  # linhas tidy + metadados/metodologia
 │   │   │   ├── exportacao.types.ts
 │   │   │   └── csv.ts                 # serialização RFC 4180
-│   │   └── sync/
-│   │       ├── sync.routes.ts         # POST /sync, GET /sync/alteracoes, GET /sync/status
-│   │       ├── sync.service.ts        # aplica operações offline via services existentes
-│   │       └── sync.types.ts
+│   │   ├── sync/
+│   │   │   ├── sync.routes.ts         # POST /sync, GET /sync/alteracoes, GET /sync/status
+│   │   │   ├── sync.service.ts        # aplica operações offline via services existentes
+│   │   │   └── sync.types.ts
+│   │   └── alertas/
+│   │       ├── alertas.routes.ts      # GET /alertas, POST/DELETE /alertas/resolvidos
+│   │       ├── alertas.service.ts     # cálculo dos alertas a partir das inspeções (regras documentadas)
+│   │       ├── alertas.repository.ts
+│   │       └── alertas.types.ts       # tipos, critérios (30 dias, queda de 20 pontos), chave da ocorrência
 │   ├── services/
 │   │   └── weather.service.ts  # Open-Meteo: Forecast + Archive + cache + enrichment
 │   ├── shared/
@@ -134,7 +141,7 @@ app/backend/
 │   │   └── global-setup.ts     # recria o banco de teste (migrate reset + seed) antes da suíte
 │   ├── unit/                   # score, CSV, clima (fetch mockado)
 │   ├── integration/            # API via app.inject: auth, colonias, avaliacoes, fotos,
-│   │                           # producoes, exportacao, sync
+│   │                           # producoes, exportacao, sync, users
 │   └── helpers.ts              # cliente autenticado, fábricas de dados, multipart
 ├── uploads/                    # fotos (volume Docker backend_uploads; ignorado no git)
 ├── node_modules/
@@ -180,15 +187,18 @@ app/frontend/
 │   │   │   └── navegacao.ts       # fonte única dos itens de navegação dos dois layouts
 │   │   ├── charts/
 │   │   │   └── GraficoScore.tsx   # evolução do score de uma colônia
-│   │   └── features/          # CartaoColonia, GaleriaFotos, SeletorClassificacao, SeloScore
+│   │   └── features/          # CartaoColonia, GaleriaFotos, MapaLeaflet (Leaflet, carregado sob demanda), SeletorClassificacao, SeloScore
 │   ├── pages/
 │   │   ├── Landing.tsx, Login.tsx, Cadastro.tsx, RecuperarSenha.tsx, Sobre.tsx, NaoEncontrado.tsx
 │   │   ├── Dashboard.tsx
+│   │   ├── Alertas.tsx         # Central de Alertas (tela 30)
+│   │   ├── Calendario.tsx      # Calendário de inspeções (tela 29)
 │   │   ├── EmConstrucao.tsx   # tela "em construção" das rotas ainda não implementadas
 │   │   ├── telasPlanejadas.ts # rotas /app pendentes + o que cada tela vai mostrar (docs/telas.md)
-│   │   ├── colonias/          # ListaColonias, DetalheColonia, FormColonia (criar/editar)
+│   │   ├── colonias/          # ListaColonias, DetalheColonia, FormColonia (criar/editar), MapaColonias
+│   │   ├── configuracoes/     # Configuracoes (central + VoltarConfiguracoes), Perfil, Meliponario, Preferencias, Dados (exportação)
 │   │   ├── avaliacoes/        # HistoricoAvaliacoes, NovaAvaliacao (fluxo rápido; formulário também usado na edição), EditarAvaliacao, DetalheAvaliacao
-│   │   ├── parametros/        # ListaParametros, FormParametro (criar/editar)
+│   │   ├── parametros/        # ListaParametros, FormParametro (criar/editar), TemplatesParametros
 │   │   └── producao/          # HistoricoProducao, FormColheita (registrar/editar), RelatorioProducao
 │   ├── hooks/
 │   │   ├── useDados.ts        # queries do TanStack Query + chaves de cache centralizadas
@@ -199,21 +209,23 @@ app/frontend/
 │   │       └── endpoints.ts   # funções por recurso (colônias, avaliações, parâmetros, fotos...)
 │   ├── store/
 │   │   ├── auth.ts            # sessão (token + usuário) em Zustand persistido
-│   │   └── preferencias.ts    # tema (claro/escuro/sistema) e sidebar recolhida
+│   │   └── preferencias.ts    # tema (claro/escuro/sistema), sidebar recolhida e dias para "inspeção atrasada"
 │   ├── types/
 │   │   └── api.ts             # tipos das respostas da API
 │   ├── utils/
+│   │   ├── calendario.ts      # grade do mês, inspeções sugeridas, próxima inspeção (+ .test.ts)
 │   │   ├── colonias.ts        # colônias que pedem atenção (nunca avaliada, score baixo, inspeção atrasada)
 │   │   ├── format.ts          # datas e números em pt-BR
 │   │   ├── imagem.ts          # compressão de foto no cliente (canvas, ~500 KB)
-│   │   ├── parametrosSugeridos.ts  # sugestões de parâmetros para começar
+│   │   ├── mapa.ts            # filtros, cores e pior status dos grupos do mapa (+ mapa.test.ts)
+│   │   ├── conjuntoParametros.ts  # prévia de aplicar template/arquivo e leitura do arquivo (+ .test.ts)
 │   │   ├── periodo.ts         # atalhos de período dos filtros (produção, avaliações)
 │   │   ├── producao.ts        # rótulos/unidades dos produtos
 │   │   └── score.ts           # faixas do score (Excelente/Boa/Atenção/Crítica) e prazo de edição (7 dias)
 │   ├── index.css              # Tailwind + tokens do tema (claro/escuro): verde floresta + amarelo do logo
 │   ├── main.tsx               # entry point: QueryClient + RouterProvider
 │   ├── router.tsx             # rotas públicas + /app/* privadas, guardas e redirecionamento dos endereços antigos
-│   └── test-setup.ts          # jest-dom para o Vitest (ainda sem testes escritos)
+│   └── test-setup.ts          # jest-dom para o Vitest (testes ao lado do código: utils/*.test.ts)
 ├── node_modules/              # volume Docker frontend_modules
 ├── Dockerfile                 # targets: development (Vite) → builder → production (nginx)
 ├── .dockerignore
@@ -228,7 +240,7 @@ Notas:
 - `VITE_API_URL` é a URL da API vista pelo **navegador** (padrão `http://localhost:3000`), não pela rede Docker.
 - Rotas públicas ficam na raiz (`/` é a landing page) dentro de `LayoutPublico`; as privadas ficam sob `/app/*` dentro de `AppLayout`. Endereços antigos sem `/app` redirecionam.
 - Telas planejadas e ainda não implementadas têm rota e mostram `EmConstrucao` com o conteúdo de `telasPlanejadas.ts`. A situação de cada tela está em `docs/telas.md`.
-- Ainda não existem: `services/offline/` (IndexedDB + fila usando `/sync`), as telas de configurações, mapa, templates de parâmetros, calendário, alertas e análises, e testes do frontend.
+- Ainda não existem: `services/offline/` (IndexedDB + fila usando `/sync`), a tela de sincronização e as análises, e o CI do frontend. Testes: `utils/{mapa,conjuntoParametros,calendario}.test.ts`.
 - `watch.usePolling` no Vite é necessário para o hot reload funcionar com bind mount do Windows dentro do Docker.
 
 ---
@@ -319,3 +331,11 @@ Notas:
 - **[2026-10-14 — frontend: produção]** — Criados `pages/producao/` e `utils/producao.ts`; as rotas `/app/producao*` deixaram de ser "em construção".
 
 - **[2026-10-15 — histórico e edição de avaliações]** — Backend: `GET /avaliacoes` (histórico geral com filtros) em `avaliacoes.routes.ts`. Frontend: `pages/avaliacoes/{HistoricoAvaliacoes,EditarAvaliacao}.tsx`; os atalhos de período saíram de `utils/producao.ts` para `utils/periodo.ts`; `/app/avaliacoes` deixou de ser "em construção".
+
+- **[2026-11-03 — configurações]** — Backend: `PUT /users/me/senha` e `DELETE /users/me` em `users.routes.ts`; `tests/integration/users.test.ts`. Frontend: criada `pages/configuracoes/` (central, perfil, meliponário, preferências, exportar dados); as rotas `/app/configuracoes*` deixaram de ser "em construção", exceto `sync`. `analises/comportamental` e `analises/predicoes` ganharam entrada em `telasPlanejadas.ts` (antes caíam no 404).
+
+- **[2026-11-03 — mapa de colônias]** — Criados `pages/colonias/MapaColonias.tsx`, `components/features/MapaLeaflet.tsx` e `utils/mapa.ts` (+ `mapa.test.ts`, primeiro teste do frontend); dependências `leaflet` e `leaflet.markercluster`. `/app/colonias/mapa` deixou de ser "em construção".
+
+- **[2026-11-03 — templates de parâmetros]** — Backend: `parametros.templates.ts` e `parametros.conjuntos.ts` (rotas `GET /parametros/templates`, `POST /parametros/templates/:id/aplicar`, `GET /parametros/exportar`, `POST /parametros/importar`); o seed passou a importar o template Iniciante; `tests/integration/parametros.test.ts`; `npm run dev` com `--poll` (hot reload do backend no Windows). Frontend: `pages/parametros/TemplatesParametros.tsx` e `utils/conjuntoParametros.ts`; removido `utils/parametrosSugeridos.ts` (duplicava o seed). `/app/parametros/templates` deixou de ser "em construção".
+
+- **[2026-11-04 — calendário e alertas]** — Migration `calendario_alertas`: `colonias.frequenciaInspecaoDias` (opcional) e tabela `alertas_resolvidos` (12 tabelas). Backend: módulo `src/modules/alertas/` e `tests/integration/alertas.test.ts`. Frontend: `pages/Alertas.tsx`, `pages/Calendario.tsx`, `utils/calendario.ts` (+ teste); contador de alertas no `AppLayout`; campo de frequência no formulário da colônia. `/app/alertas` e `/app/calendario` deixaram de ser "em construção".

@@ -618,7 +618,7 @@ Status do score: verde / lima / âmbar / vermelho (semânticas, não mudam com o
 - ✅ Autenticação
 - ◐ Offline básico (PWA): app instalável com o app shell em cache e API `/sync` pronta no backend; falta a fila no cliente (IndexedDB)
 - ✅ Docker setup completo
-- ◐ Configurações (perfil, meliponário, preferências, exportar/importar): só o tema claro/escuro existe por enquanto
+- ◐ Configurações: perfil (com troca de senha e exclusão da conta), meliponário, preferências e exportação prontos; falta importar backup e a tela de sincronização
 
 **Tecnologias:**
 - Frontend: React + TypeScript + Vite + PWA
@@ -644,9 +644,9 @@ Status do score: verde / lima / âmbar / vermelho (semânticas, não mudam com o
 ### **Fase 3: Produção e Recursos Avançados**
 **Entregas:**
 - ✅ Registro de colheitas (adiantado: entrou junto com o MVP)
-- 📋 Calendário de inspeções
-- ◐ Sistema de alertas: o dashboard já destaca colônias sem avaliação, com score baixo ou com inspeção atrasada; falta a central de alertas
-- ◐ Exportação de dados: API completa (CSV/JSON + backup) e exportação nas telas de histórico e de produção; falta a tela de exportar/importar e as fotos em zip
+- ✅ Calendário de inspeções (mês com inspeções, colheitas, divisões e sugestões; frequência por colônia; sem agendamentos)
+- ✅ Sistema de alertas: central em `/app/alertas` (calculados das inspeções, resolver/reabrir, contador no menu); faltam avisos por e-mail/push
+- ◐ Exportação de dados: API completa (CSV/JSON + backup), tela de exportação nas Configurações e exportação filtrada nos históricos; falta importar e as fotos em zip
 - ◐ Melhorias de UX (contínuo)
 
 ### **Fase 4: Machine Learning**
@@ -672,7 +672,7 @@ Status do score: verde / lima / âmbar / vermelho (semânticas, não mudam com o
 ## 🧪 Testes
 
 ### **Testes Unitários:**
-- Backend Node.js: Vitest. Hoje são 132 testes, unitários e de integração via `app.inject`, contra um banco Postgres de teste separado e com CI no GitHub Actions
+- Backend Node.js: Vitest. Hoje são 138 testes, unitários e de integração via `app.inject`, contra um banco Postgres de teste separado e com CI no GitHub Actions
 - Backend Python: pytest
 - Frontend: Vitest + React Testing Library (configurados, ainda sem testes)
 
@@ -768,7 +768,7 @@ Escolhida por ser permissiva e incluir proteção de patentes — adequada a um 
 - [x] Histórico de avaliações é exibido graficamente
 - [x] Sistema funciona em celular e desktop
 - [x] Score de saúde é calculado automaticamente
-- [ ] Alertas básicos funcionam (o dashboard já destaca colônias que pedem atenção)
+- [x] Alertas básicos funcionam (central de alertas + destaque no dashboard)
 - [x] Código está no GitHub
 - [x] Documentação básica existe
 

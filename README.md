@@ -11,11 +11,12 @@ Voltado a abelhas sem ferrão (Meliponini), o sistema permite avaliações perso
 | Parte | Estado |
 |-------|--------|
 | **Backend** (Node.js + Fastify + Prisma) | ✅ MVP completo, com testes automatizados e CI |
-| **Frontend** (React + Vite + PWA) | 🚧 Telas centrais do MVP prontas (colônias, avaliações, parâmetros, produção); configurações, mapa, calendário e modo offline por fazer |
+| **Frontend** (React + Vite + PWA) | 🚧 Telas centrais do MVP prontas (colônias com mapa, avaliações, parâmetros, produção, calendário, alertas, configurações); modo offline por fazer |
 | **Analytics** (Python + FastAPI) | 📋 Planejado (Fase 2): análises, correlações, genealogia |
 
 O que o backend já faz:
 
+- **Conta** — cadastro, login (JWT), perfil, meliponário, troca de senha e exclusão da conta com todos os dados e fotos (LGPD)
 - **Colônias** — cadastro com código automático no padrão Kew (`TETRANGU-001`) e catálogo fixo das 19 espécies de meliponíneos do RS
 - **Genealogia** — divisões registram a colônia-mãe e, opcionalmente, a colônia doadora de campeiras. O servidor garante a consistência: a espécie não muda depois de definida, mãe, filha e doadora são da mesma espécie, a filha não entra no meliponário antes da mãe e a árvore não tem ciclos
 - **Avaliações** — parâmetros de saúde personalizáveis (Bom/Médio/Ruim), score automático de 0 a 100, edição permitida por 7 dias e histórico geral com filtros por colônia, status, período e parâmetro + classificação
@@ -34,9 +35,10 @@ O que o frontend já tem:
 - **Histórico de avaliações** — linha do tempo por mês com filtros (período, status, colônia, parâmetro), evolução do score, exportação CSV/JSON, detalhe de cada inspeção e edição nos primeiros 7 dias
 - **Produção** — histórico de colheitas, registro com foto opcional e relatório com ranking e exportação
 - **Parâmetros** — lista, criação e edição dos critérios de avaliação
+- **Configurações** — perfil (dados, senha e exclusão da conta), meliponário (com coordenadas pela localização do aparelho), preferências (tema e frequência de inspeção usada nos avisos do dashboard) e exportação de todos os dados em CSV/JSON, além do backup completo
 - **Layout responsivo** — sidebar no desktop e barra de navegação inferior no mobile, com a mesma base de código; tema claro, escuro ou do sistema; instalável como PWA
 
-As telas que ainda não existem já têm rota e mostram uma página "em construção" que descreve o que está previsto. Ainda faltam: configurações (perfil, meliponário, preferências, exportar/importar), mapa de colônias, templates de parâmetros, calendário e alertas, a fila de sincronização offline no cliente (IndexedDB + `/sync`) e as análises da Fase 2. A recuperação de senha por e-mail também não existe ainda. A situação de cada tela está em [`docs/telas.md`](docs/telas.md).
+As telas que ainda não existem já têm rota e mostram uma página "em construção" que descreve o que está previsto. Ainda faltam: a fila de sincronização offline no cliente (IndexedDB + `/sync`), importação de backup, fotos em zip e as análises da Fase 2. A recuperação de senha por e-mail também não existe ainda. A situação de cada tela está em [`docs/telas.md`](docs/telas.md).
 
 ## Começando
 
@@ -124,7 +126,7 @@ make reset     # apaga os volumes e recria tudo (CUIDADO: apaga o banco)
 
 ## Executando os testes
 
-O backend tem uma suíte de 132 testes em [Vitest](https://vitest.dev/): testes unitários (cálculo de score, geração de CSV, integração com o clima) e testes de integração que exercitam a API completa (autenticação, colônias e genealogia, avaliações e histórico, fotos, produção, exportação e sincronização).
+O backend tem uma suíte de 138 testes em [Vitest](https://vitest.dev/): testes unitários (cálculo de score, geração de CSV, integração com o clima) e testes de integração que exercitam a API completa (autenticação, conta e meliponário, colônias e genealogia, avaliações e histórico, fotos, produção, exportação e sincronização).
 
 ```
 docker compose exec backend npm test

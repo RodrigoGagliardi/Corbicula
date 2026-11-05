@@ -84,7 +84,7 @@ export default defineConfig({
 > em `prisma.config.ts` (via `datasource.url`). O bloco `datasource` no schema
 > só declara o `provider`.
 
-**Conteúdo atual de `app/backend/prisma/schema.prisma` (11 tabelas):**
+**Conteúdo atual de `app/backend/prisma/schema.prisma` (12 tabelas):**
 
 ```prisma
 generator client {
@@ -108,6 +108,7 @@ model User {
   colonias    Colonia[]
   parametros  Parametro[]
   syncQueue   SyncQueue[]
+  alertasResolvidos AlertaResolvido[]
 
   @@map("users")
 }
@@ -121,7 +122,7 @@ model Meliponario {
   latitude  Float?
   longitude Float?
   bioma     String?
-  areaTotal Float?
+  areaTotal Float?    // m²
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -143,6 +144,8 @@ model Colonia {
   longitude      Float?
   observacoes    String?  @db.Text
   status         String   @default("ativa") // ativa, inativa, morta
+  // Intervalo sugerido entre inspeções (dias). null = usa a preferência geral do usuário.
+  frequenciaInspecaoDias Int?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -360,6 +363,22 @@ model SyncQueue {
 
   @@index([userId, sincronizado])
   @@map("sync_queue")
+}
+
+// Os alertas são calculados a partir das avaliações (GET /alertas); aqui fica só
+// o que o usuário marcou como resolvido. A chave identifica a ocorrência (ex.:
+// "score_baixo:<avaliacaoId>"), então um problema que reaparece numa nova
+// inspeção gera um alerta novo.
+model AlertaResolvido {
+  id          String   @id @default(uuid()) @db.Uuid
+  chave       String
+  resolvidoEm DateTime @default(now())
+
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, chave])
+  @@map("alertas_resolvidos")
 }
 ```
 

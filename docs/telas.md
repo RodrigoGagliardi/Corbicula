@@ -6,7 +6,7 @@
 
 ### Situação de implementação (03/11/2026)
 
-Legenda: ✅ pronta · ◐ parcial · 🚧 rota com página "em construção" · ⚪ sem rota ainda
+Legenda: ✅ pronta · ◐ parcial · 🚧 rota com página "em construção"
 
 | # | Tela | Situação |
 |---|------|----------|
@@ -17,18 +17,23 @@ Legenda: ✅ pronta · ◐ parcial · 🚧 rota com página "em construção" ·
 | 5 | Sobre o Projeto | ✅ inclui a atribuição da Open-Meteo |
 | 6 | Dashboard Principal | ✅ |
 | 7–10 | Colônias: lista, detalhes, criar, editar | ✅ |
-| 11 | Mapa de Colônias | 🚧 |
+| 11 | Mapa de Colônias | ✅ |
 | 12 | Nova Avaliação (Quick) | ✅ |
 | 13 | Histórico de Avaliações | ✅ (pendências na seção da tela) |
 | 14 | Detalhes da Avaliação | ✅ |
 | 15 | Editar Avaliação | ✅ |
 | 16–17 | Parâmetros: gerenciar, criar/editar | ✅ |
-| 18 | Templates de Parâmetros | 🚧 |
+| 18 | Templates de Parâmetros | ✅ |
 | 19–23 | Análises: dashboard, individual, comparativa, correlações, genealogia | 🚧 Fase 2 |
-| 24–25 | Análise Comportamental, Predições (ML) | ⚪ Fase 2 / Fase 4 |
+| 24–25 | Análise Comportamental, Predições (ML) | 🚧 Fase 2 / Fase 4 |
 | 26–28 | Produção: registrar, histórico, relatório | ✅ |
-| 29–30 | Calendário, Central de Alertas | 🚧 |
-| 31–35 | Configurações: perfil, meliponário, preferências, dados, sincronização | 🚧 (o tema claro/escuro/sistema já fica no menu do usuário) |
+| 29–30 | Calendário, Central de Alertas | ✅ (sem agendamentos nem avisos por e-mail/push) |
+| — | Central de Configurações (`/app/configuracoes`) | ✅ |
+| 31 | Perfil do Usuário | ◐ nome, e-mail, senha e exclusão da conta; sem foto, tipo de meliponicultor nem bio (o schema não tem esses campos) |
+| 32 | Dados do Meliponário | ✅ |
+| 33 | Preferências | ◐ tema e frequência de inspeção; sem idioma, unidades, formato de data e notificações |
+| 34 | Exportar/Importar Dados | ◐ exportação CSV/JSON e backup completo; sem importar, fotos em zip, Excel e PDF |
+| 35 | Sincronização Offline | 🚧 |
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -446,6 +451,15 @@ Legenda: ✅ pronta · ◐ parcial · 🚧 rota com página "em construção" ·
 - Filtros na sidebar (mesmos da lista)
 - [Modo Satélite / Mapa]
 
+**Implementado (03/11/2026)** — `pages/colonias/MapaColonias.tsx` + `components/features/MapaLeaflet.tsx`, lógica em `utils/mapa.ts` (com testes):
+- Leaflet com mapa base OpenStreetMap e satélite Esri World Imagery (gratuitos, sem chave; atribuição no mapa e na tela Sobre). O Leaflet é carregado sob demanda, fora do pacote principal.
+- Marcadores com as cores de status do score (verde/lima/âmbar/vermelho, tokens de `index.css`) e cinza para "sem avaliação". Grupos (Leaflet.markercluster) assumem a cor do **pior** status que contêm; colônias no mesmo ponto se abrem em leque no zoom máximo.
+- Meliponário como hexágono amarelo, maior que os marcadores (aparece como moldura quando colônias estão no mesmo ponto).
+- Clique abre um painel lateral (abaixo do mapa no mobile) em vez de popup: código, espécie, score, última inspeção, [Ver detalhes] e [Avaliar].
+- Filtros na URL: status da colônia (padrão ativas), espécie, score da última avaliação; busca de texto como na lista. `?colonia=<id>` abre o mapa com a colônia selecionada (link "Ver no mapa" no detalhe).
+- Colônias sem coordenadas **não** são posicionadas no meliponário (seria um dado espacial inventado): aparecem em "Fora do mapa" com link para adicionar as coordenadas.
+- Offline: os blocos do mapa não são guardados (política de uso do OSM); sem conexão, os pontos aparecem sobre fundo vazio com um aviso.
+
 ---
 
 ## 📋 AVALIAÇÕES
@@ -728,6 +742,12 @@ Novembro 2024
 **Importar Template:**
 - Substitui parâmetros atuais ou mescla
 - Confirmação antes de aplicar
+
+**Implementado (03/11/2026)** — `pages/parametros/TemplatesParametros.tsx`; templates em `app/backend/src/modules/parametros/parametros.templates.ts` (fonte única, também usada pelo seed); regras em `parametros.conjuntos.ts`.
+- Templates cumulativos e versionados (`versao`): Iniciante (5), Intermediário (8: + potes de pólen, estrutura do ninho, reservas pelo peso da caixa), Avançado (12: + comportamento defensivo, presença de machos, coleta de resina, higiene), Científico (15: + postura recente, ocupação da caixa, condições internas). Critérios de referência gerais, qualitativos sempre que possível — a tela avisa para ajustar à espécie.
+- Aplicar abre uma confirmação com o modo (**mesclar** / **substituir**) e a prévia do que será criado, reativado, desativado e mantido. Tudo acontece numa transação no servidor.
+- Regras de integridade: parâmetro que já existe (mesmo nome, sem diferenciar maiúsculas/acentos) **nunca tem os critérios sobrescritos** — eles podem estar em avaliações antigas; a prévia avisa quando os critérios diferem. "Substituir" **desativa** (não exclui) os que ficam de fora. Sempre sobra pelo menos 1 ativo.
+- Exportar meus parâmetros (JSON versionado `corbicula-parametros` v1, com critérios por espécie pelo código Kew) e importar de arquivo com as mesmas regras — para padronizar a coleta entre pesquisadores. Atalhos também na tela 16 (Gerenciar Parâmetros), cujo estado vazio aplica o template Iniciante.
 
 ---
 
@@ -1091,6 +1111,12 @@ MAND-005
 - Configurar quais alertas receber e como (in-app, e-mail, push)
 
 **Nota:** funcionalidade de alta efetividade — traz o usuário de volta em vez de exigir input.
+
+**Implementado (04/11/2026)** — Calendário: `pages/Calendario.tsx` + `utils/calendario.ts` (com testes). Alertas: `pages/Alertas.tsx` + módulo `app/backend/src/modules/alertas/`.
+- **Calendário:** grade mensal (domingo a sábado) com inspeções (cor do score), colheitas, divisões e inspeções sugeridas; clicar num dia abre o painel com links (inspeção, colheita, colônia, "Avaliar"). Mês e dia na URL. Sugestão = última inspeção (ou a entrada, se nunca avaliada) + frequência da colônia (`frequenciaInspecaoDias`, campo opcional no cadastro) ou a preferência geral; vencidas aparecem hoje como atrasadas. Datas agrupadas pelo dia local. O detalhe da colônia mostra a próxima inspeção sugerida. **Não implementado:** agendar atividades num dia e lembretes (exigem input manual — decisão do autor, 04/11/2026).
+- **Alertas** (`GET /alertas`, calculados das inspeções — nada é digitado): `nunca_avaliada` (1ª inspeção atrasada desde a entrada), `sem_inspecao` (alta se passar do dobro da frequência), `score_baixo` (Crítica = alta, Atenção = média, lista os parâmetros Ruim), `queda_score` (≥ 20 pontos em relação à inspeção anterior) e `parametro_ruim` (parâmetro Ruim num score Boa/Excelente — cobre "rainha ausente", "infestação" e "reservas baixas" sem depender do nome do parâmetro). Só a última inspeção de cada colônia ativa conta.
+- Marcar como resolvido / reabrir (`POST`/`DELETE /alertas/resolvidos`, tabela `alertas_resolvidos`, vale em todos os aparelhos). A chave identifica a ocorrência (ex.: `score_baixo:<avaliacaoId>`): o mesmo problema numa inspeção nova gera alerta novo. Filtro por tipo e "mostrar resolvidos" na URL; contador de abertos na sidebar e no "Mais" do mobile. A tela mostra os critérios usados.
+- **Não implementado:** escolher quais alertas receber e avisos por e-mail/push (dependem do PWA offline e de um serviço de e-mail).
 
 ---
 

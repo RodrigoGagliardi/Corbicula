@@ -19,6 +19,7 @@ os dados do usuário autenticado. Respostas vêm como anexo
 | `GET /exportacao/avaliacoes` | `formato`, `coloniaId`, `status`, `desde`, `ate` | Uma linha por **avaliação × parâmetro** (formato longo) |
 | `GET /exportacao/producoes` | `formato`, `coloniaId`, `tipoProduto`, `desde`, `ate` | Uma linha por colheita |
 | `GET /exportacao/backup` | — | JSON estruturado com todos os dados do usuário |
+| `GET /parametros/exportar` | — | Os parâmetros de avaliação (critérios + critérios por espécie), reimportáveis — ver abaixo |
 
 `formato` = `csv` (padrão) ou `json`. Datas dos filtros em ISO 8601 (`2026-01-01` ou `2026-01-01T00:00:00Z`).
 
@@ -68,6 +69,7 @@ descrição de como foi calculado.
 | latitude / longitude | número | Graus decimais (WGS84) |
 | colonia_mae_id / colonia_mae_codigo | UUID / texto | Genealogia (divisão) |
 | colonia_doadora_campeiras_id / colonia_doadora_campeiras_codigo | UUID / texto | Divisão: outra colônia que doou campeiras (opcional) |
+| frequencia_inspecao_dias | inteiro | Intervalo sugerido entre inspeções desta colônia (vazio = preferência geral do usuário). Sugestão de manejo |
 | n_avaliacoes / n_producoes | inteiro | Contagens |
 | observacoes | texto | Livre |
 | registrado_em / atualizado_em | data-hora | Auditoria |
@@ -120,6 +122,36 @@ por espécie), `colonias`, `avaliacoes` (com parâmetros), `producoes`, `fotos`
 (metadados + `url`). Os campos que o banco guarda como JSON em texto já saem
 convertidos em objeto. Os arquivos de imagem **não** entram no JSON (a
 exportação em zip ainda está pendente).
+
+### parâmetros (JSON reimportável)
+
+`GET /parametros/exportar` gera `corbicula-parametros-<AAAA-MM-DD>.json`, aceito
+de volta por `POST /parametros/importar` (`{ "modo": "mesclar" | "substituir", "dados": <arquivo> }`).
+Serve para documentar e compartilhar o **protocolo de coleta**: quem importa
+avalia com os mesmos critérios.
+
+```json
+{
+  "formato": "corbicula-parametros",
+  "versao": 1,
+  "exportadoEm": "2026-11-03T22:00:00.000Z",
+  "metodologia": "…",
+  "parametros": [
+    {
+      "nome": "Sanidade", "ativo": true,
+      "criterioBom": "…", "criterioMedio": "…", "criterioRuim": "…",
+      "criteriosEspecie": [{ "especie": "TETRANGU", "criterioBom": "…", "criterioMedio": "…", "criterioRuim": "…" }]
+    }
+  ]
+}
+```
+
+- `especie` é o código Kew (estável entre instalações; o UUID não é). Códigos
+  desconhecidos são ignorados e listados na resposta (`especiesIgnoradas`).
+- Ao importar, parâmetro com o mesmo nome (sem diferenciar maiúsculas/acentos)
+  **mantém os critérios do usuário** — o arquivo nunca altera o significado de
+  avaliações já feitas. "substituir" desativa (não exclui) os que ficam de fora.
+- Templates prontos: `GET /parametros/templates` (cada um com `versao`).
 
 ---
 
