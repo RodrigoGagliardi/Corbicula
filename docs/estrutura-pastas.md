@@ -203,12 +203,18 @@ app/frontend/
 │   │   ├── parametros/        # ListaParametros, FormParametro (criar/editar), TemplatesParametros
 │   │   └── producao/          # HistoricoProducao, FormColheita (registrar/editar), RelatorioProducao
 │   ├── hooks/
+│   │   ├── useCargaLocal.ts   # dispara o pull do banco local ao abrir o app logado e online (+ .test.ts)
 │   │   ├── useDados.ts        # queries do TanStack Query + chaves de cache centralizadas
 │   │   └── useOnline.ts       # estado de conexão do navegador
 │   ├── services/
-│   │   └── api/
-│   │       ├── client.ts      # fetch com JWT, ErroApi (status + mensagens do backend)
-│   │       └── endpoints.ts   # funções por recurso (colônias, avaliações, parâmetros, fotos...)
+│   │   ├── api/
+│   │   │   ├── client.ts      # fetch com JWT, ErroApi (status + mensagens do backend)
+│   │   │   └── endpoints.ts   # funções por recurso (colônias, avaliações, parâmetros, fotos, sync...) (+ .test.ts)
+│   │   └── offline/           # dados locais do PWA (IndexedDB via idb), um banco por usuário
+│   │       ├── tipos.ts       # linhas do GET /sync/alteracoes e registro meta (desde, ultimoPull, armazenamentoPersistente)
+│   │       ├── mesclar.ts     # regra pura do pull: grava por id, remove o que saiu de idsAtuais, protege pendências (+ .test.ts)
+│   │       ├── banco.ts       # banco corbicula-offline-<usuarioId> e aplicação do pull numa transação (+ .test.ts com fake-indexeddb)
+│   │       └── sincronizacao.ts  # puxarAlteracoes (deduplicado, desde com margem) e pedirArmazenamentoPersistente (+ .test.ts)
 │   ├── store/
 │   │   ├── auth.ts            # sessão (token + usuário) em Zustand persistido
 │   │   └── preferencias.ts    # tema (claro/escuro/sistema), sidebar recolhida e dias para "inspeção atrasada"
@@ -242,7 +248,7 @@ Notas:
 - `VITE_API_URL` é a URL da API vista pelo **navegador** (padrão `http://localhost:3000`), não pela rede Docker.
 - Rotas públicas ficam na raiz (`/` é a landing page) dentro de `LayoutPublico`; as privadas ficam sob `/app/*` dentro de `AppLayout`. Endereços antigos sem `/app` redirecionam.
 - Telas planejadas e ainda não implementadas têm rota e mostram `EmConstrucao` com o conteúdo de `telasPlanejadas.ts`. A situação de cada tela está em `docs/telas.md`.
-- Ainda não existem: `services/offline/` (IndexedDB + fila usando `/sync`), a tela de sincronização e as análises, e o CI do frontend. Testes: `utils/{mapa,conjuntoParametros,calendario}.test.ts`.
+- `services/offline/` tem, por enquanto, a base local e o pull incremental; as telas ainda leem da API. Ainda não existem: a fila de envio pelo `/sync`, a tela de sincronização, as análises e o CI do frontend. Testes ao lado do código: `utils/{mapa,conjuntoParametros,calendario}.test.ts`, `services/offline/*.test.ts`, `services/api/endpoints.test.ts` e `hooks/useCargaLocal.test.ts`.
 - `watch.usePolling` no Vite é necessário para o hot reload funcionar com bind mount do Windows dentro do Docker.
 
 ---
@@ -343,3 +349,5 @@ Notas:
 - **[2026-11-04 — calendário e alertas]** — Migration `calendario_alertas`: `colonias.frequenciaInspecaoDias` (opcional) e tabela `alertas_resolvidos` (12 tabelas). Backend: módulo `src/modules/alertas/` e `tests/integration/alertas.test.ts`. Frontend: `pages/Alertas.tsx`, `pages/Calendario.tsx`, `utils/calendario.ts` (+ teste); contador de alertas no `AppLayout`; campo de frequência no formulário da colônia. `/app/alertas` e `/app/calendario` deixaram de ser "em construção".
 
 - **[2026-11-05 — BMAD Method]** — Instalado o BMAD Method v6.12.4 (módulo BMM, Claude Code) na branch `chore/bmad-setup`: `_bmad/` (config e scripts), `_bmad-output/` (artefatos) e 29 skills em `.claude/skills/bmad-*`. Tudo local, fora do git. Regras do projeto para os agentes em `_bmad/custom/regras-corbicula.md`, carregadas por `_bmad/custom/<skill>.toml` (`persistent_facts`).
+
+- **[2026-11-05 — PWA offline: base local e pull]** — Frontend: criada `src/services/offline/` (`tipos.ts`, `mesclar.ts`, `banco.ts`, `sincronizacao.ts` + testes) e `src/hooks/useCargaLocal.ts` (+ teste), chamado pelo `AppLayout`; `syncApi.alteracoes` em `services/api/endpoints.ts` (+ `endpoints.test.ts`). Dependências: `idb` (runtime) e `fake-indexeddb` (dev, só testes). Backend: criar, editar ou excluir um critério por espécie passa a atualizar o `updatedAt` do parâmetro na mesma transação (`parametros.repository.ts`), para o pull incremental trazer os critérios; teste em `tests/integration/sync.test.ts`.

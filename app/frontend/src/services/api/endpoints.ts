@@ -25,6 +25,7 @@ import type {
   TemplateParametros,
   Usuario,
 } from "../../types/api";
+import type { RespostaAlteracoes } from "../offline/tipos";
 import { api, baixarArquivo } from "./client";
 
 // Query string só com os filtros preenchidos.
@@ -119,6 +120,11 @@ export const producoesApi = {
   criar: (dados: ProducaoInput) => api.post<Producao>("/producoes", dados),
   atualizar: (id: string, dados: Partial<Omit<ProducaoInput, "coloniaId">>) => api.patch<Producao>(`/producoes/${id}`, dados),
   excluir: (id: string) => api.delete(`/producoes/${id}`),
+};
+
+export const syncApi = {
+  // Pull incremental: sem `desde`, carga completa. Use `servidorEm` da resposta como próximo `desde`.
+  alteracoes: (desde?: string) => api.get<RespostaAlteracoes>(`/sync/alteracoes${consulta({ desde })}`),
 };
 
 export const exportacaoApi = {

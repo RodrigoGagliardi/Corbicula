@@ -319,6 +319,72 @@ describe("sync — pull e status", () => {
     expect(depois.idsAtuais.colonias).not.toContain(c.id);
   });
 
+  it("criar, editar e excluir um critério por espécie faz o parâmetro voltar no pull incremental", async () => {
+    const { api } = await novoUsuario(app);
+    const [parametroId] = (await criarParametros(api, 1)) as [string];
+    const jatai = await idEspecie(api, "TETRANGU");
+    const mandacaia = await idEspecie(api, "MELIQUAD");
+    const criterios = (texto: string) => ({ criterioBom: `${texto} bom`, criterioMedio: `${texto} médio`, criterioRuim: `${texto} ruim` });
+
+    // Pull incremental a partir de um `desde` tirado logo antes da mudança.
+    const puxarDepoisDe = async (mudar: () => Promise<unknown>) => {
+      const { servidorEm } = (await api.get("/sync/alteracoes")).body;
+      await pausa();
+      await mudar();
+      return (await api.get(`/sync/alteracoes?desde=${encodeURIComponent(servidorEm)}`)).body;
+    };
+    type CriterioPull = { especieId: string; criterioBom: string; criterioMedio: string; criterioRuim: string };
+    const criteriosDoPull = (body: { parametros: { id: string; criteriosEspecie: CriterioPull[] }[] }) => {
+      expect(body.parametros.map((p) => p.id)).toEqual([parametroId]);
+      return Object.fromEntries(
+        body.parametros[0]!.criteriosEspecie.map(({ especieId, criterioBom, criterioMedio, criterioRuim }) => [
+          especieId,
+          { criterioBom, criterioMedio, criterioRuim },
+        ])
+      );
+    };
+
+    // Criar
+    const aposCriar = await puxarDepoisDe(async () => {
+      const criado = await api.put(`/parametros/${parametroId}/especies/${jatai}`, criterios("jataí"));
+      expect(criado.status).toBe(200);
+      // A resposta do PUT continua trazendo a espécie embutida.
+      expect(criado.body).toMatchObject({
+        parametroId,
+        especieId: jatai,
+        ...criterios("jataí"),
+        especie: { id: jatai, codigo: "TETRANGU", nomePopular: expect.any(String) },
+      });
+      expect(Object.keys(criado.body.especie).sort()).toEqual(["codigo", "id", "nomePopular"]);
+      expect((await api.put(`/parametros/${parametroId}/especies/${mandacaia}`, criterios("mandaçaia"))).status).toBe(200);
+    });
+    expect(criteriosDoPull(aposCriar)).toEqual({ [jatai]: criterios("jataí"), [mandacaia]: criterios("mandaçaia") });
+
+    // Editar
+    const aposEditar = await puxarDepoisDe(() => api.put(`/parametros/${parametroId}/especies/${jatai}`, criterios("jataí v2")));
+    expect(criteriosDoPull(aposEditar)).toEqual({ [jatai]: criterios("jataí v2"), [mandacaia]: criterios("mandaçaia") });
+
+    // Excluir
+    const aposExcluir = await puxarDepoisDe(async () => {
+      expect((await api.delete(`/parametros/${parametroId}/especies/${mandacaia}`)).status).toBe(204);
+    });
+    expect(criteriosDoPull(aposExcluir)).toEqual({ [jatai]: criterios("jataí v2") });
+
+    // Excluir um critério inexistente continua 404 e não toca no parâmetro.
+    const semMudanca = await puxarDepoisDe(async () => {
+      expect((await api.delete(`/parametros/${parametroId}/especies/${mandacaia}`)).status).toBe(404);
+    });
+    expect(semMudanca.parametros).toEqual([]);
+
+    // Espécie inexistente (UUID válido, P2003): 404 e a transação não toca no parâmetro.
+    const especieInexistente = await puxarDepoisDe(async () => {
+      const res = await api.put(`/parametros/${parametroId}/especies/00000000-0000-4000-8000-000000000000`, criterios("fantasma"));
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe("Espécie não encontrada");
+    });
+    expect(especieInexistente.parametros).toEqual([]);
+  });
+
   it("status mostra a última sincronização e as operações não aplicadas", async () => {
     const { api } = await novoUsuario(app);
     expect((await api.get("/sync/status")).body).toEqual({ ultimaSincronizacao: null, naoAplicadas: [] });

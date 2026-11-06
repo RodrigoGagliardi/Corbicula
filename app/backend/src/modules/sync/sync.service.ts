@@ -207,6 +207,10 @@ export const syncService = {
   // Pull incremental: registros alterados desde `desde` + lista completa de ids
   // atuais (o cliente remove localmente o que não estiver mais na lista).
   // `servidorEm` é capturado ANTES das consultas — use-o como próximo `desde`.
+  // O filtro olha só o updatedAt do registro principal: toda escrita numa tabela
+  // filha devolvida aqui (ex.: ParametroEspecie em parametros.criteriosEspecie)
+  // precisa atualizar o updatedAt do pai na mesma transação, senão o pull
+  // incremental não a traz (ver parametros.repository.ts).
   async alteracoes(userId: string, desde?: Date) {
     const servidorEm = new Date();
     const alterado = desde ? { updatedAt: { gt: desde } } : {};

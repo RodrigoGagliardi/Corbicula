@@ -1,6 +1,7 @@
 import { Ellipsis, Info, LogOut, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Settings, Sun, User, Wifi, WifiOff, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router";
+import { useCargaLocal } from "../../hooks/useCargaLocal";
 import { useAlertas } from "../../hooks/useDados";
 import { useOnline } from "../../hooks/useOnline";
 import { useAuth } from "../../store/auth";
@@ -13,6 +14,8 @@ import { ACAO_PRINCIPAL, ITENS_BARRA_INFERIOR, ITENS_NAV, type ItemNav } from ".
 //  - mobile: barra superior compacta + navegação inferior com ação central e "Mais"
 // O conteúdo (<Outlet/>) é o mesmo nos dois casos.
 export function AppLayout() {
+  // Carga do banco local (pull incremental) ao abrir o app logado.
+  useCargaLocal();
   return (
     <div className="min-h-dvh md:flex">
       <BarraLateral />
