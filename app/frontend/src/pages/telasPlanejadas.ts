@@ -9,7 +9,7 @@ export const TELAS_PLANEJADAS: Record<string, TelaPlanejada> = {
     titulo: "Análises",
     descricao: "Hub de análises científicas (Fase 2 — microsserviço Python).",
     icone: ChartLine,
-    previsto: ["Análise individual por colônia", "Comparativa entre 2 a 10 colônias", "Correlações entre parâmetros (Pearson/Spearman)", "Genealogia (árvore mãe → filhas)", "Padrões comportamentais e predições (estimativas que melhoram com o tempo)"],
+    previsto: ["Análise individual por colônia", "Comparativa entre 2 a 10 colônias", "Correlações entre parâmetros (Pearson/Spearman)", "Genealogia (linhagem materna: mãe → filhas)", "Padrões de inspeção, sazonalidade e predições (estimativas que melhoram com o tempo)"],
   },
   "analises/comparativa": {
     titulo: "Análise comparativa",
@@ -21,19 +21,19 @@ export const TELAS_PLANEJADAS: Record<string, TelaPlanejada> = {
     titulo: "Correlações",
     descricao: "Relações entre parâmetros, clima e produção.",
     icone: ChartLine,
-    previsto: ["Matriz de correlação (Pearson/Spearman)", "Clima × score e produção", "Metodologia e tamanho de amostra sempre visíveis"],
+    previsto: ["Matriz de correlação de postos (Spearman) entre parâmetros", "Clima × score e produção, sempre ajustados pela estação", "Metodologia e tamanho de amostra sempre visíveis"],
   },
   "analises/genealogia": {
     titulo: "Genealogia",
-    descricao: "Árvore de linhagens das colônias.",
+    descricao: "Árvore da linhagem materna das colônias (o pai é desconhecido).",
     icone: GitBranch,
     previsto: ["Árvore mãe → filhas, com doadoras de campeiras", "Score e status de cada colônia na árvore"],
   },
   "analises/comportamental": {
     titulo: "Análise comportamental",
-    descricao: "Horários e dias de atividade das colônias.",
+    descricao: "Quando as inspeções acontecem e como o score varia ao longo do ano.",
     icone: Activity,
-    previsto: ["Atividade por hora do dia e dia da semana", "Relação com temperatura, umidade e condição do tempo", "Padrões sazonais ao longo do ano"],
+    previsto: ["Inspeções por hora do dia e dia da semana (é o horário em que você abre a caixa, não a atividade das abelhas)", "Relação com o clima dos dias anteriores, ajustada pela estação", "Padrões sazonais ao longo do ano"],
   },
   "analises/predicoes": {
     titulo: "Predições",

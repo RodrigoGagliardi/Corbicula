@@ -116,7 +116,7 @@ export function calcularAlertas(
         tipo: "queda_score",
         gravidade: "media",
         titulo: `Score caiu ${anterior.scoreGeral - ultima.scoreGeral} pontos`,
-        detalhe: `De ${anterior.scoreGeral} para ${ultima.scoreGeral} entre as duas últimas inspeções.`,
+        detalhe: `De ${anterior.scoreGeral} para ${ultima.scoreGeral} entre as duas últimas inspeções. Pode ser variação da observação: confira a colônia antes de agir.`,
         desde: ultima.dataAvaliacao,
         colonia,
         avaliacao,

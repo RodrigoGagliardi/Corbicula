@@ -4,7 +4,7 @@
 
 O Projeto Corbicula tem como principal objetivo a coleta e análise de dados de colônias de abelhas do Rio Grande do Sul, podendo ser utilizado tanto para fins científicos da academia quanto para gerenciamento de meliponários de pequeno e médio porte.
 
-Voltado a abelhas sem ferrão (Meliponini), o sistema permite avaliações personalizáveis de saúde das colônias, controle genético de linhagens (relação mãe/filha em divisões), registro de produção e exportação de dados limpos para análise em R, Python ou planilhas. Enriquece cada inspeção com dados climáticos automáticos a partir das coordenadas da colônia e foi projetado para funcionar offline (PWA com sincronização).
+Voltado a abelhas sem ferrão (Meliponini), o sistema permite avaliações personalizáveis de saúde das colônias, rastreamento da linhagem materna das colônias (relação mãe/filha em divisões), registro de produção e exportação de dados limpos para análise em R, Python ou planilhas. Enriquece cada inspeção com dados climáticos automáticos a partir das coordenadas da colônia e foi projetado para funcionar offline (PWA com sincronização).
 
 ## Estado do projeto
 

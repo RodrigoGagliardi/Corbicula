@@ -360,8 +360,7 @@ Legenda: ✅ pronta · ◐ parcial · 🚧 rota com página "em construção"
 **5. Análises**
 - Estatísticas da colônia
 - Comparação com média do meliponário
-- Velocidade de postura estimada
-- Idade estimada da rainha
+- Velocidade de postura e idade mínima da rainha, só se houver contagem de discos de cria e eventos de rainha (campos ainda não existem)
 - [Ver Análise Completa] → Análise Individual
 
 ---
@@ -776,7 +775,7 @@ Novembro 2024
    - [Ver Árvore]
 
 5. **Comportamental**
-   - Padrões de atividade
+   - Padrões de inspeção e sazonalidade
    - [Analisar]
 
 6. **Predições (ML)**
@@ -818,11 +817,9 @@ Novembro 2024
 - Gráfico por mês
 
 **5. Produtividade**
-- Velocidade de postura estimada
-  - Baseada em discos de cria
-- Idade estimada da rainha
-  - Baseada em declínio de produtividade
-- Projeções
+- Colheitas da colônia por estação (ml e g separados)
+- Velocidade de postura estimada e idade **mínima** conhecida da rainha, só quando houver contagem de discos de cria e eventos de rainha (campos ainda não existem). Sempre como aproximação
+- Projeções: exploratórias, com o n visível
 
 **6. Comparações**
 - Vs média do meliponário
@@ -869,13 +866,15 @@ Novembro 2024
 
 **5. Recomendações**
 - "JAT-001 está melhorando, continue assim"
-- "MAND-001 poderia ser boa matriz para divisão"
+- "MAND-001 poderia ser boa matriz para divisão" (indicação com incerteza: mostrar quantas inspeções e filhas a sustentam)
 
 ---
 
 ### **22. Correlações** `/app/analises/correlacoes`
 
 **Objetivo:** Encontrar relações entre parâmetros
+
+> Parâmetros são ordinais (Bom/Médio/Ruim): usar correlação de postos (Spearman) e tratar inspeções da mesma colônia como dependentes. Parâmetro × score não entra (é circular). O n fica sempre visível. Ver as regras de análise no módulo 5 de `escopo.md`.
 
 **Configuração:**
 - Selecionar colônias (ou todas)
@@ -913,7 +912,7 @@ Pólen       0.65   0.71   0.55       1.00
 
 ### **23. Genealogia (Árvore)** `/app/analises/genealogia`
 
-**Objetivo:** Visualizar linhagens
+**Objetivo:** Visualizar a linhagem materna das colônias (o pai é desconhecido; não é genética)
 
 **Visualização:**
 
@@ -946,7 +945,7 @@ MAND-005
 - Status
 
 **Estatísticas:**
-- Taxa de sucesso de divisões (%)
+- Taxa de sucesso de divisões (%): exige a data e o motivo da mudança de status da colônia, que ainda não existem
 - Melhor matriz (mais filhas bem-sucedidas)
 - Média de score por linhagem
 
@@ -958,24 +957,24 @@ MAND-005
 
 ### **24. Análise Comportamental** `/app/analises/comportamental`
 
-**Objetivo:** Padrões de atividade
+**Objetivo:** Padrões de inspeção e sazonalidade
+
+> O horário registrado é o da inspeção, não o da atividade das abelhas. Inspeções se concentram em manhãs amenas, então qualquer gráfico por hora mede o meliponicultor. Atividade real por horário exige contagem de campeiras em horários fixos (campo ainda não existe).
 
 **Análises:**
 
-**1. Horários de Atividade**
-- Se usuário registrou horário nas avaliações
-- Gráfico: Atividade por hora do dia
-- Picos e vales
-- Por espécie
+**1. Quando você inspeciona**
+- Gráfico: inspeções por hora do dia e por dia da semana
+- Rótulo explícito: "horário das inspeções"
+- Útil para ver lacunas (estações ou horários nunca observados)
 
-**2. Dias da Semana**
-- Qual dia há mais atividade
-- Útil para planejar inspeções
+**2. Aderência à frequência**
+- Intervalo entre inspeções × frequência sugerida da colônia
 
 **3. Influência Climática**
-- Correlação entre clima e score
-- "Em dias ensolarados, score médio é 12% maior"
-- Gráfico: Score por condição climática
+- Clima dos dias **antes** da inspeção × score, sempre ajustado pela estação. Sem o ajuste, o inverno aparece como efeito do clima
+- Num meliponário só, o efeito costuma ser pequeno demais para detectar: mostrar o n e tratar como exploratório
+- Relato de evento extremo (geada, onda de calor) com as colônias afetadas
 
 **4. Sazonalidade**
 - Meses de maior/menor atividade
@@ -983,9 +982,8 @@ MAND-005
 - Melhor época para divisões
 
 **5. Temperatura e Umidade**
-- Correlação com performance
-- Faixa ideal identificada
-- Alertas se fora da faixa
+- Relação com o score, ajustada pela estação e com o n visível
+- "Faixa ideal" só com vários meliponários ou muitos anos de dados
 
 ---
 

@@ -32,9 +32,11 @@ O Projeto Corbicula é uma aplicação web gratuita e open-source (licença Apac
 1. **Gestão completa de meliponários** (cadastro e monitoramento de colônias)
 2. **Avaliações personalizáveis** (cada usuário define seus próprios critérios)
 3. **Funcionamento offline** (PWA com sincronização automática)
-4. **Análises científicas avançadas** (estatísticas, correlações, predições)
-5. **Controle genealógico** (rastreamento de linhagens e divisões)
-6. **Análise comportamental** (padrões de atividade, produtividade)
+4. **Análises científicas** (estatísticas, correlações e, mais tarde, predições), sempre com o tamanho da amostra e a metodologia visíveis
+5. **Controle genealógico** (linhagem materna das colônias: mãe → filhas em divisões; não é genética, porque o pai é desconhecido)
+6. **Padrões de manejo e sazonalidade** (quando as inspeções acontecem, variação do score nas estações, produtividade)
+
+> **Limites do dado (06/11/2026).** Algumas promessas originais dependem de campos que o app ainda não coleta: atividade das abelhas por horário (o horário registrado é o da inspeção), velocidade de postura e idade da rainha (não há contagem de discos de cria nem eventos de rainha), diversidade genética (exige genotipagem). Elas ficam como "possível se você registrar X". O porquê de cada limite está no segundo eixo de [`efetividade.md`](efetividade.md).
 
 ---
 
@@ -287,9 +289,16 @@ Classificação:
 
 ### **MÓDULO 5: Análises Avançadas (Python)**
 
+**Regras de análise (06/11/2026).** Valem para toda análise deste módulo; vêm de uma simulação de meliponário com verdade conhecida (ver [`efetividade.md`](efetividade.md)):
+- Toda relação com clima ou data é ajustada pela estação. Sem isso, o inverno aparece como "efeito do clima" mesmo quando o clima não faz nada.
+- Cada parâmetro é ordinal (Bom > Médio > Ruim, sem distância igual entre eles), e várias inspeções da mesma colônia não são observações independentes: a colônia entra como efeito aleatório.
+- O n e o poder estatístico ficam visíveis. Num meliponário de ~30 colônias, a maioria dos efeitos realistas tem menos de 60% de chance de ser detectada.
+- Nada é apresentado como "efeito" sem grupo de comparação. Antes e depois de uma ação ("alimentei e o score subiu") nunca é eficácia: a maior parte do ganho é regressão à média.
+- Uma análise nova só vai para a tela depois de recuperar um efeito conhecido e de não acusar efeito no mundo nulo, nos dados simulados.
+
 #### 5.1 Análises Estatísticas
 **Correlações:**
-- Entre parâmetros (ex: mel vs cria)
+- Entre parâmetros (ex: mel vs cria), por correlação de postos (Spearman). Parâmetro × score não entra: é circular, porque o score é calculado dos próprios parâmetros
 - Matriz de correlação
 - Teste de significância estatística
 - Interpretação textual
@@ -305,30 +314,30 @@ Classificação:
 - Entre origens (captura vs compra vs divisão)
 - Entre tipos de caixa
 - Entre localizações
+- Com um meliponário só, comparações entre grupos são exploratórias: mostrar o n de colônias de cada grupo
 
 #### 5.2 Controle Genealógico
 **Árvore Genealógica:**
 - Visualização interativa
 - Mostra colônia-mãe e filhas
-- Indica sucesso/fracasso de divisões
-- Calcula taxa de sucesso por matriz
+- Indica sucesso/fracasso de divisões e calcula a taxa de sucesso por matriz. Depende de registrar a data e o motivo da mudança de status da colônia, que ainda não existem
 
 **Análise de Linhagens:**
 - Performance média de descendentes
-- Identificação de melhores matrizes
-- Diversidade genética (baseada em origens)
+- Ordenação de matrizes pela força das filhas, com aviso de incerteza (com poucas filhas, raramente é conclusiva)
+- Diversidade de procedência (origens das colônias). Diversidade genética exige genotipagem e fica fora
 - Sugestão de divisões
 
 #### 5.3 Análise Comportamental
-**Padrões de Atividade:**
-- Horários de pico (se registrado)
-- Dias da semana mais ativos
-- Correlação com clima
-- Variação sazonal
+**Padrões de inspeção e sazonalidade:**
+- Hora e dia da semana das inspeções, rotulados como "quando você abre a caixa". Não medem a atividade das abelhas: as inspeções se concentram em manhãs amenas
+- Variação sazonal do score
+- Clima antes da inspeção × score, sempre ajustado pela estação
+- Atividade real por horário só com contagem de campeiras em horários fixos (campo ainda não existe)
 
-**Velocidade de Postura:**
-- Cálculo baseado em discos de cria
-- Estimativa de idade da rainha
+**Velocidade de Postura (se você registrar):**
+- Exige contagem de discos de cria e eventos de rainha (introdução ou troca, com a data em que foi percebida), campos que ainda não existem
+- Com eles: postura estimada e idade **mínima** conhecida da rainha, sempre como aproximação
 - Predição de declínio produtivo
 
 #### 5.4 Machine Learning (Futuro)
