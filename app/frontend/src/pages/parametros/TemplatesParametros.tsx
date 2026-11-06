@@ -4,7 +4,7 @@ import { useId, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import { Botao } from "../../components/ui/Botao";
 import { CabecalhoPagina, Cartao, Selo } from "../../components/ui/Cartao";
-import { Carregando, ErroCarregamento, MensagemErro } from "../../components/ui/Estados";
+import { AvisoSemConexao, Carregando, ErroCarregamento, MensagemErro } from "../../components/ui/Estados";
 import { chaves, useParametros, useTemplatesParametros } from "../../hooks/useDados";
 import { parametrosApi } from "../../services/api/endpoints";
 import type { ArquivoParametros, CriteriosTexto, ModoAplicacao, Parametro, ResumoAplicacao, TemplateParametros } from "../../types/api";
@@ -53,7 +53,7 @@ export function TemplatesParametros() {
   );
 
   if (templates.isLoading || parametros.isLoading) return <><CabecalhoPagina titulo="Templates de parâmetros" voltar={voltar} /><Carregando /></>;
-  if (templates.error || parametros.error || !templates.data || !parametros.data) {
+  if (!templates.data || !parametros.data) {
     return (
       <>
         <CabecalhoPagina titulo="Templates de parâmetros" voltar={voltar} />
@@ -84,6 +84,7 @@ export function TemplatesParametros() {
         voltar={voltar}
         acoes={acoes}
       />
+      <AvisoSemConexao>Sem conexão: aplicar um template, importar ou exportar parâmetros exige conexão.</AvisoSemConexao>
       <MensagemErro erro={exportar.error} />
 
       {resultado && <ResumoResultado {...resultado} aoFechar={() => setResultado(null)} />}

@@ -4,9 +4,10 @@ import { Link, useSearchParams } from "react-router";
 import { LinkBotao } from "../../components/ui/Botao";
 import { Selecao } from "../../components/ui/Campo";
 import { CabecalhoPagina, Cartao, Selo } from "../../components/ui/Cartao";
-import { Carregando, ErroCarregamento, EstadoVazio, MensagemErro } from "../../components/ui/Estados";
+import { Carregando, ErroCarregamento, EstadoVazio, MensagemErro, NotaSemConexao } from "../../components/ui/Estados";
 import { chaves, useColonias, useProducoes, useResumoProducao } from "../../hooks/useDados";
 import { producoesApi } from "../../services/api/endpoints";
+import { ehErroDeConexao } from "../../services/offline/leituraLocal";
 import type { FiltrosProducao, GrupoProducao, Producao, TipoProduto } from "../../types/api";
 import { formatarData } from "../../utils/format";
 import { inicioDoPeriodo, ROTULO_PERIODO, type Periodo } from "../../utils/periodo";
@@ -108,7 +109,7 @@ export function CartaoTotal({ grupo }: { grupo: GrupoProducao }) {
 export function HistoricoProducao() {
   const { filtros, params } = useFiltrosProducao();
   const { data: producoes, isLoading, error, refetch } = useProducoes(filtros);
-  const { data: resumo } = useResumoProducao(filtros);
+  const { data: resumo, error: erroResumo } = useResumoProducao(filtros);
   const filtrando = params.size > 0;
 
   const acoes = (
@@ -140,6 +141,9 @@ export function HistoricoProducao() {
         />
       ) : (
         <div className="space-y-4">
+          {!resumo && ehErroDeConexao(erroResumo) && (
+            <NotaSemConexao>Os totais por produto são calculados no servidor e precisam de conexão.</NotaSemConexao>
+          )}
           {resumo && resumo.grupos.length > 0 && (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {resumo.grupos.map((g) => (

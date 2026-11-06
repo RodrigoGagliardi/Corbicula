@@ -6,7 +6,7 @@ import type { Camada } from "../../components/features/MapaLeaflet";
 import { LinkBotao } from "../../components/ui/Botao";
 import { CLASSE_ENTRADA, Selecao } from "../../components/ui/Campo";
 import { CabecalhoPagina, Cartao } from "../../components/ui/Cartao";
-import { Carregando, ErroCarregamento, EstadoVazio } from "../../components/ui/Estados";
+import { AvisoSemConexao, Carregando, ErroCarregamento, EstadoVazio } from "../../components/ui/Estados";
 import { useColonias, useEu } from "../../hooks/useDados";
 import { useAuth } from "../../store/auth";
 import type { Colonia, StatusColonia } from "../../types/api";
@@ -105,6 +105,10 @@ export function MapaColonias() {
         subtitulo={`${noMapa.length} de ${total} ${total === 1 ? "colônia filtrada" : "colônias filtradas"} no mapa`}
         acoes={acoes}
       />
+      {/* Os blocos do mapa não são guardados offline (política de uso do OSM). */}
+      <AvisoSemConexao>
+        Sem conexão: o fundo do mapa precisa de conexão. Os pontos vêm da cópia offline das colônias.
+      </AvisoSemConexao>
 
       <div className="mb-4 space-y-3">
         <div className="relative">

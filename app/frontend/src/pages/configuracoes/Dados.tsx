@@ -3,7 +3,7 @@ import { Archive, Download } from "lucide-react";
 import { Link } from "react-router";
 import { Botao } from "../../components/ui/Botao";
 import { CabecalhoPagina, Cartao } from "../../components/ui/Cartao";
-import { MensagemErro } from "../../components/ui/Estados";
+import { AvisoSemConexao, MensagemErro } from "../../components/ui/Estados";
 import { exportacaoApi } from "../../services/api/endpoints";
 import { VoltarConfiguracoes } from "./Configuracoes";
 
@@ -49,6 +49,7 @@ export function Dados() {
         titulo="Exportar dados"
         subtitulo="Seus dados completos, prontos para R, Python ou planilhas."
       />
+      <AvisoSemConexao>Sem conexão: os arquivos são gerados no servidor, e exportar exige conexão.</AvisoSemConexao>
 
       <div className="space-y-4">
         <Cartao className="space-y-3">

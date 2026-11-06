@@ -209,12 +209,15 @@ app/frontend/
 │   ├── services/
 │   │   ├── api/
 │   │   │   ├── client.ts      # fetch com JWT, ErroApi (status + mensagens do backend)
-│   │   │   └── endpoints.ts   # funções por recurso (colônias, avaliações, parâmetros, fotos, sync...) (+ .test.ts)
+│   │   │   ├── endpoints.ts   # funções por recurso (colônias, avaliações, parâmetros, fotos, sync...) (+ .test.ts)
+│   │   │   └── opcoesConsulta.ts  # opções padrão do QueryClient: networkMode "always", refetch ao reconectar, retry (+ .test.ts)
 │   │   └── offline/           # dados locais do PWA (IndexedDB via idb), um banco por usuário
 │   │       ├── tipos.ts       # linhas do GET /sync/alteracoes e registro meta (desde, ultimoPull, armazenamentoPersistente)
 │   │       ├── mesclar.ts     # regra pura do pull: grava por id, remove o que saiu de idsAtuais, protege pendências (+ .test.ts)
 │   │       ├── banco.ts       # banco corbicula-offline-<usuarioId> e aplicação do pull numa transação (+ .test.ts com fake-indexeddb)
-│   │       └── sincronizacao.ts  # puxarAlteracoes (deduplicado, desde com margem) e pedirArmazenamentoPersistente (+ .test.ts)
+│   │       ├── sincronizacao.ts  # puxarAlteracoes (deduplicado, desde com margem) e pedirArmazenamentoPersistente (+ .test.ts)
+│   │       ├── leituras.ts    # regra pura: monta cada resposta REST (colônias, avaliações, histórico, produções, parâmetros, espécies) a partir das linhas locais (+ .test.ts)
+│   │       └── leituraLocal.ts   # comFallbackLocal: sem rede ou com ErroApi(0), lê o banco local do usuário da sessão (+ .test.ts)
 │   ├── store/
 │   │   ├── auth.ts            # sessão (token + usuário) em Zustand persistido
 │   │   └── preferencias.ts    # tema (claro/escuro/sistema), sidebar recolhida e dias para "inspeção atrasada"
@@ -248,7 +251,7 @@ Notas:
 - `VITE_API_URL` é a URL da API vista pelo **navegador** (padrão `http://localhost:3000`), não pela rede Docker.
 - Rotas públicas ficam na raiz (`/` é a landing page) dentro de `LayoutPublico`; as privadas ficam sob `/app/*` dentro de `AppLayout`. Endereços antigos sem `/app` redirecionam.
 - Telas planejadas e ainda não implementadas têm rota e mostram `EmConstrucao` com o conteúdo de `telasPlanejadas.ts`. A situação de cada tela está em `docs/telas.md`.
-- `services/offline/` tem, por enquanto, a base local e o pull incremental; as telas ainda leem da API. Ainda não existem: a fila de envio pelo `/sync`, a tela de sincronização, as análises e o CI do frontend. Testes ao lado do código: `utils/{mapa,conjuntoParametros,calendario}.test.ts`, `services/offline/*.test.ts`, `services/api/endpoints.test.ts` e `hooks/useCargaLocal.test.ts`.
+- `services/offline/` tem a base local, o pull incremental e as leituras offline: online as telas leem da API; sem conexão, as queries de `hooks/useDados.ts` com cópia local (colônias, avaliações, histórico, produções, parâmetros, espécies) leem o banco local no mesmo formato da rota REST, e o perfil vem da sessão. Alertas, resumo/relatório de produção, templates e fotos só existem no servidor e mostram aviso de conexão. Ainda não existem: a fila de envio pelo `/sync`, a tela de sincronização, as análises e o CI do frontend. Testes ao lado do código: `utils/{mapa,conjuntoParametros,calendario}.test.ts`, `services/offline/*.test.ts`, `services/api/endpoints.test.ts` e `hooks/useCargaLocal.test.ts`.
 - `watch.usePolling` no Vite é necessário para o hot reload funcionar com bind mount do Windows dentro do Docker.
 
 ---
@@ -351,3 +354,5 @@ Notas:
 - **[2026-11-05 — BMAD Method]** — Instalado o BMAD Method v6.12.4 (módulo BMM, Claude Code) na branch `chore/bmad-setup`: `_bmad/` (config e scripts), `_bmad-output/` (artefatos) e 29 skills em `.claude/skills/bmad-*`. Tudo local, fora do git. Regras do projeto para os agentes em `_bmad/custom/regras-corbicula.md`, carregadas por `_bmad/custom/<skill>.toml` (`persistent_facts`).
 
 - **[2026-11-05 — PWA offline: base local e pull]** — Frontend: criada `src/services/offline/` (`tipos.ts`, `mesclar.ts`, `banco.ts`, `sincronizacao.ts` + testes) e `src/hooks/useCargaLocal.ts` (+ teste), chamado pelo `AppLayout`; `syncApi.alteracoes` em `services/api/endpoints.ts` (+ `endpoints.test.ts`). Dependências: `idb` (runtime) e `fake-indexeddb` (dev, só testes). Backend: criar, editar ou excluir um critério por espécie passa a atualizar o `updatedAt` do parâmetro na mesma transação (`parametros.repository.ts`), para o pull incremental trazer os critérios; teste em `tests/integration/sync.test.ts`.
+
+- **[2026-11-06 — PWA offline: leituras offline nas telas]** — Frontend: `services/offline/leituras.ts` (derivação pura das respostas REST) e `leituraLocal.ts` (`comFallbackLocal`, ponto único da decisão online/local), com testes; `hooks/useDados.ts` envolve as 9 leituras com cópia local e o `useEu` (sessão), sem mudar as chaves; `main.tsx` com `networkMode: "always"` e sem retry de erro de conexão sem rede; `ErroCarregamento` com texto de conexão e novos `AvisoSemConexao`/`NotaSemConexao` em `components/ui/Estados.tsx`, usados em parâmetros, perfil, meliponário, exportação, alertas, resumo de produção e fotos.

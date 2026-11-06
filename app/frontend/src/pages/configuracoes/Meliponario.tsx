@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import { Botao } from "../../components/ui/Botao";
 import { Campo, Entrada, Selecao } from "../../components/ui/Campo";
 import { CabecalhoPagina, Cartao } from "../../components/ui/Cartao";
-import { Carregando, ErroCarregamento, MensagemErro } from "../../components/ui/Estados";
+import { AvisoSemConexao, Carregando, ErroCarregamento, MensagemErro } from "../../components/ui/Estados";
 import { chaves, useEu } from "../../hooks/useDados";
 import { usuariosApi } from "../../services/api/endpoints";
 import { useAuth } from "../../store/auth";
@@ -27,6 +27,7 @@ export function PaginaMeliponario() {
         titulo="Meliponário"
         subtitulo="As coordenadas daqui são usadas no clima automático das colônias que não têm coordenadas próprias."
       />
+      <AvisoSemConexao>Sem conexão: salvar o meliponário exige conexão.</AvisoSemConexao>
       {isLoading ? (
         <Carregando />
       ) : error || !usuario ? (

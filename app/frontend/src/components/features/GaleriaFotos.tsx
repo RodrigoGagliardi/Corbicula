@@ -4,16 +4,17 @@ import { useRef } from "react";
 import { useFotos } from "../../hooks/useDados";
 import { urlArquivo } from "../../services/api/client";
 import { fotosApi } from "../../services/api/endpoints";
+import { ehErroDeConexao } from "../../services/offline/leituraLocal";
 import { formatarData } from "../../utils/format";
 import { comprimirImagem } from "../../utils/imagem";
 import { classesBotao } from "../ui/Botao";
-import { MensagemErro } from "../ui/Estados";
+import { MensagemErro, NotaSemConexao } from "../ui/Estados";
 
 // Galeria + upload opcional. Foto nunca é obrigatória (claude.md §8).
 export function GaleriaFotos({ vinculo }: { vinculo: { coloniaId: string } | { avaliacaoId: string } | { producaoId: string } }) {
   const queryClient = useQueryClient();
   const input = useRef<HTMLInputElement>(null);
-  const { data: fotos } = useFotos(vinculo);
+  const { data: fotos, error } = useFotos(vinculo);
 
   const enviar = useMutation({
     mutationFn: async (arquivo: File) => fotosApi.enviar(await comprimirImagem(arquivo), vinculo),
@@ -32,6 +33,9 @@ export function GaleriaFotos({ vinculo }: { vinculo: { coloniaId: string } | { a
             </li>
           ))}
         </ul>
+      ) : !fotos && ehErroDeConexao(error) ? (
+        // Fotos ficam só no servidor (sem cópia offline).
+        <NotaSemConexao>As fotos precisam de conexão para aparecer.</NotaSemConexao>
       ) : (
         <p className="flex items-center gap-2 text-sm text-muted-foreground">
           <ImageOff className="size-4" aria-hidden /> Nenhuma foto.

@@ -7,9 +7,10 @@ import { GaleriaFotos } from "../../components/features/GaleriaFotos";
 import { BarraScore, SeloScore } from "../../components/features/SeloScore";
 import { Botao, LinkBotao } from "../../components/ui/Botao";
 import { CabecalhoPagina, Cartao, Selo } from "../../components/ui/Cartao";
-import { Carregando, ErroCarregamento, MensagemErro } from "../../components/ui/Estados";
+import { Carregando, ErroCarregamento, MensagemErro, NotaSemConexao } from "../../components/ui/Estados";
 import { chaves, useAvaliacoes, useColonia, useResumoProducao } from "../../hooks/useDados";
 import { coloniasApi } from "../../services/api/endpoints";
+import { ehErroDeConexao } from "../../services/offline/leituraLocal";
 import { usePreferencias } from "../../store/preferencias";
 import { proximaInspecao } from "../../utils/calendario";
 import {
@@ -260,8 +261,10 @@ function Info({ rotulo, children }: { rotulo: string; children: ReactNode }) {
 
 // Totais de produção da colônia (um por produto + unidade; ml e g não se somam).
 function CartaoProducao({ coloniaId, ativa }: { coloniaId: string; ativa: boolean }) {
-  const { data: resumo } = useResumoProducao({ coloniaId });
+  const { data: resumo, error } = useResumoProducao({ coloniaId });
   const grupos = resumo?.grupos ?? [];
+  // Os totais são calculados no servidor: sem conexão, avisa em vez de dizer "nenhuma colheita".
+  const semConexao = !resumo && ehErroDeConexao(error);
   return (
     <Cartao>
       <div className="mb-3 flex items-center justify-between">
@@ -275,7 +278,9 @@ function CartaoProducao({ coloniaId, ativa }: { coloniaId: string; ativa: boolea
           </Link>
         )}
       </div>
-      {grupos.length === 0 ? (
+      {semConexao ? (
+        <NotaSemConexao>Os totais de produção precisam de conexão.</NotaSemConexao>
+      ) : grupos.length === 0 ? (
         <p className="flex items-center gap-2 text-sm text-muted-foreground">
           <Droplets className="size-4" aria-hidden /> Nenhuma colheita registrada.
         </p>
@@ -292,7 +297,7 @@ function CartaoProducao({ coloniaId, ativa }: { coloniaId: string; ativa: boolea
           ))}
         </ul>
       )}
-      {grupos.length > 0 && (
+      {(grupos.length > 0 || semConexao) && (
         <Link to={`/app/producao?colonia=${coloniaId}`} className="mt-3 inline-block text-sm text-muted-foreground hover:text-foreground hover:underline">
           Ver colheitas
         </Link>

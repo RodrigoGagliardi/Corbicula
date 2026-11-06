@@ -5,7 +5,7 @@ import { Link, useSearchParams } from "react-router";
 import { SeloScore } from "../components/features/SeloScore";
 import { Botao, LinkBotao } from "../components/ui/Botao";
 import { CabecalhoPagina, Cartao } from "../components/ui/Cartao";
-import { Carregando, ErroCarregamento, MensagemErro } from "../components/ui/Estados";
+import { AvisoSemConexao, Carregando, ErroCarregamento, MensagemErro } from "../components/ui/Estados";
 import { useAlertas } from "../hooks/useDados";
 import { alertasApi } from "../services/api/endpoints";
 import type { Alerta, RespostaAlertas, TipoAlerta } from "../types/api";
@@ -71,7 +71,8 @@ export function Alertas() {
   });
 
   if (isLoading) return <><CabecalhoPagina titulo="Alertas" /><Carregando /></>;
-  if (error || !data) return <><CabecalhoPagina titulo="Alertas" /><ErroCarregamento erro={error} tentarDeNovo={() => refetch()} /></>;
+  // Com o último resultado em cache, um refetch que falhou (ex.: offline) não o substitui.
+  if (!data) return <><CabecalhoPagina titulo="Alertas" /><ErroCarregamento erro={error} tentarDeNovo={() => refetch()} /></>;
 
   const { alertas, totais, criterios } = data;
   const contagem = (tipo: TipoAlerta) => alertas.filter((a) => a.tipo === tipo && !a.resolvido).length;
@@ -87,6 +88,9 @@ export function Alertas() {
             : `${totais.abertos} aberto(s)${totais.alta ? ` · ${totais.alta} de gravidade alta` : ""}`
         }
       />
+      <AvisoSemConexao>
+        Sem conexão: os alertas são calculados no servidor e podem estar desatualizados; resolver ou reabrir exige conexão.
+      </AvisoSemConexao>
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <div className="flex gap-1.5 overflow-x-auto pb-1" role="group" aria-label="Filtrar por tipo">

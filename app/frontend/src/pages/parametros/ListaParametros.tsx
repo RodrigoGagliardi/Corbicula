@@ -4,7 +4,7 @@ import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { Link, useLocation } from "react-router";
 import { Botao, LinkBotao } from "../../components/ui/Botao";
 import { CabecalhoPagina, Cartao, Selo } from "../../components/ui/Cartao";
-import { Carregando, ErroCarregamento, MensagemErro } from "../../components/ui/Estados";
+import { AvisoSemConexao, Carregando, ErroCarregamento, MensagemErro } from "../../components/ui/Estados";
 import { chaves, useParametros } from "../../hooks/useDados";
 import { parametrosApi } from "../../services/api/endpoints";
 import type { Parametro } from "../../types/api";
@@ -68,6 +68,7 @@ export function ListaParametros() {
         subtitulo="O que você observa em cada inspeção. Cada parâmetro é classificado como Bom, Médio ou Ruim."
         acoes={parametros.length > 0 ? acoes : undefined}
       />
+      <AvisoSemConexao>Sem conexão: dá para consultar os parâmetros, mas criar, editar, reordenar, excluir ou aplicar templates exige conexão.</AvisoSemConexao>
 
       {parametros.length === 0 ? (
         <Cartao className="space-y-4 text-center">

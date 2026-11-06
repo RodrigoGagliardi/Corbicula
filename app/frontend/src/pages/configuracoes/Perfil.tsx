@@ -5,7 +5,7 @@ import { Link, useNavigate } from "react-router";
 import { Botao } from "../../components/ui/Botao";
 import { Campo, Entrada } from "../../components/ui/Campo";
 import { CabecalhoPagina, Cartao } from "../../components/ui/Cartao";
-import { Carregando, ErroCarregamento, MensagemErro } from "../../components/ui/Estados";
+import { AvisoSemConexao, Carregando, ErroCarregamento, MensagemErro } from "../../components/ui/Estados";
 import { chaves, useEu } from "../../hooks/useDados";
 import { usuariosApi } from "../../services/api/endpoints";
 import { useAuth } from "../../store/auth";
@@ -20,6 +20,7 @@ export function Perfil() {
   return (
     <>
       <CabecalhoPagina voltar={<VoltarConfiguracoes />} titulo="Perfil" subtitulo="Seus dados de acesso." />
+      <AvisoSemConexao>Sem conexão: alterar os dados, a senha ou excluir a conta exige conexão.</AvisoSemConexao>
       {isLoading ? (
         <Carregando />
       ) : error || !usuario ? (
