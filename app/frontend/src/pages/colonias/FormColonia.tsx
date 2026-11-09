@@ -164,7 +164,7 @@ function Formulario({ colonia }: { colonia?: ColoniaDetalhada | undefined }) {
     latitude: estado.latitude && !Number.isFinite(numeroOuNull(estado.latitude)) ? "Número inválido." : undefined,
     longitude: estado.longitude && !Number.isFinite(numeroOuNull(estado.longitude)) ? "Número inválido." : undefined,
     frequencia:
-      estado.frequencia.trim() && !/^d+$/.test(estado.frequencia.trim()) ? "Use um número inteiro de dias."
+      estado.frequencia.trim() && !/^\d+$/.test(estado.frequencia.trim()) ? "Use um número inteiro de dias."
       : estado.frequencia.trim() && (Number(estado.frequencia) < 1 || Number(estado.frequencia) > 365) ? "Entre 1 e 365 dias."
       : undefined,
   };

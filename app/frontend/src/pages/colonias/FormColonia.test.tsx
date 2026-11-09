@@ -88,6 +88,16 @@ describe("FormColonia: status, data e motivo", () => {
     expect(dados).not.toHaveProperty("motivoStatus");
   });
 
+  it("frequência de inspeção em dias: aceita um inteiro e envia o número", async () => {
+    renderizar("/app/colonias/nova");
+    fireEvent.change(screen.getByLabelText("Frequência de inspeção (dias)"), { target: { value: "30" } });
+    expect(screen.queryByText("Use um número inteiro de dias.")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cadastrar colônia" }));
+
+    await waitFor(() => expect(criar).toHaveBeenCalledTimes(1));
+    expect(criar.mock.calls[0]![0].frequenciaInspecaoDias).toBe(30);
+  });
+
   it("edição mudando o status: status, statusDesde e motivo", async () => {
     renderizar("/app/colonias/c1/editar");
     fireEvent.change(status(), { target: { value: "morta" } });
