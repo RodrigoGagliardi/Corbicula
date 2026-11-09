@@ -39,6 +39,9 @@ function colonia(id: string, codigo: string, parcial: Partial<ColoniaServidor> =
     observacoes: null,
     status: "ativa",
     frequenciaInspecaoDias: null,
+    statusDesde: null,
+    motivoStatus: null,
+    motivoStatusDetalhe: null,
     especieId: null,
     coloniaMaeId: null,
     coloniaDoadoraCampeirasId: null,
@@ -65,6 +68,11 @@ function avaliacao(
     condicaoClimatica: null,
     observacoesGerais: null,
     acoesTomadas: [],
+    motivoInspecao: null,
+    motivoInspecaoDetalhe: null,
+    motivosAcoes: null,
+    climaFonte: null,
+    protocoloId: null,
     scoreGeral: 100,
     statusGeral: "excelente",
     parametros: parametros.map(([parametroId, classificacao]) => ({
@@ -251,6 +259,16 @@ describe("buscarColonia (GET /colonias/:id)", () => {
   it("inexistente: ErroApi 404, como na API", () => {
     esperarErro(() => buscarColonia(base(), "nao-existe"), 404, "Colônia não encontrada");
   });
+
+  it("preserva desde/motivo do status e não inventa o histórico (só a API o traz)", () => {
+    const d = base();
+    d.colonias = d.colonias.map((c) =>
+      c.id === "f2" ? { ...c, statusDesde: DATA, motivoStatus: "outro", motivoStatusDetalhe: "Caixa caiu" } : c
+    );
+    const c = buscarColonia(d, "f2");
+    expect(c).toMatchObject({ status: "morta", statusDesde: DATA, motivoStatus: "outro", motivoStatusDetalhe: "Caixa caiu" });
+    expect("historicoStatus" in c).toBe(false);
+  });
 });
 
 // ─── Avaliações ───────────────────────────────────────────────────────────────
@@ -342,6 +360,19 @@ describe("buscarAvaliacao (GET /colonias/:id/avaliacoes/:id)", () => {
     ]);
     expect(a.acoesTomadas).toEqual(["alimentação"]);
     expect(a.parametros[0]).toMatchObject({ id: "a1-p-b", parametroId: "p-b", avaliacaoId: "a1" });
+  });
+
+  it("preserva motivos e procedência do clima da linha local", () => {
+    const d = base();
+    const contexto = {
+      motivoInspecao: "problema_observado",
+      motivoInspecaoDetalhe: null,
+      motivosAcoes: { "alimentação": "resposta_problema" },
+      climaFonte: "api_historico",
+      protocoloId: "pr1",
+    } as const;
+    d.avaliacoes = d.avaliacoes.map((a) => ({ ...a, ...contexto }));
+    expect(buscarAvaliacao(d, "c1", "a1")).toMatchObject(contexto);
   });
 
   it("404: colônia inexistente, avaliação inexistente ou de outra colônia", () => {

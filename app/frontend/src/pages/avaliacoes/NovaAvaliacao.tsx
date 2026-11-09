@@ -15,6 +15,14 @@ import { correspondeBusca } from "../../utils/colonias";
 import { formatarData, paraInputDataHora, tempoRelativo } from "../../utils/format";
 import { comprimirImagem } from "../../utils/imagem";
 import { calcularScore } from "../../utils/score";
+import { SeletorMotivo } from "../../components/features/SeletorMotivo";
+import {
+  MOTIVOS_ACAO,
+  MOTIVOS_INSPECAO,
+  payloadContextoAvaliacao,
+  type MotivoAcaoCodigo,
+  type MotivoInspecaoCodigo,
+} from "../../utils/vocabularios";
 
 const ACOES = ["Alimentação artificial", "Limpeza realizada", "Divisão executada", "Tratamento aplicado", "Troca de caixa"];
 const SUGESTOES_OBS = ["Colônia forte", "Rainha ativa", "Muitos forídeos", "Precisa limpeza", "Pouco alimento"];
@@ -133,8 +141,20 @@ function estadoInicial(avaliacao: AvaliacaoDetalhada | undefined) {
     dataHora: paraInputDataHora(avaliacao ? new Date(avaliacao.dataAvaliacao) : new Date()),
     observacoes: avaliacao?.observacoesGerais ?? "",
     acoes: avaliacao?.acoesTomadas ?? [],
+    motivoInspecao: avaliacao?.motivoInspecao ?? null,
+    motivoInspecaoDetalhe: avaliacao?.motivoInspecaoDetalhe ?? "",
+    motivosAcoes: (avaliacao?.motivosAcoes ?? {}) as Record<string, MotivoAcaoCodigo>,
   };
 }
+
+const OPCOES_MOTIVO_INSPECAO = (Object.keys(MOTIVOS_INSPECAO) as MotivoInspecaoCodigo[]).map((codigo) => ({
+  codigo,
+  rotulo: MOTIVOS_INSPECAO[codigo],
+}));
+const OPCOES_MOTIVO_ACAO = (Object.keys(MOTIVOS_ACAO) as MotivoAcaoCodigo[]).map((codigo) => ({
+  codigo,
+  rotulo: MOTIVOS_ACAO[codigo],
+}));
 
 // Criação (sem `avaliacao`) ou edição de uma avaliação existente (até 7 dias).
 export function FormularioAvaliacao({
@@ -155,6 +175,17 @@ export function FormularioAvaliacao({
   const [dataHora, setDataHora] = useState(inicial.dataHora);
   const [observacoes, setObservacoes] = useState(inicial.observacoes);
   const [acoes, setAcoes] = useState<string[]>(inicial.acoes);
+  // Contexto opcional: por que inspecionou e, por ação, preventiva ou resposta.
+  const [motivoInspecao, setMotivoInspecao] = useState<MotivoInspecaoCodigo | null>(inicial.motivoInspecao);
+  const [motivoInspecaoDetalhe, setMotivoInspecaoDetalhe] = useState(inicial.motivoInspecaoDetalhe);
+  const [motivosAcoes, setMotivosAcoes] = useState<Record<string, MotivoAcaoCodigo>>(inicial.motivosAcoes);
+  const marcarMotivoAcao = (acao: string, motivo: MotivoAcaoCodigo | null) =>
+    setMotivosAcoes((atual) => {
+      const novo = { ...atual };
+      if (motivo) novo[acao] = motivo;
+      else delete novo[acao];
+      return novo;
+    });
   const [foto, setFoto] = useState<File | null>(null);
   const inputFoto = useRef<HTMLInputElement>(null);
   const editando = Boolean(avaliacao);
@@ -176,6 +207,8 @@ export function FormularioAvaliacao({
         })),
         observacoesGerais: observacoes.trim() || null,
         acoesTomadas: acoes.length ? acoes : null,
+        // Sem nada marcado, nenhuma chave nova (payload de antes destes campos).
+        ...payloadContextoAvaliacao({ motivoInspecao, motivoInspecaoDetalhe, acoes, motivosAcoes }, avaliacao),
       };
       if (avaliacao) {
         // Edição: o servidor recalcula o score com o conjunto enviado. Fotos são
@@ -288,6 +321,27 @@ export function FormularioAvaliacao({
         <Cartao className="space-y-4">
           <h2 className="font-semibold text-foreground">Finalizar</h2>
 
+          <fieldset className="space-y-2">
+            <legend className="mb-2 text-sm font-medium text-foreground">
+              Motivo da inspeção <span className="font-normal text-muted-foreground">(opcional)</span>
+            </legend>
+            <SeletorMotivo
+              rotulo="Motivo da inspeção"
+              opcoes={OPCOES_MOTIVO_INSPECAO}
+              valor={motivoInspecao}
+              onChange={setMotivoInspecao}
+            />
+            {motivoInspecao === "outro" && (
+              <Entrada
+                aria-label="Descreva o motivo da inspeção"
+                placeholder="Descreva o motivo"
+                maxLength={500}
+                value={motivoInspecaoDetalhe}
+                onChange={(e) => setMotivoInspecaoDetalhe(e.target.value)}
+              />
+            )}
+          </fieldset>
+
           <Campo rotulo="Observações gerais">
             {(id) => (
               <>
@@ -310,17 +364,36 @@ export function FormularioAvaliacao({
 
           <fieldset>
             <legend className="mb-2 text-sm font-medium text-foreground">Ações tomadas</legend>
-            <div className="grid gap-1.5 sm:grid-cols-2">
+            <div className="grid items-start gap-1.5 sm:grid-cols-2">
               {opcoesAcoes.map((a) => (
-                <label key={a} className="flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm hover:bg-background">
-                  <input
-                    type="checkbox"
-                    className="size-5 accent-primary"
-                    checked={acoes.includes(a)}
-                    onChange={(e) => setAcoes((l) => (e.target.checked ? [...l, a] : l.filter((x) => x !== a)))}
-                  />
-                  {a}
-                </label>
+                <div key={a} className="rounded-lg px-2 py-2 hover:bg-background">
+                  <label className="flex items-center gap-2.5 text-sm">
+                    <input
+                      type="checkbox"
+                      className="size-5 accent-primary"
+                      checked={acoes.includes(a)}
+                      onChange={(e) => {
+                        const marcada = e.target.checked;
+                        setAcoes((l) => (marcada ? [...l, a] : l.filter((x) => x !== a)));
+                        // Ação desmarcada leva junto o motivo dela.
+                        if (!marcada) marcarMotivoAcao(a, null);
+                      }}
+                    />
+                    {a}
+                  </label>
+                  {/* Opcional: por que a ação foi tomada. */}
+                  {acoes.includes(a) && (
+                    <div className="mt-1.5 pl-7.5">
+                      <SeletorMotivo
+                        compacto
+                        rotulo={`Motivo da ação ${a}`}
+                        opcoes={OPCOES_MOTIVO_ACAO}
+                        valor={motivosAcoes[a] ?? null}
+                        onChange={(m) => marcarMotivoAcao(a, m)}
+                      />
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           </fieldset>

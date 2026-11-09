@@ -1,6 +1,8 @@
 // Tipos das respostas da API (espelham app/backend/src/modules/*).
 // Datas chegam como string ISO 8601 (UTC).
 
+import type { FonteClima, MotivoAcaoCodigo, MotivoInspecaoCodigo, MotivoStatusCodigo } from "../utils/vocabularios";
+
 export type Classificacao = "bom" | "medio" | "ruim";
 export type StatusAvaliacao = "excelente" | "boa" | "atencao" | "critica";
 export type StatusColonia = "ativa" | "inativa" | "morta";
@@ -86,6 +88,11 @@ export interface Colonia {
   status: StatusColonia;
   // Intervalo sugerido entre inspeções (dias); null = preferência geral.
   frequenciaInspecaoDias: number | null;
+  // Estado atual do status (cópia da última entrada do histórico). Nulos em
+  // registros anteriores a 06/11/2026; podem faltar numa cópia offline antiga.
+  statusDesde: string | null;
+  motivoStatus: MotivoStatusCodigo | null;
+  motivoStatusDetalhe: string | null;
   especieId: string | null;
   coloniaMaeId: string | null;
   coloniaDoadoraCampeirasId: string | null;
@@ -101,6 +108,22 @@ export interface ColoniaDetalhada extends Colonia {
   coloniasFilhas: { id: string; codigo: string; status: StatusColonia }[];
   coloniaDoadoraCampeiras: { id: string; codigo: string } | null;
   coloniasReceptorasCampeiras: { id: string; codigo: string; status: StatusColonia }[];
+  // Só na API (GET /colonias/:id); a cópia offline não o tem.
+  historicoStatus?: EntradaHistoricoStatus[];
+}
+
+// Uma mudança de status (a API devolve da mais antiga para a mais recente).
+export interface EntradaHistoricoStatus {
+  id: string;
+  // null = primeira entrada criada por uma correção (status anterior desconhecido).
+  statusAnterior: StatusColonia | null;
+  statusNovo: StatusColonia;
+  dataPercebida: string;
+  motivo: MotivoStatusCodigo | null;
+  motivoDetalhe: string | null;
+  createdAt: string;
+  // Difere de createdAt quando a entrada foi corrigida.
+  updatedAt: string;
 }
 
 export interface CriterioEspecie {
@@ -143,6 +166,13 @@ export interface Avaliacao {
   condicaoClimatica: CondicaoClimatica | null;
   observacoesGerais: string | null;
   acoesTomadas: string[];
+  // Contexto (06/11/2026; nulos em registros anteriores).
+  motivoInspecao: MotivoInspecaoCodigo | null;
+  motivoInspecaoDetalhe: string | null;
+  // Ação (de acoesTomadas) → motivo.
+  motivosAcoes: Record<string, MotivoAcaoCodigo> | null;
+  climaFonte: FonteClima | null;
+  protocoloId: string | null;
   scoreGeral: number;
   statusGeral: StatusAvaliacao;
   createdAt: string;
@@ -266,6 +296,10 @@ export interface ColoniaInput {
   longitude?: number | null;
   observacoes?: string | null;
   frequenciaInspecaoDias?: number | null;
+  // Só no PATCH: data e motivo da mudança de status (ou correção da última).
+  statusDesde?: string;
+  motivoStatus?: MotivoStatusCodigo | null;
+  motivoStatusDetalhe?: string | null;
 }
 
 export interface AvaliacaoInput {
@@ -274,6 +308,9 @@ export interface AvaliacaoInput {
   observacoesGerais?: string | null;
   acoesTomadas?: string[] | null;
   duracaoMinutos?: number | null;
+  motivoInspecao?: MotivoInspecaoCodigo | null;
+  motivoInspecaoDetalhe?: string | null;
+  motivosAcoes?: Record<string, MotivoAcaoCodigo> | null;
 }
 
 export interface ParametroInput {

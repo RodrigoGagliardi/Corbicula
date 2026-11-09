@@ -23,6 +23,8 @@ import {
   tempoRelativo,
 } from "../../utils/format";
 import { COR_PRODUTO, formatarQuantidade, ROTULO_PRODUTO } from "../../utils/producao";
+import { rotuloMotivoStatus } from "../../utils/vocabularios";
+import type { EntradaHistoricoStatus } from "../../types/api";
 
 export function DetalheColonia() {
   const { id = "" } = useParams();
@@ -48,6 +50,13 @@ export function DetalheColonia() {
   const dimensoes = dim && [dim.altura, dim.largura, dim.profundidade].some(Boolean)
     ? [dim.altura, dim.largura, dim.profundidade].map((v) => v ?? "?").join(" × ") + " cm"
     : null;
+  // "desde <data> · <motivo>" do status atual (vazio em registros antigos).
+  const desdeMotivo = [
+    colonia.statusDesde ? `desde ${formatarData(colonia.statusDesde)}` : null,
+    rotuloMotivoStatus(colonia.motivoStatus, colonia.motivoStatusDetalhe),
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <>
@@ -106,6 +115,7 @@ export function DetalheColonia() {
           <dl className="space-y-2 text-sm">
             <Info rotulo="Status">
               <Selo className="bg-muted text-foreground">{ROTULO_STATUS_COLONIA[colonia.status]}</Selo>
+              {desdeMotivo && <span className="mt-0.5 block text-xs text-muted-foreground">{desdeMotivo}</span>}
             </Info>
             <Info rotulo="Entrada">{formatarData(colonia.dataEntrada)}</Info>
             <Info rotulo="Origem">{ROTULO_ORIGEM[colonia.origem]}</Info>
@@ -138,6 +148,10 @@ export function DetalheColonia() {
             )}
           </dl>
           {colonia.observacoes && <p className="mt-3 border-t border-border pt-3 text-sm whitespace-pre-line text-muted-foreground">{colonia.observacoes}</p>}
+          {/* Só vem da API: a cópia offline não guarda o histórico. */}
+          {colonia.historicoStatus && colonia.historicoStatus.length > 0 && (
+            <HistoricoStatus entradas={colonia.historicoStatus} />
+          )}
         </Cartao>
 
         <Cartao>
@@ -255,6 +269,40 @@ function Info({ rotulo, children }: { rotulo: string; children: ReactNode }) {
     <div className="flex justify-between gap-3">
       <dt className="text-muted-foreground">{rotulo}</dt>
       <dd className="text-right text-foreground">{children}</dd>
+    </div>
+  );
+}
+
+// Mudanças de status, da mais recente para a mais antiga (pela data percebida). A data é a que o
+// usuário informou ("percebi em"); uma entrada corrigida depois é sinalizada.
+function HistoricoStatus({ entradas }: { entradas: EntradaHistoricoStatus[] }) {
+  return (
+    <div className="mt-3 border-t border-border pt-3">
+      <h3 className="mb-2 text-sm font-medium text-foreground">Histórico de status</h3>
+      <ol className="space-y-2 text-sm">
+        {[...entradas]
+          // Pela data percebida (pode ser retroativa ou corrigida); empate: a registrada por último.
+          .sort((a, b) => b.dataPercebida.localeCompare(a.dataPercebida) || b.createdAt.localeCompare(a.createdAt))
+          .map((h) => {
+          const motivo = rotuloMotivoStatus(h.motivo, h.motivoDetalhe);
+          return (
+            <li key={h.id}>
+              <p className="text-foreground">
+                {h.statusAnterior ? `${ROTULO_STATUS_COLONIA[h.statusAnterior]} → ` : ""}
+                {ROTULO_STATUS_COLONIA[h.statusNovo]}
+                <span className="text-muted-foreground"> · {formatarData(h.dataPercebida)}</span>
+              </p>
+              {(motivo || h.updatedAt !== h.createdAt) && (
+                <p className="text-xs text-muted-foreground">
+                  {motivo}
+                  {motivo && h.updatedAt !== h.createdAt && " · "}
+                  {h.updatedAt !== h.createdAt && `corrigido em ${formatarData(h.updatedAt)}`}
+                </p>
+              )}
+            </li>
+          );
+        })}
+      </ol>
     </div>
   );
 }

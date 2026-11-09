@@ -308,6 +308,15 @@ Legenda: ✅ pronta · ◐ parcial · 🚧 rota com página "em construção"
 
 **Objetivo:** Ver informações completas de uma colônia
 
+> **Status, desde quando e por quê (09/11/2026).** No cartão "Informações", abaixo do selo do status,
+> aparece "desde \<data\> · \<motivo\>" (a data é a que o usuário informou como "data em que percebi";
+> `outro` mostra o texto digitado). Registros anteriores a 06/11/2026 não têm esses dados e mostram só
+> o selo. Logo abaixo, o **histórico de status** (pela data percebida, mais recente primeiro; empate
+> pela ordem de registro): status anterior → novo, data
+> percebida, motivo e "corrigido em \<data\>" quando a entrada foi corrigida depois. O histórico vem só
+> da API (`GET /colonias/:id`); lida da cópia offline, a colônia mostra o "desde · motivo" e o histórico
+> simplesmente não aparece.
+
 **Layout:**
 
 **Header:**
@@ -428,6 +437,26 @@ Legenda: ✅ pronta · ◐ parcial · 🚧 rota com página "em construção"
   - Causa (opcional)
 - Histórico de alterações (quem, quando)
 
+> **Implementado (09/11/2026) — mudança de status com data e motivo** (`FormColonia.tsx`, regras em
+> `utils/vocabularios.ts`). Na criação (tela 9) só se escolhe o status; nada muda ali.
+> - Ao trocar o status no formulário de edição aparecem, logo abaixo, **"Data em que percebi"**
+>   (padrão hoje, sem data futura nem anterior à entrada da colônia ou à data do status atual, para o
+>   histórico não sair de ordem) e os **chips de motivo** do status novo:
+>   só os compatíveis (morta: fome, frio, pragas, intoxicação suspeita, orfandade, divisão não
+>   vingou, desconhecida; inativa: abandono, roubo/perda, venda/doação, união; ativa: voltou a ser
+>   ativa, correção de registro) e `outro`, que abre um campo de texto. Nada é obrigatório: um toque
+>   marca, outro desmarca; sem tocar, vai a data de hoje e o motivo vazio.
+> - O PATCH leva `status`, `statusDesde` e, se escolhidos, `motivoStatus`/`motivoStatusDetalhe`.
+>   Com o status igual ao salvo e sem abrir a correção, nenhum desses campos vai.
+> - Com o status igual, "Corrigir data ou motivo" abre os mesmos campos com os valores salvos; vai só
+>   o que mudou (a data vai se o usuário mexeu no campo, mesmo deixando o valor sugerido), e o servidor corrige a última entrada do histórico em vez de criar outra (um status
+>   marcado por engano se desfaz voltando o status, que gera nova entrada). O link não aparece numa
+>   colônia ativa que nunca mudou de status.
+> - A data vai como meio-dia local; para hoje, o menor entre agora e o meio-dia (o servidor recusa data
+>   futura, e à noite "agora" já seria o dia seguinte em UTC). A comparação usa a colônia como estava
+>   ao abrir o formulário: uma atualização em segundo plano não desfaz uma mudança feita em outro
+>   aparelho. Erro do servidor aparece no formulário.
+
 ---
 
 ### **11. Mapa de Colônias** `/app/colonias/mapa`
@@ -466,6 +495,17 @@ Legenda: ✅ pronta · ◐ parcial · 🚧 rota com página "em construção"
 ### **12. Nova Avaliação (Quick)** `/app/avaliacoes/nova`
 
 **Objetivo:** Avaliar colônia rapidamente (mobile-first)
+
+> **Contexto opcional (09/11/2026).** O fluxo rápido não muda: classificar e salvar continua com o
+> mesmo número de toques, e sem tocar nos campos abaixo o payload é o de antes (sem as chaves novas).
+> No cartão "Finalizar":
+> - **Motivo da inspeção** em chips de um toque: Rotina, Algo chamou atenção, Retorno após uma ação e
+>   Outro (abre um campo de texto). Tocar de novo desmarca.
+> - Em cada **ação tomada** marcada aparecem dois chips: Preventiva (calendário, estação, rotina) ou
+>   Resposta a um problema observado. Vai `motivosAcoes` só com as ações marcadas que receberam
+>   motivo; desmarcar a ação descarta o motivo dela.
+> Os códigos e rótulos vêm de `utils/vocabularios.ts` (os mesmos do backend e de `docs/exportacao.md`).
+> Motivos nunca entram no score.
 
 **Fluxo:**
 
@@ -589,6 +629,13 @@ Novembro 2024
 
 **Objetivo:** Ver avaliação completa
 
+> **Contexto (09/11/2026).** O cartão de observações mostra o **motivo da inspeção** (com o texto de
+> `outro`) e, ao lado de cada ação tomada, o motivo dela, quando registrados. O cartão do clima mostra
+> a **procedência**: "API (previsão)", "API (histórico ERA5)" ou "Digitado" (algum campo foi informado ou
+> alterado pelo usuário; os outros podem ter vindo da API). Avaliações anteriores a 06/11/2026 não têm
+> procedência e não mostram a linha. O crédito à Open-Meteo aparece sempre que houver algum valor de
+> clima (temperatura, umidade ou condição); códigos desconhecidos aparecem como vieram. O protocolo vigente (`protocoloId`) não aparece nesta tela; vai na exportação.
+
 **Seções:**
 
 **Header:**
@@ -634,6 +681,9 @@ Novembro 2024
 > prazo de 7 dias conta a partir do registro (`createdAt`), igual ao servidor. Parâmetros
 > desativados depois da inspeção continuam editáveis nela. O score é recalculado; o clima registrado
 > é mantido; fotos são geridas no detalhe. Ainda **não** há histórico de edições.
+> Desde 09/11/2026 os chips de motivo da inspeção e de cada ação vêm pré-preenchidos com o que foi
+> salvo; um motivo desmarcado vai como `null` (apagado). O protocolo da avaliação só muda se o
+> conjunto de parâmetros avaliados mudar (regra do servidor).
 
 **Regras:**
 - Só pode editar avaliações dos últimos 7 dias
@@ -682,6 +732,11 @@ Novembro 2024
 ### **17. Criar/Editar Parâmetro** `/app/parametros/novo` ou `/app/parametros/:id/editar`
 
 **Objetivo:** Definir critério personalizado
+
+> **Protocolo (09/11/2026).** Cada avaliação guarda, no servidor, o protocolo vigente (parâmetros e
+> texto dos critérios aplicados). Editar um critério aqui (ou na tela 16) **não** muda o protocolo das
+> avaliações já registradas; a próxima avaliação recebe outro. As telas não pedem nada a mais por
+> isso: o protocolo aparece na exportação (`docs/exportacao.md`).
 
 **Formulário:**
 

@@ -191,7 +191,7 @@ app/frontend/
 │   │   │   └── navegacao.ts       # fonte única dos itens de navegação dos dois layouts
 │   │   ├── charts/
 │   │   │   └── GraficoScore.tsx   # evolução do score de uma colônia
-│   │   └── features/          # CartaoColonia, GaleriaFotos, MapaLeaflet (Leaflet, carregado sob demanda), SeletorClassificacao, SeloScore
+│   │   └── features/          # CartaoColonia, GaleriaFotos, MapaLeaflet (Leaflet, carregado sob demanda), SeletorClassificacao, SeletorMotivo, SeloScore
 │   ├── pages/
 │   │   ├── Landing.tsx, Login.tsx, Cadastro.tsx, RecuperarSenha.tsx, Sobre.tsx, NaoEncontrado.tsx
 │   │   ├── Dashboard.tsx
@@ -234,7 +234,8 @@ app/frontend/
 │   │   ├── conjuntoParametros.ts  # prévia de aplicar template/arquivo e leitura do arquivo (+ .test.ts)
 │   │   ├── periodo.ts         # atalhos de período dos filtros (produção, avaliações)
 │   │   ├── producao.ts        # rótulos/unidades dos produtos
-│   │   └── score.ts           # faixas do score (Excelente/Boa/Atenção/Crítica) e prazo de edição (7 dias)
+│   │   ├── score.ts           # faixas do score (Excelente/Boa/Atenção/Crítica) e prazo de edição (7 dias)
+│   │   └── vocabularios.ts    # motivos de status/inspeção/ação e procedência do clima (mesmos códigos do backend) + payloads (+ .test.ts)
 │   ├── index.css              # Tailwind + tokens do tema (claro/escuro): verde floresta + amarelo do logo
 │   ├── main.tsx               # entry point: QueryClient + RouterProvider
 │   ├── router.tsx             # rotas públicas + /app/* privadas, guardas e redirecionamento dos endereços antigos
@@ -253,7 +254,7 @@ Notas:
 - `VITE_API_URL` é a URL da API vista pelo **navegador** (padrão `http://localhost:3000`), não pela rede Docker.
 - Rotas públicas ficam na raiz (`/` é a landing page) dentro de `LayoutPublico`; as privadas ficam sob `/app/*` dentro de `AppLayout`. Endereços antigos sem `/app` redirecionam.
 - Telas planejadas e ainda não implementadas têm rota e mostram `EmConstrucao` com o conteúdo de `telasPlanejadas.ts`. A situação de cada tela está em `docs/telas.md`.
-- `services/offline/` tem a base local, o pull incremental e as leituras offline: online as telas leem da API; sem conexão, as queries de `hooks/useDados.ts` com cópia local (colônias, avaliações, histórico, produções, parâmetros, espécies) leem o banco local no mesmo formato da rota REST, e o perfil vem da sessão. Alertas, resumo/relatório de produção, templates e fotos só existem no servidor e mostram aviso de conexão. Ainda não existem: a fila de envio pelo `/sync`, a tela de sincronização, as análises e o CI do frontend. Testes ao lado do código: `utils/{mapa,conjuntoParametros,calendario}.test.ts`, `services/offline/*.test.ts`, `services/api/endpoints.test.ts` e `hooks/useCargaLocal.test.ts`.
+- `services/offline/` tem a base local, o pull incremental e as leituras offline: online as telas leem da API; sem conexão, as queries de `hooks/useDados.ts` com cópia local (colônias, avaliações, histórico, produções, parâmetros, espécies) leem o banco local no mesmo formato da rota REST, e o perfil vem da sessão. Alertas, resumo/relatório de produção, templates e fotos só existem no servidor e mostram aviso de conexão. Ainda não existem: a fila de envio pelo `/sync`, a tela de sincronização, as análises e o CI do frontend. Testes ao lado do código: `utils/{mapa,conjuntoParametros,calendario,vocabularios}.test.ts`, `components/features/SeletorMotivo.test.tsx`, `pages/avaliacoes/NovaAvaliacao.test.tsx`, `pages/colonias/FormColonia.test.tsx`, `services/offline/*.test.ts`, `services/api/endpoints.test.ts` e `hooks/useCargaLocal.test.ts`.
 - `watch.usePolling` no Vite é necessário para o hot reload funcionar com bind mount do Windows dentro do Docker.
 
 ---
@@ -360,3 +361,5 @@ Notas:
 - **[2026-11-06 — PWA offline: leituras offline nas telas]** — Frontend: `services/offline/leituras.ts` (derivação pura das respostas REST) e `leituraLocal.ts` (`comFallbackLocal`, ponto único da decisão online/local), com testes; `hooks/useDados.ts` envolve as 9 leituras com cópia local e o `useEu` (sessão), sem mudar as chaves; `main.tsx` com `networkMode: "always"` e sem retry de erro de conexão sem rede; `ErroCarregamento` com texto de conexão e novos `AvisoSemConexao`/`NotaSemConexao` em `components/ui/Estados.tsx`, usados em parâmetros, perfil, meliponário, exportação, alertas, resumo de produção e fotos.
 
 - **[2026-11-06 — dados de desfecho e contexto (backend)]** — Migration `20261106230000_dados_de_desfecho` (tabelas `colonias_status_historico` e `protocolos`; colunas novas em `colonias` e `avaliacoes`; 14 tabelas). Criados `src/shared/vocabularios.ts`, `src/modules/avaliacoes/avaliacoes.protocolo.ts` e `tests/unit/protocolo.test.ts`. Exportação ganhou `/exportacao/historico-status` e `/exportacao/protocolos`.
+
+- **[2026-11-09 — dados de desfecho e contexto (frontend)]** — Criados `src/utils/vocabularios.ts` (vocabulários e payloads, + teste) e `src/components/features/SeletorMotivo.tsx` (chips de escolha única opcional, + teste); testes de render `pages/avaliacoes/NovaAvaliacao.test.tsx` e `pages/colonias/FormColonia.test.tsx`. Campos novos em `types/api.ts`; formulário e detalhe da colônia, nova/editar avaliação e detalhe da avaliação mostram e coletam data/motivo do status, histórico de status, motivos da inspeção e das ações e procedência do clima.

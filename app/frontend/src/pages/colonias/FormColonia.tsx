@@ -9,8 +9,19 @@ import { Carregando, ErroCarregamento, MensagemErro } from "../../components/ui/
 import { chaves, useColonia, useColonias, useEspecies } from "../../hooks/useDados";
 import { coloniasApi } from "../../services/api/endpoints";
 import { usePreferencias } from "../../store/preferencias";
+import { SeletorMotivo } from "../../components/features/SeletorMotivo";
 import type { ColoniaDetalhada, ColoniaInput, Origem, StatusColonia, TipoCaixa } from "../../types/api";
-import { paraInputData, ROTULO_CAIXA, ROTULO_ORIGEM, ROTULO_STATUS_COLONIA } from "../../utils/format";
+import { formatarData, paraInputData, ROTULO_CAIXA, ROTULO_ORIGEM, ROTULO_STATUS_COLONIA } from "../../utils/format";
+import {
+  dataMinimaStatus,
+  estadoStatusInicial,
+  MOTIVOS_STATUS,
+  motivosDoStatus,
+  payloadStatus,
+  rotuloMotivoStatus,
+  trocarStatus,
+  type EstadoStatus,
+} from "../../utils/vocabularios";
 
 interface Estado {
   especieId: string;
@@ -26,7 +37,6 @@ interface Estado {
   latitude: string;
   longitude: string;
   observacoes: string;
-  status: StatusColonia;
   frequencia: string;
 }
 
@@ -45,7 +55,6 @@ function estadoInicial(colonia?: ColoniaDetalhada, maeSugerida?: string | null):
     latitude: colonia?.latitude?.toString() ?? "",
     longitude: colonia?.longitude?.toString() ?? "",
     observacoes: colonia?.observacoes ?? "",
-    status: colonia?.status ?? "ativa",
     frequencia: colonia?.frequenciaInspecaoDias?.toString() ?? "",
   };
 }
@@ -53,7 +62,8 @@ function estadoInicial(colonia?: ColoniaDetalhada, maeSugerida?: string | null):
 const numeroOuNull = (v: string) => (v.trim() === "" ? null : Number(v.replace(",", ".")));
 const textoOuNull = (v: string) => (v.trim() === "" ? null : v.trim());
 
-function paraPayload(e: Estado): ColoniaInput {
+// Sem os campos de status: na criação vai só `status`; na edição, os de payloadStatus.
+function paraPayload(e: Estado): Omit<ColoniaInput, "status"> {
   const dim = { altura: numeroOuNull(e.altura), largura: numeroOuNull(e.largura), profundidade: numeroOuNull(e.profundidade) };
   const dimensoes = Object.fromEntries(Object.entries(dim).filter(([, v]) => v !== null));
   return {
@@ -64,7 +74,6 @@ function paraPayload(e: Estado): ColoniaInput {
     especieId: e.especieId || null,
     coloniaMaeId: e.origem === "divisao" && e.coloniaMaeId ? e.coloniaMaeId : null,
     coloniaDoadoraCampeirasId: e.origem === "divisao" && e.coloniaDoadoraId ? e.coloniaDoadoraId : null,
-    status: e.status,
     dimensoesCaixa: Object.keys(dimensoes).length ? dimensoes : null,
     localizacao: textoOuNull(e.localizacao),
     latitude: numeroOuNull(e.latitude),
@@ -91,6 +100,12 @@ function Formulario({ colonia }: { colonia?: ColoniaDetalhada | undefined }) {
   const { data: especies } = useEspecies();
   const { data: colonias } = useColonias();
   const [estado, setEstado] = useState(() => estadoInicial(colonia, params.get("mae")));
+  // Status como estava ao abrir o formulário: um refetch em segundo plano (ex.:
+  // mudança feita em outro aparelho) não pode virar a base da comparação, senão
+  // o PATCH desfaria a mudança e criaria uma entrada falsa no histórico.
+  const [statusBase] = useState(() => colonia && { ...colonia });
+  // Status e, na edição, data e motivo da mudança (ou correção dos salvos).
+  const [st, setSt] = useState<EstadoStatus>(() => estadoStatusInicial(statusBase));
   const frequenciaGeral = usePreferencias((s) => s.diasInspecaoAtrasada);
   const [tentou, setTentou] = useState(false);
   const [gps, setGps] = useState<"idle" | "buscando" | "erro">("idle");
@@ -124,7 +139,19 @@ function Formulario({ colonia }: { colonia?: ColoniaDetalhada | undefined }) {
           : undefined;
 
   const hoje = paraInputData(new Date());
+  const mudouStatus = Boolean(statusBase) && st.status !== statusBase?.status;
+  const camposStatus = mudouStatus || st.corrigindo;
+  const minimoStatus = dataMinimaStatus(estado.dataEntrada, statusBase, mudouStatus);
   const erros = {
+    statusDesde: !camposStatus || !st.desde
+      ? undefined
+      : st.desde > hoje
+        ? "A data não pode ser futura."
+        : minimoStatus.dia && st.desde < minimoStatus.dia
+          ? minimoStatus.origem === "status"
+            ? `A data não pode ser anterior à do status atual (${formatarData(statusBase!.statusDesde!)}).`
+            : "A data não pode ser anterior à entrada da colônia."
+          : undefined,
     dataEntrada: !estado.dataEntrada
       ? "Informe a data de entrada."
       : estado.dataEntrada > hoje
@@ -145,7 +172,10 @@ function Formulario({ colonia }: { colonia?: ColoniaDetalhada | undefined }) {
   const erro = (c: keyof typeof erros) => (tentou ? erros[c] : undefined);
 
   const salvar = useMutation({
-    mutationFn: () => (colonia ? coloniasApi.atualizar(colonia.id, paraPayload(estado)) : coloniasApi.criar(paraPayload(estado))),
+    mutationFn: () =>
+      colonia
+        ? coloniasApi.atualizar(colonia.id, { ...paraPayload(estado), ...(statusBase && payloadStatus(statusBase, st)) })
+        : coloniasApi.criar({ ...paraPayload(estado), status: st.status }),
     onSuccess: (salva) => {
       queryClient.invalidateQueries({ queryKey: chaves.colonias });
       navegar(`/app/colonias/${salva.id}`, { replace: true });
@@ -240,7 +270,7 @@ function Formulario({ colonia }: { colonia?: ColoniaDetalhada | undefined }) {
             </Campo>
             <Campo rotulo="Status">
               {(id) => (
-                <Selecao id={id} value={estado.status} onChange={(e) => alterar("status", e.target.value as StatusColonia)}>
+                <Selecao id={id} value={st.status} onChange={(e) => setSt(trocarStatus(statusBase, e.target.value as StatusColonia))}>
                   {(Object.keys(ROTULO_STATUS_COLONIA) as StatusColonia[]).map((s) => (
                     <option key={s} value={s}>
                       {ROTULO_STATUS_COLONIA[s]}
@@ -250,6 +280,16 @@ function Formulario({ colonia }: { colonia?: ColoniaDetalhada | undefined }) {
               )}
             </Campo>
           </div>
+          {statusBase && (
+            <CamposStatus
+              colonia={statusBase}
+              st={st}
+              setSt={setSt}
+              hoje={hoje}
+              minimo={minimoStatus.dia || undefined}
+              erroData={erro("statusDesde")}
+            />
+          )}
         </Cartao>
 
         <Cartao className="space-y-4">
@@ -398,5 +438,103 @@ function Formulario({ colonia }: { colonia?: ColoniaDetalhada | undefined }) {
         </div>
       </form>
     </>
+  );
+}
+
+// Data e motivo da mudança de status (só na edição). Aparecem quando o status
+// muda; com o status igual ao salvo, um toque abre a correção da data/motivo.
+// Nada aqui é obrigatório: sem tocar, a data é hoje e o motivo fica vazio.
+function CamposStatus({
+  colonia,
+  st,
+  setSt,
+  hoje,
+  minimo,
+  erroData,
+}: {
+  colonia: ColoniaDetalhada;
+  st: EstadoStatus;
+  setSt: (st: EstadoStatus) => void;
+  hoje: string;
+  minimo: string | undefined;
+  erroData: string | undefined;
+}) {
+  const mudou = st.status !== colonia.status;
+  const atual = [
+    colonia.statusDesde ? `desde ${formatarData(colonia.statusDesde)}` : null,
+    rotuloMotivoStatus(colonia.motivoStatus, colonia.motivoStatusDetalhe),
+  ].filter(Boolean);
+
+  if (!mudou && !st.corrigindo) {
+    // Colônia ativa que nunca mudou de status não tem o que corrigir.
+    if (colonia.status === "ativa" && !colonia.statusDesde && !colonia.motivoStatus) return null;
+    return (
+      <p className="text-sm text-muted-foreground">
+        {ROTULO_STATUS_COLONIA[colonia.status]}
+        {atual.length > 0 && ` ${atual.join(" · ")}`}.{" "}
+        <button
+          type="button"
+          onClick={() => setSt({ ...estadoStatusInicial(colonia), corrigindo: true })}
+          className="font-medium text-foreground underline decoration-accent decoration-2 underline-offset-4 hover:decoration-foreground"
+        >
+          Corrigir data ou motivo
+        </button>
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-3 rounded-xl border border-border bg-background p-3">
+      <p className="text-sm font-medium text-foreground">
+        {mudou
+          ? `${ROTULO_STATUS_COLONIA[colonia.status]} → ${ROTULO_STATUS_COLONIA[st.status]}`
+          : `Corrigir o status atual (${ROTULO_STATUS_COLONIA[colonia.status]})`}
+        <span className="font-normal text-muted-foreground"> · opcional</span>
+      </p>
+      <Campo
+        rotulo="Data em que percebi"
+        erro={erroData}
+        ajuda={mudou ? "Padrão: hoje. Se percebeu antes, ajuste." : undefined}
+      >
+        {(id) => (
+          <Entrada
+            id={id}
+            type="date"
+            max={hoje}
+            min={minimo}
+            value={st.desde}
+            onChange={(e) => setSt({ ...st, desde: e.target.value, desdeTocado: true })}
+            className="max-w-48"
+          />
+        )}
+      </Campo>
+      <fieldset className="space-y-2">
+        <legend className="mb-2 text-sm font-medium text-foreground">Motivo</legend>
+        <SeletorMotivo
+          rotulo={`Motivo do status ${ROTULO_STATUS_COLONIA[st.status]}`}
+          opcoes={motivosDoStatus(st.status).map((m) => ({ codigo: m, rotulo: MOTIVOS_STATUS[m].rotulo }))}
+          valor={st.motivo}
+          onChange={(motivo) => setSt({ ...st, motivo })}
+        />
+        {st.motivo === "outro" && (
+          <Entrada
+            aria-label="Descreva o motivo"
+            placeholder="Descreva o motivo"
+            maxLength={500}
+            value={st.detalhe}
+            onChange={(e) => setSt({ ...st, detalhe: e.target.value })}
+          />
+        )}
+      </fieldset>
+      {!mudou && (
+        <button
+          type="button"
+          onClick={() => setSt(estadoStatusInicial(colonia))}
+          className="text-sm text-muted-foreground hover:text-foreground hover:underline"
+        >
+          Cancelar correção
+        </button>
+      )}
+    </div>
   );
 }
