@@ -104,7 +104,11 @@ async function aplicar(op: OperacaoSync, userId: string): Promise<Omit<Resultado
     };
   }
   if (op.tipo === "colonia") {
-    await coloniasService.atualizar(op.entidadeId, userId, atualizarColoniaSchema.parse(op.dados));
+    // Mudança de status feita offline sem statusDesde: a data padrão é o
+    // instante da operação no cliente, não o da sincronização.
+    await coloniasService.atualizar(op.entidadeId, userId, atualizarColoniaSchema.parse(op.dados), {
+      statusDesdePadrao: new Date(op.criadoEm),
+    });
   }
   if (op.tipo === "producao") {
     await producoesService.atualizar(op.entidadeId, userId, atualizarProducaoSchema.parse(op.dados));

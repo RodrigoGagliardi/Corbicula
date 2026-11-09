@@ -98,8 +98,9 @@ app/backend/
 │   │   │   └── parametros.types.ts
 │   │   ├── avaliacoes/
 │   │   │   ├── avaliacoes.routes.ts   # /:coloniaId/avaliacoes (CRUD) + /avaliacoes (histórico geral)
-│   │   │   ├── avaliacoes.service.ts  # dispara enriquecerComClima após criar
+│   │   │   ├── avaliacoes.service.ts  # dispara enriquecerComClima após criar; motivos e procedência do clima
 │   │   │   ├── avaliacoes.repository.ts  # upsert de parâmetros (preserva fotos vinculadas)
+│   │   │   ├── avaliacoes.protocolo.ts   # protocolo da avaliação: conteúdo canônico, hash SHA-256, template de origem
 │   │   │   └── avaliacoes.types.ts
 │   │   ├── fotos/
 │   │   │   ├── fotos.routes.ts        # upload multipart (/fotos)
@@ -131,6 +132,7 @@ app/backend/
 │   │   ├── env.ts              # variáveis de ambiente (inclui UPLOADS_DIR)
 │   │   ├── errors.ts           # erros tipados (NOT_FOUND, CONFLICT, BAD_REQUEST)
 │   │   ├── json.ts             # parse tolerante de campos JSON-em-texto
+│   │   ├── vocabularios.ts     # vocabulários fechados (motivos de status/inspeção/ação, procedência do clima)
 │   │   └── middleware/
 │   │       └── authenticate.ts # verifica JWT e injeta userId no request
 │   ├── types/
@@ -141,7 +143,7 @@ app/backend/
 │   ├── setup/
 │   │   ├── test-env.mts        # URL do banco <nome>_test e pasta de uploads temporária
 │   │   └── global-setup.ts     # recria o banco de teste (migrate reset + seed) antes da suíte
-│   ├── unit/                   # score, CSV, clima (fetch mockado)
+│   ├── unit/                   # score, CSV, clima (fetch mockado), protocolo
 │   ├── integration/            # API via app.inject: auth, colonias, avaliacoes, fotos,
 │   │                           # producoes, exportacao, sync, users
 │   └── helpers.ts              # cliente autenticado, fábricas de dados, multipart
@@ -356,3 +358,5 @@ Notas:
 - **[2026-11-05 — PWA offline: base local e pull]** — Frontend: criada `src/services/offline/` (`tipos.ts`, `mesclar.ts`, `banco.ts`, `sincronizacao.ts` + testes) e `src/hooks/useCargaLocal.ts` (+ teste), chamado pelo `AppLayout`; `syncApi.alteracoes` em `services/api/endpoints.ts` (+ `endpoints.test.ts`). Dependências: `idb` (runtime) e `fake-indexeddb` (dev, só testes). Backend: criar, editar ou excluir um critério por espécie passa a atualizar o `updatedAt` do parâmetro na mesma transação (`parametros.repository.ts`), para o pull incremental trazer os critérios; teste em `tests/integration/sync.test.ts`.
 
 - **[2026-11-06 — PWA offline: leituras offline nas telas]** — Frontend: `services/offline/leituras.ts` (derivação pura das respostas REST) e `leituraLocal.ts` (`comFallbackLocal`, ponto único da decisão online/local), com testes; `hooks/useDados.ts` envolve as 9 leituras com cópia local e o `useEu` (sessão), sem mudar as chaves; `main.tsx` com `networkMode: "always"` e sem retry de erro de conexão sem rede; `ErroCarregamento` com texto de conexão e novos `AvisoSemConexao`/`NotaSemConexao` em `components/ui/Estados.tsx`, usados em parâmetros, perfil, meliponário, exportação, alertas, resumo de produção e fotos.
+
+- **[2026-11-06 — dados de desfecho e contexto (backend)]** — Migration `20261106230000_dados_de_desfecho` (tabelas `colonias_status_historico` e `protocolos`; colunas novas em `colonias` e `avaliacoes`; 14 tabelas). Criados `src/shared/vocabularios.ts`, `src/modules/avaliacoes/avaliacoes.protocolo.ts` e `tests/unit/protocolo.test.ts`. Exportação ganhou `/exportacao/historico-status` e `/exportacao/protocolos`.

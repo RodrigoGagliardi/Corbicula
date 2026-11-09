@@ -1,6 +1,10 @@
 import { prisma } from "../../config/database";
 import { enriquecerComClima } from "../../services/weather.service";
+import { erroRequisicao } from "../../shared/errors";
+import { parsearJson } from "../../shared/json";
+import type { FonteClima } from "../../shared/vocabularios";
 import { apagarArquivos, listarArquivosDe } from "../fotos/fotos.service";
+import { resolverProtocolo } from "./avaliacoes.protocolo";
 import { avaliacoesRepository } from "./avaliacoes.repository";
 import type { CriarAvaliacaoInput, AtualizarAvaliacaoInput, FiltrosAvaliacoes } from "./avaliacoes.types";
 
@@ -75,13 +79,59 @@ async function validarParametros(
   }
 }
 
-// Confirma que a colônia existe e pertence ao usuário.
-async function validarPropriedadeColonia(coloniaId: string, userId: string): Promise<void> {
+// Confirma que a colônia existe e pertence ao usuário; devolve a espécie
+// (critérios por espécie do protocolo).
+async function validarPropriedadeColonia(
+  coloniaId: string,
+  userId: string
+): Promise<{ especieId: string | null }> {
   const colonia = await prisma.colonia.findFirst({
     where: { id: coloniaId, userId },
-    select: { id: true },
+    select: { especieId: true },
   });
   if (!colonia) throw erroNaoEncontrado("Colônia não encontrada");
+  return colonia;
+}
+
+// ─── Contexto: motivos das ações e procedência do clima ───────────────────────
+
+// Cada chave de motivosAcoes precisa ser uma das ações tomadas. Mapa vazio é
+// gravado como nulo (nada registrado).
+function conferirMotivosAcoes(
+  motivos: Record<string, string> | null,
+  acoes: string[]
+): Record<string, string> | null {
+  if (!motivos) return null;
+  const fora = Object.keys(motivos).filter((acao) => !acoes.includes(acao));
+  if (fora.length > 0) {
+    throw erroRequisicao(
+      `motivosAcoes: as ações ${fora.map((a) => `"${a}"`).join(", ")} não estão em acoesTomadas.`
+    );
+  }
+  return Object.keys(motivos).length > 0 ? motivos : null;
+}
+
+const CAMPOS_CLIMA = ["temperatura", "umidade", "condicaoClimatica"] as const;
+type Clima = {
+  temperatura?: number | null | undefined;
+  umidade?: number | null | undefined;
+  condicaoClimatica?: string | null | undefined;
+};
+
+// Na criação: algum campo de clima informado = digitado. Sem clima, fica nulo
+// até o weather.service preencher (api_previsao / api_historico).
+function fonteClimaNaCriacao(data: Clima): FonteClima | null {
+  return CAMPOS_CLIMA.some((c) => data[c] !== undefined && data[c] !== null) ? "digitado" : null;
+}
+
+// Na edição: só muda quando o usuário altera algum campo de clima (reenviar o
+// mesmo valor não conta). Alterou e sobrou clima = digitado (um valor da API
+// editado vira digitado); alterou e apagou tudo = sem clima (nulo).
+function fonteClimaNaEdicao(data: Clima, atual: { [K in keyof Clima]-?: Exclude<Clima[K], undefined> }): FonteClima | null | undefined {
+  const alterou = CAMPOS_CLIMA.some((c) => data[c] !== undefined && data[c] !== atual[c]);
+  if (!alterou) return undefined;
+  const final = CAMPOS_CLIMA.map((c) => (data[c] !== undefined ? data[c] : atual[c]));
+  return final.every((v) => v === null) ? null : "digitado";
 }
 
 // ─── Mapper de saída ──────────────────────────────────────────────────────────
@@ -124,18 +174,22 @@ export const avaliacoesService = {
   },
 
   async criar(coloniaId: string, userId: string, data: CriarAvaliacaoInput) {
-    await validarPropriedadeColonia(coloniaId, userId);
-    await validarParametros(
-      data.parametros.map((p) => p.parametroId),
-      userId
-    );
+    const { especieId } = await validarPropriedadeColonia(coloniaId, userId);
+    const parametroIds = data.parametros.map((p) => p.parametroId);
+    await validarParametros(parametroIds, userId);
+    const motivosAcoes = conferirMotivosAcoes(data.motivosAcoes ?? null, data.acoesTomadas ?? []);
 
     if (data.id && (await avaliacoesRepository.existeId(data.id))) {
       throw erroConflito("Já existe um registro com este id.");
     }
 
     const { scoreGeral, statusGeral } = calcularScore(data.parametros);
-    const avaliacao = await avaliacoesRepository.criar(coloniaId, scoreGeral, statusGeral, data);
+    const protocoloId = await resolverProtocolo(userId, especieId, parametroIds);
+    const avaliacao = await avaliacoesRepository.criar(coloniaId, scoreGeral, statusGeral, data, {
+      protocoloId,
+      motivosAcoes,
+      climaFonte: fonteClimaNaCriacao(data),
+    });
 
     // Enriquecimento assíncrono — não bloqueia a resposta; falha silenciosamente.
     // Executado apenas quando o usuário não forneceu dados climáticos manuais.
@@ -151,7 +205,7 @@ export const avaliacoesService = {
   },
 
   async atualizar(id: string, coloniaId: string, userId: string, data: AtualizarAvaliacaoInput) {
-    await validarPropriedadeColonia(coloniaId, userId);
+    const { especieId } = await validarPropriedadeColonia(coloniaId, userId);
 
     const existente = await avaliacoesRepository.buscarPorId(id, coloniaId);
     if (!existente) throw erroNaoEncontrado();
@@ -162,20 +216,45 @@ export const avaliacoesService = {
       );
     }
 
+    // Motivos das ações: conferidos contra as ações finais. Se só as ações
+    // mudaram, os motivos de ações que saíram são descartados.
+    const acoesFinais =
+      data.acoesTomadas !== undefined
+        ? (data.acoesTomadas ?? [])
+        : parsearJson<string[]>(existente.acoesTomadas, []);
+    let motivosAcoes: Record<string, string> | null | undefined;
+    if (data.motivosAcoes !== undefined) {
+      motivosAcoes = conferirMotivosAcoes(data.motivosAcoes, acoesFinais);
+    } else if (data.acoesTomadas !== undefined && existente.motivosAcoes) {
+      const atuais = existente.motivosAcoes as Record<string, string>;
+      const mantidos = Object.fromEntries(Object.entries(atuais).filter(([acao]) => acoesFinais.includes(acao)));
+      if (Object.keys(mantidos).length !== Object.keys(atuais).length) {
+        motivosAcoes = Object.keys(mantidos).length > 0 ? mantidos : null;
+      }
+    }
+
     // Recalcula score apenas se os parâmetros forem substituídos.
     let scoreGeral = existente.scoreGeral;
     let statusGeral = existente.statusGeral;
+    let protocoloId: string | undefined;
 
     if (data.parametros) {
-      await validarParametros(
-        data.parametros.map((p) => p.parametroId),
-        userId,
-        existente.parametros.map((p) => p.parametroId)
-      );
+      const novos = data.parametros.map((p) => p.parametroId);
+      const atuais = existente.parametros.map((p) => p.parametroId);
+      await validarParametros(novos, userId, atuais);
       ({ scoreGeral, statusGeral } = calcularScore(data.parametros));
+      // O protocolo só é resolvido de novo quando o CONJUNTO avaliado muda
+      // (mudar só as classificações mantém o protocolo, inclusive o nulo de
+      // avaliações antigas).
+      const mesmoConjunto = novos.length === atuais.length && novos.every((p) => atuais.includes(p));
+      if (!mesmoConjunto) protocoloId = await resolverProtocolo(userId, especieId, novos);
     }
 
-    const avaliacao = await avaliacoesRepository.atualizar(id, scoreGeral, statusGeral, data);
+    const avaliacao = await avaliacoesRepository.atualizar(id, scoreGeral, statusGeral, data, {
+      protocoloId,
+      motivosAcoes,
+      climaFonte: fonteClimaNaEdicao(data, existente),
+    });
     return mapearSaida(avaliacao);
   },
 

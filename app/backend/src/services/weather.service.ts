@@ -1,4 +1,5 @@
 import { prisma } from "../config/database";
+import type { FonteClima } from "../shared/vocabularios";
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -7,6 +8,9 @@ export interface ClimaResultado {
   umidade: number;
   condicaoClimatica: "ensolarado" | "nublado" | "chuvoso";
 }
+
+// Procedência do clima (CAP-5): qual endpoint da Open-Meteo respondeu.
+export type FonteClimaApi = Extract<FonteClima, "api_previsao" | "api_historico">;
 
 interface OpenMeteoHourly {
   time: string[];
@@ -40,7 +44,7 @@ function mapearWMO(code: number): ClimaResultado["condicaoClimatica"] {
 // Chave: lat (2 casas) + lon (2 casas) + hora UTC. ~1 km de precisão.
 // TTL: 1 hora — suficiente para dados de previsão; dados de arquivo nunca mudam.
 
-const _cache = new Map<string, { resultado: ClimaResultado; expiraEm: number }>();
+const _cache = new Map<string, { resultado: ClimaComFonte; expiraEm: number }>();
 const CACHE_TTL_MS = 60 * 60 * 1000;
 
 function chaveCache(lat: number, lon: number, dataHora: Date): string {
@@ -48,7 +52,7 @@ function chaveCache(lat: number, lon: number, dataHora: Date): string {
   return `${lat.toFixed(2)}_${lon.toFixed(2)}_${hora}`;
 }
 
-function lerCache(chave: string): ClimaResultado | null {
+function lerCache(chave: string): ClimaComFonte | null {
   const entrada = _cache.get(chave);
   if (!entrada || entrada.expiraEm < Date.now()) {
     _cache.delete(chave);
@@ -57,7 +61,7 @@ function lerCache(chave: string): ClimaResultado | null {
   return entrada.resultado;
 }
 
-function escreverCache(chave: string, resultado: ClimaResultado): void {
+function escreverCache(chave: string, resultado: ClimaComFonte): void {
   _cache.set(chave, { resultado, expiraEm: Date.now() + CACHE_TTL_MS });
 }
 
@@ -139,29 +143,46 @@ async function buscarArquivo(lat: number, lon: number, dataHora: Date): Promise<
 
 // ─── API pública ──────────────────────────────────────────────────────────────
 
+export interface ClimaComFonte {
+  clima: ClimaResultado;
+  fonte: FonteClimaApi;
+}
+
 // Usa Forecast para datas até 5 dias atrás; Archive para datas mais antigas.
+// Devolve também o endpoint usado (procedência). O cache guarda os dois.
 // Retorna null em qualquer falha — nunca lança exceção.
-export async function buscarClima(
+export async function buscarClimaComFonte(
   lat: number,
   lon: number,
   dataHora: Date
-): Promise<ClimaResultado | null> {
+): Promise<ClimaComFonte | null> {
   const chave = chaveCache(lat, lon, dataHora);
   const cached = lerCache(chave);
   if (cached) return cached;
 
   try {
     const diffDias = (Date.now() - dataHora.getTime()) / (1000 * 60 * 60 * 24);
-    const resultado =
-      diffDias <= 5
+    const fonte: FonteClimaApi = diffDias <= 5 ? "api_previsao" : "api_historico";
+    const clima =
+      fonte === "api_previsao"
         ? await buscarPrevisao(lat, lon, dataHora)
         : await buscarArquivo(lat, lon, dataHora);
+    if (!clima) return null;
 
-    if (resultado) escreverCache(chave, resultado);
+    const resultado = { clima, fonte };
+    escreverCache(chave, resultado);
     return resultado;
   } catch {
     return null;
   }
+}
+
+export async function buscarClima(
+  lat: number,
+  lon: number,
+  dataHora: Date
+): Promise<ClimaResultado | null> {
+  return (await buscarClimaComFonte(lat, lon, dataHora))?.clima ?? null;
 }
 
 // ─── Enriquecimento pós-avaliação ─────────────────────────────────────────────
@@ -195,15 +216,19 @@ export async function enriquecerComClima(
 
     if (lat === null || lon === null) return;
 
-    const clima = await buscarClima(lat, lon, dataAvaliacao);
-    if (!clima) return;
+    const resultado = await buscarClimaComFonte(lat, lon, dataAvaliacao);
+    if (!resultado) return;
+    const { clima, fonte } = resultado;
 
-    await prisma.avaliacao.update({
-      where: { id: avaliacaoId },
+    // Só preenche se o clima continua vazio: se o usuário informou o clima
+    // enquanto a API respondia, o valor dele (digitado) prevalece.
+    await prisma.avaliacao.updateMany({
+      where: { id: avaliacaoId, temperatura: null, umidade: null, condicaoClimatica: null },
       data: {
         temperatura: clima.temperatura,
         umidade: clima.umidade,
         condicaoClimatica: clima.condicaoClimatica,
+        climaFonte: fonte,
       },
     });
   } catch {

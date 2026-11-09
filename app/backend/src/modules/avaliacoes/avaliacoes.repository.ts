@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import type { CriarAvaliacaoInput, AtualizarAvaliacaoInput, FiltrosAvaliacoes } from "./avaliacoes.types";
 
@@ -32,6 +32,17 @@ const INCLUDE_COMPLETO = {
 } as const;
 
 // ─── Helpers de serialização ──────────────────────────────────────────────────
+
+// Campos calculados pelo service (protocolo, procedência do clima, motivos das
+// ações já conferidos contra acoesTomadas). No update, undefined = não alterar.
+export interface ContextoAvaliacao {
+  protocoloId?: string | null | undefined;
+  climaFonte?: string | null | undefined;
+  motivosAcoes?: Record<string, string> | null | undefined;
+}
+
+// Json opcional: null do JS vira NULL no banco (Prisma.DbNull).
+const jsonOuNulo = (valor: Record<string, string> | null) => valor ?? Prisma.DbNull;
 
 function serializarParametros(
   parametros: CriarAvaliacaoInput["parametros"]
@@ -90,7 +101,8 @@ export const avaliacoesRepository = {
     coloniaId: string,
     scoreGeral: number,
     statusGeral: string,
-    data: CriarAvaliacaoInput
+    data: CriarAvaliacaoInput,
+    contexto: ContextoAvaliacao = {}
   ) =>
     prisma.avaliacao.create({
       data: {
@@ -103,6 +115,11 @@ export const avaliacoesRepository = {
         condicaoClimatica: data.condicaoClimatica ?? null,
         observacoesGerais: data.observacoesGerais ?? null,
         acoesTomadas: data.acoesTomadas ? JSON.stringify(data.acoesTomadas) : null,
+        motivoInspecao: data.motivoInspecao ?? null,
+        motivoInspecaoDetalhe: data.motivoInspecaoDetalhe ?? null,
+        motivosAcoes: jsonOuNulo(contexto.motivosAcoes ?? null),
+        climaFonte: contexto.climaFonte ?? null,
+        protocoloId: contexto.protocoloId ?? null,
         scoreGeral,
         statusGeral,
         parametros: { create: serializarParametros(data.parametros) },
@@ -118,7 +135,8 @@ export const avaliacoesRepository = {
     id: string,
     scoreGeral: number,
     statusGeral: string,
-    data: AtualizarAvaliacaoInput
+    data: AtualizarAvaliacaoInput,
+    contexto: ContextoAvaliacao = {}
   ) => {
     const camposBase = {
       ...(data.dataAvaliacao !== undefined && { dataAvaliacao: new Date(data.dataAvaliacao) }),
@@ -130,6 +148,11 @@ export const avaliacoesRepository = {
       ...(data.acoesTomadas !== undefined && {
         acoesTomadas: data.acoesTomadas ? JSON.stringify(data.acoesTomadas) : null,
       }),
+      ...(data.motivoInspecao !== undefined && { motivoInspecao: data.motivoInspecao }),
+      ...(data.motivoInspecaoDetalhe !== undefined && { motivoInspecaoDetalhe: data.motivoInspecaoDetalhe }),
+      ...(contexto.motivosAcoes !== undefined && { motivosAcoes: jsonOuNulo(contexto.motivosAcoes) }),
+      ...(contexto.climaFonte !== undefined && { climaFonte: contexto.climaFonte }),
+      ...(contexto.protocoloId !== undefined && { protocoloId: contexto.protocoloId }),
     };
 
     if (data.parametros) {

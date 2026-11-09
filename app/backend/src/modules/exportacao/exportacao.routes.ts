@@ -5,6 +5,7 @@ import { gerarCsv, type LinhaCsv } from "./csv";
 import {
   COLUNAS_AVALIACOES,
   COLUNAS_COLONIAS,
+  COLUNAS_HISTORICO_STATUS,
   COLUNAS_PRODUCOES,
   exportacaoService,
   metadados,
@@ -12,6 +13,7 @@ import {
 import {
   exportarAvaliacoesSchema,
   exportarColoniasSchema,
+  exportarHistoricoStatusSchema,
   exportarProducoesSchema,
   type Formato,
 } from "./exportacao.types";
@@ -62,7 +64,7 @@ export const exportacaoRoutes: FastifyPluginAsync = async (app) => {
     },
   }, async (request, reply) => {
     const { formato, ...filtros } = exportarAvaliacoesSchema.parse(request.query);
-    const linhas = await exportacaoService.linhasAvaliacoes(request.userId, filtros);
+    const linhas = await exportacaoService.linhasAvaliacoes(request.userId, filtros, formato);
     return enviar(reply, "avaliacoes", formato, COLUNAS_AVALIACOES, linhas, filtros);
   });
 
@@ -78,13 +80,43 @@ export const exportacaoRoutes: FastifyPluginAsync = async (app) => {
     return enviar(reply, "producoes", formato, COLUNAS_PRODUCOES, linhas, filtros);
   });
 
+  app.get("/historico-status", {
+    schema: {
+      tags: ["exportacao"],
+      summary: "Exporta o histórico de mudanças de status das colônias (CSV ou JSON)",
+      description:
+        "Uma linha por mudança de status (data percebida, motivo e classe evento/censura). " +
+        "Query: formato=csv|json, coloniaId, desde, ate (pela data percebida).",
+    },
+  }, async (request, reply) => {
+    const { formato, ...filtros } = exportarHistoricoStatusSchema.parse(request.query);
+    const linhas = await exportacaoService.linhasHistoricoStatus(request.userId, filtros);
+    return enviar(reply, "historico-status", formato, COLUNAS_HISTORICO_STATUS, linhas, filtros);
+  });
+
+  app.get("/protocolos", {
+    schema: {
+      tags: ["exportacao"],
+      summary: "Exporta os protocolos de avaliação (JSON)",
+      description:
+        "Parâmetros e critérios aplicados em cada protocolo, com hash, template de origem e " +
+        "número de avaliações. Só JSON (o conteúdo é uma lista aninhada).",
+    },
+  }, async (request, reply) => {
+    const dados = await exportacaoService.protocolos(request.userId);
+    reply.header("Content-Disposition", `attachment; filename="corbicula_protocolos_${hoje()}.json"`);
+    return reply
+      .type("application/json; charset=utf-8")
+      .send({ metadados: metadados("protocolos", {}, dados.length), dados });
+  });
+
   app.get("/backup", {
     schema: {
       tags: ["exportacao"],
       summary: "Backup completo em JSON estruturado",
       description:
         "Todos os dados do usuário (meliponário, parâmetros, colônias, avaliações, produções, " +
-        "metadados de fotos). Os arquivos de imagem não são incluídos.",
+        "metadados de fotos, histórico de status e protocolos). Os arquivos de imagem não são incluídos.",
     },
   }, async (request, reply) => {
     const backup = await exportacaoService.backupCompleto(request.userId);

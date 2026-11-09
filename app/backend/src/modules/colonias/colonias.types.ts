@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CODIGOS_MOTIVO_STATUS } from "../../shared/vocabularios";
 
 export const ORIGENS = ["captura", "compra", "divisao", "resgate"] as const;
 export const TIPOS_CAIXA = ["INPA", "PNN", "Schenck", "tronco", "outro"] as const;
@@ -59,6 +60,16 @@ export const atualizarColoniaSchema = z.object({
   coloniaDoadoraCampeirasId: z.uuid().nullable().optional(),
   status: z.enum(STATUS_COLONIA).optional(),
   frequenciaInspecaoDias: FREQUENCIA_INSPECAO.nullable().optional(),
+  // Detalhes da mudança de status (todos opcionais). Com `status` novo, valem
+  // para a nova entrada do histórico (statusDesde padrão = agora); sem mudança
+  // de status, corrigem a última entrada. Compatibilidade motivo × status é
+  // conferida no service (depende do status atual quando `status` não vem).
+  statusDesde: z.string().datetime({ message: "Data inválida (use formato ISO 8601)" }).optional(),
+  motivoStatus: z
+    .enum(CODIGOS_MOTIVO_STATUS, { message: "Motivo de status desconhecido" })
+    .nullable()
+    .optional(),
+  motivoStatusDetalhe: z.string().max(500).nullable().optional(),
 });
 
 export const filtrosColoniaSchema = z.object({
