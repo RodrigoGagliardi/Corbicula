@@ -8,7 +8,7 @@ import { Botao, LinkBotao } from "../../components/ui/Botao";
 import { CabecalhoPagina, Cartao, Selo } from "../../components/ui/Cartao";
 import { Carregando, ErroCarregamento, MensagemErro } from "../../components/ui/Estados";
 import { chaves, useAvaliacao, useAvaliacoes, useColonia } from "../../hooks/useDados";
-import { avaliacoesApi } from "../../services/api/endpoints";
+import { escritas } from "../../services/offline/escrita";
 import type { Classificacao } from "../../types/api";
 import { formatarData, formatarDataHora, ROTULO_CLIMA } from "../../utils/format";
 import { COR_STATUS, fimDaEdicao, podeEditar, ROTULO_CLASSIFICACAO, ROTULO_STATUS } from "../../utils/score";
@@ -43,7 +43,7 @@ export function DetalheAvaliacao() {
   }, [estado?.nova, semClima, tentativasClima, refetch]);
 
   const excluir = useMutation({
-    mutationFn: () => avaliacoesApi.excluir(coloniaId, id),
+    mutationFn: () => escritas.excluirAvaliacao(coloniaId, id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: chaves.colonias });
       navegar(`/app/colonias/${coloniaId}`, { replace: true });

@@ -1,7 +1,7 @@
 import type { FiltrosAvaliacoes, FiltrosProducao } from "../../types/api";
 import { useAuth } from "../../store/auth";
 import { ErroApi } from "../api/client";
-import { abrirBanco, indexedDbDisponivel, lerMeta, type BancoOffline } from "./banco";
+import { abrirBanco, contarFila, indexedDbDisponivel, lerMeta, type BancoOffline } from "./banco";
 import {
   buscarAvaliacao,
   buscarColonia,
@@ -15,7 +15,9 @@ import {
 } from "./leituras";
 
 // Ponto único da decisão online/local das leituras.
-//  - Online, a fonte é a API; o banco local nem é aberto.
+//  - Com operações na fila do usuário, a fonte é a cópia local mesmo online: ela
+//    já tem as mudanças que ainda não chegaram ao servidor.
+//  - Online e com a fila vazia, a fonte é a API.
 //  - Sem rede (`navigator.onLine` falso) ou com falha de rede na chamada
 //    (`ErroApi` status 0), lê o banco local do usuário da sessão.
 //  - Sem usuário, sem IndexedDB ou com o banco nunca carregado (`meta.desde`
@@ -63,7 +65,19 @@ async function lerBancoLocal<T>(local: (db: BancoOffline) => Promise<T>, erroCon
   }
 }
 
-export function comFallbackLocal<T>(remoto: () => Promise<T>, local: (db: BancoOffline) => Promise<T>): Promise<T> {
+// Há operações na fila do usuário da sessão? Falha do banco conta como não.
+async function filaComOperacoes(): Promise<boolean> {
+  const usuarioId = useAuth.getState().usuario?.id;
+  if (!usuarioId || !indexedDbDisponivel()) return false;
+  try {
+    return (await contarFila(await abrirBanco(usuarioId))) > 0;
+  } catch {
+    return false;
+  }
+}
+
+export async function comFallbackLocal<T>(remoto: () => Promise<T>, local: (db: BancoOffline) => Promise<T>): Promise<T> {
+  if (await filaComOperacoes()) return lerBancoLocal(local, new ErroApi(0, MENSAGEM_SEM_CONEXAO));
   return comFallback(remoto, (erro) => lerBancoLocal(local, erro));
 }
 

@@ -9,7 +9,8 @@ import { AreaTexto, Campo, CLASSE_ENTRADA, Entrada } from "../../components/ui/C
 import { CabecalhoPagina, Cartao } from "../../components/ui/Cartao";
 import { Carregando, ErroCarregamento, EstadoVazio, MensagemErro } from "../../components/ui/Estados";
 import { chaves, useColonias, useParametros } from "../../hooks/useDados";
-import { avaliacoesApi, fotosApi } from "../../services/api/endpoints";
+import { fotosApi } from "../../services/api/endpoints";
+import { escritas } from "../../services/offline/escrita";
 import type { AvaliacaoDetalhada, Classificacao, Colonia, Parametro } from "../../types/api";
 import { correspondeBusca } from "../../utils/colonias";
 import { formatarData, paraInputDataHora, tempoRelativo } from "../../utils/format";
@@ -213,14 +214,17 @@ export function FormularioAvaliacao({
       if (avaliacao) {
         // Edição: o servidor recalcula o score com o conjunto enviado. Fotos são
         // gerenciadas no detalhe da avaliação.
-        return { avaliacao: await avaliacoesApi.atualizar(colonia.id, avaliacao.id, dados), fotoFalhou: false };
+        // Offline, a edição fica na fila e aparece na hora na cópia local.
+        return { avaliacao: await escritas.atualizarAvaliacao(colonia.id, avaliacao, dados), fotoFalhou: false };
       }
-      const criada = await avaliacoesApi.criar(colonia.id, dados);
+      const criada = await escritas.criarAvaliacao(colonia.id, dados);
 
       // A foto é enviada depois e nunca desfaz a avaliação: se falhar, a
-      // avaliação continua salva e o aviso aparece no detalhe.
-      let fotoFalhou = false;
-      if (foto) {
+      // avaliação continua salva e o aviso aparece no detalhe. Avaliação salva
+      // offline: a foto ainda não é guardada (fotos offline vêm depois) e o
+      // mesmo aviso aparece.
+      let fotoFalhou = Boolean(foto) && criada.offline;
+      if (foto && !criada.offline) {
         try {
           await fotosApi.enviar(await comprimirImagem(foto), { avaliacaoId: criada.id });
         } catch {

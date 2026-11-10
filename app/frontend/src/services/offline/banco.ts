@@ -1,5 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import type { Especie } from "../../types/api";
+import type { MudancasFila } from "./fila";
 import { mesclar } from "./mesclar";
 import {
   META_VAZIA,
@@ -7,7 +8,9 @@ import {
   type AvaliacaoServidor,
   type ColoniaServidor,
   type IdsPorTipo,
+  type LinhaLocal,
   type MetaOffline,
+  type OperacaoFila,
   type ParametroServidor,
   type ProducaoServidor,
   type RespostaAlteracoes,
@@ -24,11 +27,13 @@ interface EsquemaOffline extends DBSchema {
   parametros: { key: string; value: ParametroServidor };
   especies: { key: string; value: Especie };
   meta: { key: string; value: MetaOffline };
+  // Fila de operações offline (versão 2), na ordem em que foram feitas.
+  fila: { key: string; value: OperacaoFila; indexes: { ordem: number } };
 }
 
 export type BancoOffline = IDBPDatabase<EsquemaOffline>;
 
-const VERSAO = 1;
+const VERSAO = 2;
 const CHAVE_META = "meta";
 
 export const nomeBanco = (usuarioId: string) => `corbicula-offline-${usuarioId}`;
@@ -45,13 +50,17 @@ export function abrirBanco(usuarioId: string): Promise<BancoOffline> {
 
   const esquecer = () => conexoes.delete(usuarioId);
   const conexao = openDB<EsquemaOffline>(nomeBanco(usuarioId), VERSAO, {
-    upgrade(db) {
-      db.createObjectStore("colonias", { keyPath: "id" });
-      db.createObjectStore("avaliacoes", { keyPath: "id" }).createIndex("coloniaId", "coloniaId");
-      db.createObjectStore("producoes", { keyPath: "id" }).createIndex("coloniaId", "coloniaId");
-      db.createObjectStore("parametros", { keyPath: "id" });
-      db.createObjectStore("especies", { keyPath: "id" });
-      db.createObjectStore("meta");
+    // Cada versão só acrescenta: um banco da versão 1 mantém os dados e ganha a fila.
+    upgrade(db, versaoAntiga) {
+      if (versaoAntiga < 1) {
+        db.createObjectStore("colonias", { keyPath: "id" });
+        db.createObjectStore("avaliacoes", { keyPath: "id" }).createIndex("coloniaId", "coloniaId");
+        db.createObjectStore("producoes", { keyPath: "id" }).createIndex("coloniaId", "coloniaId");
+        db.createObjectStore("parametros", { keyPath: "id" });
+        db.createObjectStore("especies", { keyPath: "id" });
+        db.createObjectStore("meta");
+      }
+      if (versaoAntiga < 2) db.createObjectStore("fila", { keyPath: "id" }).createIndex("ordem", "ordem");
     },
     // Outra aba quer uma versão mais nova do banco: fecha esta conexão para não travá-la.
     blocking() {
@@ -78,8 +87,11 @@ export async function atualizarMeta(db: BancoOffline, parcial: Partial<MetaOffli
 
 export const contarEspecies = (db: BancoOffline) => db.count("especies");
 
-// Aplica uma resposta do pull numa transação só: lê os ids locais, monta o plano
-// (`mesclar`) e grava dados, exclusões, espécies (quando vierem) e o novo `desde`.
+// Aplica uma resposta do pull numa transação só: lê os ids locais e os da fila,
+// monta o plano (`mesclar`) e grava dados, exclusões, espécies (quando vierem) e
+// o novo `desde`. As entidades da fila são lidas dentro da transação: uma escrita
+// offline feita durante o pull nunca é sobrescrita por ele.
+// Devolve quantos registros foram gravados ou removidos.
 // Se qualquer escrita falhar, a transação aborta e nada muda.
 // Dentro da transação não há `await` fora do IndexedDB (senão ela fecharia sozinha).
 export async function aplicarPull(
@@ -87,19 +99,23 @@ export async function aplicarPull(
   resposta: RespostaAlteracoes,
   pendentes: ReadonlySet<string>,
   especies: Especie[] | null
-): Promise<void> {
-  const tx = db.transaction([...TIPOS_PULL, "especies", "meta"], "readwrite");
+): Promise<number> {
+  const tx = db.transaction([...TIPOS_PULL, "especies", "meta", "fila"], "readwrite");
   const escritas: Promise<unknown>[] = [];
   try {
-    const [colonias, avaliacoes, producoes, parametros, metaAtual] = await Promise.all([
+    const [colonias, avaliacoes, producoes, parametros, metaAtual, fila] = await Promise.all([
       tx.objectStore("colonias").getAllKeys(),
       tx.objectStore("avaliacoes").getAllKeys(),
       tx.objectStore("producoes").getAllKeys(),
       tx.objectStore("parametros").getAllKeys(),
       tx.objectStore("meta").get(CHAVE_META),
+      tx.objectStore("fila").getAll(),
     ]);
     const idsLocais: IdsPorTipo = { colonias, avaliacoes, producoes, parametros };
-    const plano = mesclar(resposta, idsLocais, pendentes);
+    const todosPendentes = new Set([...pendentes, ...fila.map((op) => op.entidadeId)]);
+    const plano = mesclar(resposta, idsLocais, todosPendentes);
+    let alterados = 0;
+    for (const tipo of TIPOS_PULL) alterados += plano.remover[tipo].length + plano.gravar[tipo].length;
 
     for (const tipo of TIPOS_PULL) {
       const store = tx.objectStore(tipo);
@@ -121,6 +137,7 @@ export async function aplicarPull(
     escritas.push(tx.objectStore("meta").put(meta, CHAVE_META));
 
     await Promise.all([...escritas, tx.done]);
+    return alterados;
   } catch (erro) {
     // Garante o rollback mesmo se o erro veio de fora de uma requisição do IndexedDB.
     try {
@@ -132,4 +149,59 @@ export async function aplicarPull(
     for (const p of [...escritas, tx.done]) p.catch(() => undefined);
     throw erro;
   }
+}
+
+// ─── Fila de operações ────────────────────────────────────────────────────────
+
+export const lerFila = (db: BancoOffline): Promise<OperacaoFila[]> => db.getAllFromIndex("fila", "ordem");
+
+export const contarFila = (db: BancoOffline) => db.count("fila");
+
+// Mudança na cópia local que acompanha uma operação.
+export interface MudancaLocal {
+  store: "colonias" | "avaliacoes" | "producoes";
+  gravar?: LinhaLocal;
+  remover?: string[];
+}
+
+// Grava a operação no fim da fila e aplica a mudança na cópia local, numa
+// transação só: ou as duas acontecem, ou nenhuma.
+export async function enfileirar(
+  db: BancoOffline,
+  operacao: Omit<OperacaoFila, "ordem">,
+  mudancas: readonly MudancaLocal[]
+): Promise<void> {
+  const tx = db.transaction(["fila", "colonias", "avaliacoes", "producoes"], "readwrite");
+  const escritas: Promise<unknown>[] = [];
+  try {
+    const ultima = await tx.objectStore("fila").index("ordem").openCursor(null, "prev");
+    const ordem = (ultima?.value.ordem ?? 0) + 1;
+    escritas.push(tx.objectStore("fila").add({ ...operacao, ordem }));
+    for (const m of mudancas) {
+      const store = tx.objectStore(m.store);
+      for (const id of m.remover ?? []) escritas.push(store.delete(id));
+      // O tipo da linha corresponde ao store (garantido por quem monta a mudança).
+      if (m.gravar) escritas.push(store.put(m.gravar as never));
+    }
+    await Promise.all([...escritas, tx.done]);
+  } catch (erro) {
+    try {
+      tx.abort();
+    } catch {
+      // Já abortada.
+    }
+    for (const p of [...escritas, tx.done]) p.catch(() => undefined);
+    throw erro;
+  }
+}
+
+// Resultado de um envio: tira da fila o que o servidor confirmou e grava o
+// novo estado das operações paradas.
+export async function atualizarFila(db: BancoOffline, mudancas: MudancasFila): Promise<void> {
+  const tx = db.transaction("fila", "readwrite");
+  await Promise.all([
+    ...mudancas.remover.map((id) => tx.store.delete(id)),
+    ...mudancas.atualizar.map((op) => tx.store.put(op)),
+    tx.done,
+  ]);
 }

@@ -25,8 +25,8 @@ import type {
   TemplateParametros,
   Usuario,
 } from "../../types/api";
-import type { RespostaAlteracoes } from "../offline/tipos";
-import { api, baixarArquivo } from "./client";
+import type { OperacaoSync, RespostaAlteracoes, RespostaSync } from "../offline/tipos";
+import { api, baixarArquivo, TIMEOUT_LONGO_MS } from "./client";
 
 // Query string só com os filtros preenchidos.
 const consulta = (filtros: object) => {
@@ -109,7 +109,7 @@ export const fotosApi = {
     for (const [k, v] of Object.entries(vinculo)) form.append(k, v);
     if (legenda) form.append("legenda", legenda);
     form.append("arquivo", arquivo, "foto.jpg");
-    return api.post<Foto>("/fotos", form);
+    return api.post<Foto>("/fotos", form, { timeoutMs: TIMEOUT_LONGO_MS });
   },
 };
 
@@ -124,7 +124,10 @@ export const producoesApi = {
 
 export const syncApi = {
   // Pull incremental: sem `desde`, carga completa. Use `servidorEm` da resposta como próximo `desde`.
-  alteracoes: (desde?: string) => api.get<RespostaAlteracoes>(`/sync/alteracoes${consulta({ desde })}`),
+  alteracoes: (desde?: string) =>
+    api.get<RespostaAlteracoes>(`/sync/alteracoes${consulta({ desde })}`, { timeoutMs: TIMEOUT_LONGO_MS }),
+  // Push da fila: até 500 operações; cada uma volta com aplicado/duplicado/conflito/erro.
+  enviar: (operacoes: OperacaoSync[]) => api.post<RespostaSync>("/sync", { operacoes }, { timeoutMs: TIMEOUT_LONGO_MS }),
 };
 
 export const exportacaoApi = {

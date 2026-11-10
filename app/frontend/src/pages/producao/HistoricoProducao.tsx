@@ -6,7 +6,7 @@ import { Selecao } from "../../components/ui/Campo";
 import { CabecalhoPagina, Cartao, Selo } from "../../components/ui/Cartao";
 import { Carregando, ErroCarregamento, EstadoVazio, MensagemErro, NotaSemConexao } from "../../components/ui/Estados";
 import { chaves, useColonias, useProducoes, useResumoProducao } from "../../hooks/useDados";
-import { producoesApi } from "../../services/api/endpoints";
+import { escritas } from "../../services/offline/escrita";
 import { ehErroDeConexao } from "../../services/offline/leituraLocal";
 import type { FiltrosProducao, GrupoProducao, Producao, TipoProduto } from "../../types/api";
 import { formatarData } from "../../utils/format";
@@ -168,7 +168,7 @@ export function HistoricoProducao() {
 function ItemColheita({ producao: p }: { producao: Producao }) {
   const queryClient = useQueryClient();
   const excluir = useMutation({
-    mutationFn: () => producoesApi.excluir(p.id),
+    mutationFn: () => escritas.excluirProducao(p),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: chaves.producoes });
       queryClient.invalidateQueries({ queryKey: chaves.colonias });

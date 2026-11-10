@@ -282,7 +282,9 @@ export interface ResumoProducao {
 
 // ─── Payloads ─────────────────────────────────────────────────────────────────
 
+// `id` (create): UUID gerado no cliente, o mesmo da operação offline (services/offline/escrita.ts).
 export interface ColoniaInput {
+  id?: string;
   dataEntrada: string;
   origem: Origem;
   tipoCaixa: TipoCaixa;
@@ -303,6 +305,7 @@ export interface ColoniaInput {
 }
 
 export interface AvaliacaoInput {
+  id?: string;
   dataAvaliacao: string;
   parametros: { parametroId: string; classificacao: Classificacao; observacoes?: string | null }[];
   observacoesGerais?: string | null;
@@ -323,6 +326,7 @@ export interface ParametroInput {
 }
 
 export interface ProducaoInput {
+  id?: string;
   coloniaId: string;
   dataColheita: string;
   tipoProduto: TipoProduto;

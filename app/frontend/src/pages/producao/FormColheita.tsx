@@ -8,7 +8,8 @@ import { AreaTexto, Campo, Entrada, Selecao } from "../../components/ui/Campo";
 import { CabecalhoPagina, Cartao } from "../../components/ui/Cartao";
 import { Carregando, ErroCarregamento, MensagemErro } from "../../components/ui/Estados";
 import { chaves, useColonias, useProducao } from "../../hooks/useDados";
-import { fotosApi, producoesApi } from "../../services/api/endpoints";
+import { fotosApi } from "../../services/api/endpoints";
+import { escritas } from "../../services/offline/escrita";
 import type { Producao, ProducaoInput, TipoProduto, Unidade } from "../../types/api";
 import { paraInputData } from "../../utils/format";
 import { comprimirImagem } from "../../utils/imagem";
@@ -109,12 +110,13 @@ function Formulario({ producao }: { producao?: Producao | undefined }) {
       const dados = paraPayload(estado);
       if (producao) {
         const { coloniaId: _colonia, ...resto } = dados;
-        return { salva: await producoesApi.atualizar(producao.id, resto), fotoFalhou: false };
+        return { salva: await escritas.atualizarProducao(producao, resto), fotoFalhou: false };
       }
-      const salva = await producoesApi.criar(dados);
+      const salva = await escritas.criarProducao(dados);
       // A foto sobe depois e nunca desfaz a colheita (foto é opcional — CLAUDE.md §8).
-      let fotoFalhou = false;
-      if (foto) {
+      // Colheita salva offline: a foto ainda não é guardada (fotos offline vêm depois).
+      let fotoFalhou = Boolean(foto) && salva.offline;
+      if (foto && !salva.offline) {
         try {
           await fotosApi.enviar(await comprimirImagem(foto), { producaoId: salva.id });
         } catch {

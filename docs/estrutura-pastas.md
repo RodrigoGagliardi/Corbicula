@@ -214,14 +214,18 @@ app/frontend/
 │   │   │   ├── endpoints.ts   # funções por recurso (colônias, avaliações, parâmetros, fotos, sync...) (+ .test.ts)
 │   │   │   └── opcoesConsulta.ts  # opções padrão do QueryClient: networkMode "always", refetch ao reconectar, retry (+ .test.ts)
 │   │   └── offline/           # dados locais do PWA (IndexedDB via idb), um banco por usuário
-│   │       ├── tipos.ts       # linhas do GET /sync/alteracoes e registro meta (desde, ultimoPull, armazenamentoPersistente)
+│   │       ├── tipos.ts       # linhas do GET /sync/alteracoes, registro meta e operações da fila (contrato do POST /sync)
 │   │       ├── mesclar.ts     # regra pura do pull: grava por id, remove o que saiu de idsAtuais, protege pendências (+ .test.ts)
-│   │       ├── banco.ts       # banco corbicula-offline-<usuarioId> e aplicação do pull numa transação (+ .test.ts com fake-indexeddb)
-│   │       ├── sincronizacao.ts  # puxarAlteracoes (deduplicado, desde com margem) e pedirArmazenamentoPersistente (+ .test.ts)
+│   │       ├── banco.ts       # banco corbicula-offline-<usuarioId> (versão 2: store fila), pull e enfileirar numa transação (+ .test.ts com fake-indexeddb)
+│   │       ├── fila.ts        # regra pura da fila: baseUpdatedAt, lote ordenado ≤ 500 com bloqueio, resultados do /sync (+ .test.ts)
+│   │       ├── linhaLocal.ts  # regra pura: aplica create/update/delete à cópia local (código provisório, prévia do score) (+ .test.ts)
+│   │       ├── escrita.ts     # escritas de colônia/avaliação/colheita: REST online, fila offline ou com pendência relacionada (+ .test.ts)
+│   │       ├── sincronizacao.ts  # sincronizar (envio da fila + pull, nova tentativa com espera crescente), puxarAlteracoes e pedirArmazenamentoPersistente (+ .test.ts, sincronizacaoCiclo.test.ts)
 │   │       ├── leituras.ts    # regra pura: monta cada resposta REST (colônias, avaliações, histórico, produções, parâmetros, espécies) a partir das linhas locais (+ .test.ts)
-│   │       └── leituraLocal.ts   # comFallbackLocal: sem rede ou com ErroApi(0), lê o banco local do usuário da sessão (+ .test.ts)
+│   │       └── leituraLocal.ts   # comFallbackLocal: com fila não vazia, sem rede ou com ErroApi(0), lê o banco local do usuário da sessão (+ .test.ts)
 │   ├── store/
 │   │   ├── auth.ts            # sessão (token + usuário) em Zustand persistido
+│   │   ├── sincronizacao.ts   # estado observável da sincronização (sincronizando, operações na fila)
 │   │   └── preferencias.ts    # tema (claro/escuro/sistema), sidebar recolhida e dias para "inspeção atrasada"
 │   ├── types/
 │   │   └── api.ts             # tipos das respostas da API
@@ -254,7 +258,7 @@ Notas:
 - `VITE_API_URL` é a URL da API vista pelo **navegador** (padrão `http://localhost:3000`), não pela rede Docker.
 - Rotas públicas ficam na raiz (`/` é a landing page) dentro de `LayoutPublico`; as privadas ficam sob `/app/*` dentro de `AppLayout`. Endereços antigos sem `/app` redirecionam.
 - Telas planejadas e ainda não implementadas têm rota e mostram `EmConstrucao` com o conteúdo de `telasPlanejadas.ts`. A situação de cada tela está em `docs/telas.md`.
-- `services/offline/` tem a base local, o pull incremental e as leituras offline: online as telas leem da API; sem conexão, as queries de `hooks/useDados.ts` com cópia local (colônias, avaliações, histórico, produções, parâmetros, espécies) leem o banco local no mesmo formato da rota REST, e o perfil vem da sessão. Alertas, resumo/relatório de produção, templates e fotos só existem no servidor e mostram aviso de conexão. Ainda não existem: a fila de envio pelo `/sync`, a tela de sincronização, as análises e o CI do frontend. Testes ao lado do código: `utils/{mapa,conjuntoParametros,calendario,vocabularios}.test.ts`, `components/features/SeletorMotivo.test.tsx`, `pages/avaliacoes/NovaAvaliacao.test.tsx`, `pages/colonias/FormColonia.test.tsx`, `services/offline/*.test.ts`, `services/api/endpoints.test.ts` e `hooks/useCargaLocal.test.ts`.
+- `services/offline/` tem a base local, o pull incremental e as leituras offline: online as telas leem da API; sem conexão, as queries de `hooks/useDados.ts` com cópia local (colônias, avaliações, histórico, produções, parâmetros, espécies) leem o banco local no mesmo formato da rota REST, e o perfil vem da sessão. Alertas, resumo/relatório de produção, templates e fotos só existem no servidor e mostram aviso de conexão. Criar, editar e excluir colônias, avaliações e colheitas passam por `services/offline/escrita.ts`: online vão pela API REST; offline (ou com falha de rede, ou com pendência relacionada) viram operações na fila do IndexedDB, aplicadas na hora à cópia local e enviadas pelo `POST /sync` ao reconectar, ao abrir o app, ao voltar para ele, logo após a escrita e pelo indicador Online do layout. Ainda não existem: fotos offline, a resolução de conflitos, a tela de sincronização, as análises e o CI do frontend. Testes ao lado do código: `utils/{mapa,conjuntoParametros,calendario,vocabularios}.test.ts`, `components/features/SeletorMotivo.test.tsx`, `pages/avaliacoes/NovaAvaliacao.test.tsx`, `pages/colonias/FormColonia.test.tsx`, `services/offline/*.test.ts`, `services/api/endpoints.test.ts` e `hooks/useCargaLocal.test.ts`.
 - `watch.usePolling` no Vite é necessário para o hot reload funcionar com bind mount do Windows dentro do Docker.
 
 ---
@@ -363,3 +367,5 @@ Notas:
 - **[2026-11-06 — dados de desfecho e contexto (backend)]** — Migration `20261106230000_dados_de_desfecho` (tabelas `colonias_status_historico` e `protocolos`; colunas novas em `colonias` e `avaliacoes`; 14 tabelas). Criados `src/shared/vocabularios.ts`, `src/modules/avaliacoes/avaliacoes.protocolo.ts` e `tests/unit/protocolo.test.ts`. Exportação ganhou `/exportacao/historico-status` e `/exportacao/protocolos`.
 
 - **[2026-11-09 — dados de desfecho e contexto (frontend)]** — Criados `src/utils/vocabularios.ts` (vocabulários e payloads, + teste) e `src/components/features/SeletorMotivo.tsx` (chips de escolha única opcional, + teste); testes de render `pages/avaliacoes/NovaAvaliacao.test.tsx` e `pages/colonias/FormColonia.test.tsx`. Campos novos em `types/api.ts`; formulário e detalhe da colônia, nova/editar avaliação e detalhe da avaliação mostram e coletam data/motivo do status, histórico de status, motivos da inspeção e das ações e procedência do clima.
+
+- **[2026-11-09 — PWA offline: fila de operações e envio pelo /sync]** — Frontend: `services/offline/fila.ts`, `linhaLocal.ts`, `escrita.ts` (+ testes) e `sincronizacaoCiclo.test.ts`; `store/sincronizacao.ts`. Banco local na versão 2 (store `fila`, upgrade sem perder dados); `aplicarPull` protege as entidades da fila lidas na mesma transação. `client.ts` com timeout (30 s; 120 s no upload de foto e no `/sync`); `syncApi.enviar`; `useCargaLocal` sincroniza (envio + pull) e `main.tsx` invalida as queries quando uma sincronização muda dados. As telas de escrita (formulários e exclusões de colônia, avaliação e colheita) usam `escritas`.

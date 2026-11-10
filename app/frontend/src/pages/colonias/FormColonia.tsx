@@ -7,7 +7,7 @@ import { AreaTexto, Campo, Entrada, Selecao } from "../../components/ui/Campo";
 import { CabecalhoPagina, Cartao } from "../../components/ui/Cartao";
 import { Carregando, ErroCarregamento, MensagemErro } from "../../components/ui/Estados";
 import { chaves, useColonia, useColonias, useEspecies } from "../../hooks/useDados";
-import { coloniasApi } from "../../services/api/endpoints";
+import { escritas } from "../../services/offline/escrita";
 import { usePreferencias } from "../../store/preferencias";
 import { SeletorMotivo } from "../../components/features/SeletorMotivo";
 import type { ColoniaDetalhada, ColoniaInput, Origem, StatusColonia, TipoCaixa } from "../../types/api";
@@ -173,9 +173,10 @@ function Formulario({ colonia }: { colonia?: ColoniaDetalhada | undefined }) {
 
   const salvar = useMutation({
     mutationFn: () =>
+      // A versão editada é a do momento em que o formulário abriu (`statusBase`).
       colonia
-        ? coloniasApi.atualizar(colonia.id, { ...paraPayload(estado), ...(statusBase && payloadStatus(statusBase, st)) })
-        : coloniasApi.criar({ ...paraPayload(estado), status: st.status }),
+        ? escritas.atualizarColonia(statusBase ?? colonia, { ...paraPayload(estado), ...(statusBase && payloadStatus(statusBase, st)) })
+        : escritas.criarColonia({ ...paraPayload(estado), status: st.status }),
     onSuccess: (salva) => {
       queryClient.invalidateQueries({ queryKey: chaves.colonias });
       navegar(`/app/colonias/${salva.id}`, { replace: true });

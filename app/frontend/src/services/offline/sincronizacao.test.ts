@@ -11,7 +11,7 @@ const banco = vi.hoisted(() => ({
   abrirBanco: vi.fn(async (_usuarioId: string): Promise<object> => ({})),
   lerMeta: vi.fn(async (_db: unknown) => ({ desde: null as string | null, ultimoPull: null, armazenamentoPersistente: null })),
   contarEspecies: vi.fn(async () => 0),
-  aplicarPull: vi.fn(async () => undefined),
+  aplicarPull: vi.fn(async () => 2),
   atualizarMeta: vi.fn(async () => undefined),
 }));
 const apis = vi.hoisted(() => ({
@@ -54,7 +54,7 @@ describe("puxarAlteracoes", () => {
   it("carga inicial: pull sem desde, espécies buscadas e plano aplicado", async () => {
     const resultado = await puxarAlteracoes("u1");
 
-    expect(resultado).toEqual({ ok: true, servidorEm: RESPOSTA.servidorEm, cargaCompleta: true });
+    expect(resultado).toEqual({ ok: true, servidorEm: RESPOSTA.servidorEm, cargaCompleta: true, alterados: 2 });
     expect(banco.abrirBanco).toHaveBeenCalledWith("u1");
     expect(apis.alteracoes).toHaveBeenCalledWith(undefined);
     expect(apis.listarEspecies).toHaveBeenCalledTimes(1);

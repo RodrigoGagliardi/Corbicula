@@ -9,7 +9,7 @@ import { Botao, LinkBotao } from "../../components/ui/Botao";
 import { CabecalhoPagina, Cartao, Selo } from "../../components/ui/Cartao";
 import { Carregando, ErroCarregamento, MensagemErro, NotaSemConexao } from "../../components/ui/Estados";
 import { chaves, useAvaliacoes, useColonia, useResumoProducao } from "../../hooks/useDados";
-import { coloniasApi } from "../../services/api/endpoints";
+import { escritas } from "../../services/offline/escrita";
 import { ehErroDeConexao } from "../../services/offline/leituraLocal";
 import { usePreferencias } from "../../store/preferencias";
 import { proximaInspecao } from "../../utils/calendario";
@@ -35,7 +35,7 @@ export function DetalheColonia() {
   const frequenciaGeral = usePreferencias((s) => s.diasInspecaoAtrasada);
 
   const excluir = useMutation({
-    mutationFn: () => coloniasApi.excluir(id),
+    mutationFn: () => escritas.excluirColonia(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: chaves.colonias });
       navegar("/app/colonias", { replace: true });

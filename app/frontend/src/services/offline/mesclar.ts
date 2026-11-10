@@ -12,7 +12,7 @@ export interface PlanoPull {
 //  - registros recebidos são gravados por id (substituem a cópia local);
 //  - ids locais que sumiram de `idsAtuais` foram excluídos no servidor e saem do banco;
 //  - um id com mudança local pendente nunca é sobrescrito nem removido — a fila de
-//    operações offline (quando existir) ainda vai enviá-lo, e uma entidade criada offline não está em
+//    operações offline ainda vai enviá-lo, e uma entidade criada offline não está em
 //    `idsAtuais` até ser sincronizada.
 // Os ids pendentes valem para todos os tipos (são UUIDs, não colidem entre stores).
 export function mesclar(

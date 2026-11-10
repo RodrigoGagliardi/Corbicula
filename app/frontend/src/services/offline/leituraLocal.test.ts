@@ -1,13 +1,12 @@
 import "fake-indexeddb/auto";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { useAuth } from "../../store/auth";
-import type { Especie, Usuario } from "../../types/api";
+import type { Colonia, Especie, Usuario } from "../../types/api";
 import { ErroApi } from "../api/client";
 import type { AvaliacaoServidor, ColoniaServidor, ParametroServidor, ProducaoServidor, RespostaAlteracoes } from "./tipos";
 
 // IndexedDB em memória (fake-indexeddb); cada teste usa um usuário próprio,
-// portanto um banco próprio. `abrirBanco` é espionado para provar que, online,
-// o banco local nem é aberto.
+// portanto um banco próprio. `abrirBanco` é espionado (contagem de aberturas).
 vi.mock("./banco", async (original) => {
   const real = await original<typeof import("./banco")>();
   return { ...real, abrirBanco: vi.fn(real.abrirBanco) };
@@ -68,12 +67,26 @@ beforeEach(() => {
 });
 
 describe("comFallbackLocal", () => {
-  it("online: devolve a API sem abrir o banco local", async () => {
+  it("online com a fila vazia: devolve a API sem ler o banco local", async () => {
     entrar("online");
     const local = vi.fn();
     await expect(comFallbackLocal(async () => "da-api", local)).resolves.toBe("da-api");
     expect(local).not.toHaveBeenCalled();
-    expect(banco.abrirBanco).not.toHaveBeenCalled();
+  });
+
+  it("online com operações na fila: lê a cópia local, que já tem as mudanças pendentes", async () => {
+    await carregar("fila-online");
+    entrar("fila-online");
+    const db = await banco.abrirBanco("fila-online");
+    await banco.enfileirar(
+      db,
+      { id: "op1", tipo: "colonia", operacao: "create", entidadeId: "c3", dados: {}, criadoEm: "2026-11-09T10:00:00.000Z", estado: "pendente", tentativas: 0, relacionadas: [] },
+      [{ store: "colonias", gravar: colonia("c3", "COL-003 (provisório)") }]
+    );
+    const remoto = vi.fn(async () => [] as Colonia[]);
+    const r = await comFallbackLocal(remoto, leiturasLocais.colonias);
+    expect(remoto).not.toHaveBeenCalled();
+    expect(r.map((c) => c.codigo)).toEqual(["COL-001", "COL-002", "COL-003 (provisório)"]);
   });
 
   it("sem rede: nem chama a API e lê o banco do usuário da sessão", async () => {
@@ -105,7 +118,6 @@ describe("comFallbackLocal", () => {
     await expect(comFallbackLocal(async () => Promise.reject(e500), local)).rejects.toBe(e500);
     await expect(comFallbackLocal(async () => Promise.reject(e404), local)).rejects.toBe(e404);
     expect(local).not.toHaveBeenCalled();
-    expect(banco.abrirBanco).not.toHaveBeenCalled();
   });
 
   it("banco nunca carregado: relança o erro de conexão original", async () => {

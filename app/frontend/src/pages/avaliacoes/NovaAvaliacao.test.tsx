@@ -86,7 +86,9 @@ describe("FormularioAvaliacao: campos de contexto opcionais", () => {
     fireEvent.click(screen.getByRole("radio", { name: "Bom" }));
     fireEvent.click(screen.getByRole("button", { name: "Salvar avaliação" }));
     await waitFor(() => expect(criar).toHaveBeenCalledTimes(1));
-    const dados = criar.mock.calls[0]![1];
+    // `id`: UUID gerado no cliente (o mesmo de uma operação offline), não um campo de contexto.
+    const { id, ...dados } = criar.mock.calls[0]![1];
+    expect(id).toMatch(/^[0-9a-f-]{36}$/);
     expect(Object.keys(dados).sort()).toEqual(["acoesTomadas", "dataAvaliacao", "observacoesGerais", "parametros"]);
   });
 

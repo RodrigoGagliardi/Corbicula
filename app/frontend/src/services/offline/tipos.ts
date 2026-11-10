@@ -73,3 +73,64 @@ export interface MetaOffline {
 }
 
 export const META_VAZIA: MetaOffline = { desde: null, ultimoPull: null, armazenamentoPersistente: null };
+
+// ─── Fila de operações offline (POST /sync) ──────────────────────────────────
+// Contrato em app/backend/src/modules/sync/sync.types.ts.
+
+export const TIPOS_OPERACAO = ["colonia", "avaliacao", "producao"] as const;
+export type TipoOperacao = (typeof TIPOS_OPERACAO)[number];
+export type AcaoOperacao = "create" | "update" | "delete";
+
+// Linha local de qualquer tipo que a fila altera.
+export type LinhaLocal = ColoniaServidor | AvaliacaoServidor | ProducaoServidor;
+
+// Operação como o POST /sync a recebe.
+export interface OperacaoSync {
+  id: string;
+  tipo: TipoOperacao;
+  operacao: AcaoOperacao;
+  entidadeId: string;
+  coloniaId?: string;
+  dados: Record<string, unknown>;
+  baseUpdatedAt?: string;
+  criadoEm: string;
+}
+
+// pendente: espera envio (também enquanto está sendo enviada; o reenvio usa o
+// mesmo `id`). conflito/erro: parada, espera decisão do usuário (story 6).
+export type EstadoOperacao = "pendente" | "conflito" | "erro";
+
+export interface OperacaoFila extends OperacaoSync {
+  // Posição na fila (crescente): a última da fila + 1, dada pelo `enfileirar`.
+  ordem: number;
+  estado: EstadoOperacao;
+  tentativas: number;
+  // Colônias que a operação referencia além da própria entidade (mãe, doadora,
+  // colônia da avaliação/colheita): uma pendência numa delas a segura.
+  relacionadas: string[];
+  ultimoErro?: string;
+  // Versão do servidor devolvida num conflito.
+  servidor?: unknown;
+  // Linha local antes de um update (base da junção por campos, story 6).
+  base?: LinhaLocal;
+}
+
+export type StatusSync = "aplicado" | "duplicado" | "conflito" | "erro";
+
+export interface ResultadoOperacaoSync {
+  id: string;
+  status: StatusSync;
+  entidadeId: string;
+  erro?: string;
+  servidor?: unknown;
+}
+
+export interface RespostaSync {
+  servidorEm: string;
+  processadas: number;
+  aplicadas: number;
+  duplicadas: number;
+  conflitos: number;
+  erros: number;
+  resultados: ResultadoOperacaoSync[];
+}

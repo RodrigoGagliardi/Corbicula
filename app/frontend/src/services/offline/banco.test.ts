@@ -1,7 +1,20 @@
 import "fake-indexeddb/auto";
+import { openDB } from "idb";
 import { describe, expect, it } from "vitest";
 import type { Especie } from "../../types/api";
-import { abrirBanco, aplicarPull, atualizarMeta, lerMeta, nomeBanco, type BancoOffline } from "./banco";
+import {
+  abrirBanco,
+  aplicarPull,
+  atualizarFila,
+  atualizarMeta,
+  contarFila,
+  enfileirar,
+  lerFila,
+  lerMeta,
+  nomeBanco,
+  type BancoOffline,
+} from "./banco";
+import type { OperacaoFila } from "./tipos";
 import type { AvaliacaoServidor, ColoniaServidor, CriterioEspecieServidor, ParametroServidor, ProducaoServidor, RespostaAlteracoes } from "./tipos";
 
 // IndexedDB real em memória (fake-indexeddb) no lugar do que o jsdom não tem.
@@ -60,7 +73,7 @@ describe("banco local (IndexedDB)", () => {
   it("cria os stores e o índice coloniaId; meta começa vazia", async () => {
     const db = await abrirBanco("estrutura");
     expect(db.name).toBe("corbicula-offline-estrutura");
-    expect([...db.objectStoreNames].sort()).toEqual(["avaliacoes", "colonias", "especies", "meta", "parametros", "producoes"]);
+    expect([...db.objectStoreNames].sort()).toEqual(["avaliacoes", "colonias", "especies", "fila", "meta", "parametros", "producoes"]);
 
     const tx = db.transaction(["avaliacoes", "producoes"]);
     expect([...tx.objectStore("avaliacoes").indexNames]).toEqual(["coloniaId"]);
@@ -219,5 +232,103 @@ describe("banco local (IndexedDB)", () => {
 
     expect(await chaves(db1, "colonias")).toEqual(["c1", "c2", "c3"]);
     expect(await chaves(db2, "colonias")).toEqual(["b1"]);
+  });
+});
+
+const operacao = (id: string, entidadeId: string, parcial: Partial<OperacaoFila> = {}): Omit<OperacaoFila, "ordem"> => ({
+  id,
+  tipo: "colonia",
+  operacao: "update",
+  entidadeId,
+  dados: { observacoes: id },
+  criadoEm: "2026-11-09T10:00:00.000Z",
+  estado: "pendente",
+  tentativas: 0,
+  relacionadas: [],
+  ...parcial,
+});
+
+describe("fila de operações", () => {
+  it("enfileirar grava a operação no fim da fila e a mudança local juntas", async () => {
+    const db = await bancoCarregado("fila-ordem");
+    await enfileirar(db, operacao("op-b", "c1"), [{ store: "colonias", gravar: colonia("c1", "editada offline") }]);
+    await enfileirar(db, operacao("op-a", "c4", { operacao: "create" }), [{ store: "colonias", gravar: colonia("c4") }]);
+    await enfileirar(db, operacao("op-c", "p1", { tipo: "producao", operacao: "delete" }), [{ store: "producoes", remover: ["p1"] }]);
+
+    expect((await lerFila(db)).map((o) => [o.id, o.ordem])).toEqual([["op-b", 1], ["op-a", 2], ["op-c", 3]]);
+    expect(await contarFila(db)).toBe(3);
+    expect((await db.get("colonias", "c1"))?.observacoes).toBe("editada offline");
+    expect(await chaves(db, "colonias")).toEqual(["c1", "c2", "c3", "c4"]);
+    expect(await chaves(db, "producoes")).toEqual([]);
+  });
+
+  it("enfileirar é atômico: se a mudança local falha, a operação não entra", async () => {
+    const db = await bancoCarregado("fila-atomica");
+    const invalida = { codigo: "sem-id" } as ColoniaServidor;
+    await expect(enfileirar(db, operacao("op1", "c1"), [{ store: "colonias", gravar: invalida }])).rejects.toBeTruthy();
+    expect(await contarFila(db)).toBe(0);
+  });
+
+  it("atualizarFila tira as confirmadas e grava as paradas", async () => {
+    const db = await bancoCarregado("fila-resultado");
+    await enfileirar(db, operacao("op1", "c1"), []);
+    await enfileirar(db, operacao("op2", "c2"), []);
+    const [, op2] = await lerFila(db);
+    await atualizarFila(db, { remover: ["op1"], atualizar: [{ ...op2!, estado: "erro", ultimoErro: "recusada" }] });
+    expect(await lerFila(db)).toEqual([{ ...op2, estado: "erro", ultimoErro: "recusada" }]);
+  });
+
+  it("o pull não sobrescreve nem remove entidade com operação na fila (lida na mesma transação)", async () => {
+    const db = await bancoCarregado("fila-pull");
+    await enfileirar(db, operacao("op1", "c1"), [{ store: "colonias", gravar: colonia("c1", "local") }]);
+    await enfileirar(db, operacao("op2", "c9", { operacao: "create" }), [{ store: "colonias", gravar: colonia("c9", "criada offline") }]);
+
+    const alterados = await aplicarPull(
+      db,
+      resposta({
+        colonias: [colonia("c1", "do servidor"), colonia("c2", "do servidor")],
+        idsAtuais: { colonias: ["c1", "c2"], avaliacoes: ["a1", "a2"], producoes: ["p1"], parametros: [] },
+      }),
+      SEM_PENDENCIAS,
+      null
+    );
+
+    expect((await db.get("colonias", "c1"))?.observacoes).toBe("local");
+    expect((await db.get("colonias", "c9"))?.observacoes).toBe("criada offline");
+    expect((await db.get("colonias", "c2"))?.observacoes).toBe("do servidor");
+    // c3 saiu de idsAtuais: removida. Gravado c2 + removido c3.
+    expect(await chaves(db, "colonias")).toEqual(["c1", "c2", "c9"]);
+    expect(alterados).toBe(2);
+  });
+
+  it("a fila sobrevive a fechar e reabrir o banco (app recarregado)", async () => {
+    const db = await bancoCarregado("fila-reabrir");
+    await enfileirar(db, operacao("op1", "c1"), [{ store: "colonias", gravar: colonia("c1", "offline") }]);
+    db.close();
+
+    const reaberto = await openDB(nomeBanco("fila-reabrir"));
+    expect((await reaberto.getAll("fila")).map((o) => o.id)).toEqual(["op1"]);
+    expect((await reaberto.get("colonias", "c1"))?.observacoes).toBe("offline");
+    reaberto.close();
+  });
+
+  it("um banco da versão 1 ganha a fila e mantém os dados", async () => {
+    const v1 = await openDB(nomeBanco("versao-1"), 1, {
+      upgrade(db) {
+        db.createObjectStore("colonias", { keyPath: "id" });
+        db.createObjectStore("avaliacoes", { keyPath: "id" }).createIndex("coloniaId", "coloniaId");
+        db.createObjectStore("producoes", { keyPath: "id" }).createIndex("coloniaId", "coloniaId");
+        db.createObjectStore("parametros", { keyPath: "id" });
+        db.createObjectStore("especies", { keyPath: "id" });
+        db.createObjectStore("meta");
+      },
+    });
+    await v1.put("colonias", colonia("c1"));
+    v1.close();
+
+    const db = await abrirBanco("versao-1");
+    expect(db.version).toBe(2);
+    expect(await chaves(db, "colonias")).toEqual(["c1"]);
+    expect(await contarFila(db)).toBe(0);
   });
 });
