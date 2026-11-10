@@ -38,6 +38,16 @@ describe("colônia", () => {
     expect(linha).toMatchObject({ id: "c9", userId: "u1", codigo: "TETRANGU-003 (provisório)", status: "ativa", statusDesde: null, coloniaMaeId: null, createdAt: AGORA, updatedAt: AGORA });
   });
 
+  it("filha sem espécie herda a da mãe (código provisório da espécie)", () => {
+    const mae = colonia("m", "TETRANGU-002", { especieId: "e-jatai" });
+    const linha = novaColonia(
+      "f",
+      { dataEntrada: "2026-11-01T12:00:00.000Z", origem: "divisao", tipoCaixa: "inpa", coloniaMaeId: "m" } as never,
+      { userId: "u1", especies, colonias: [mae], agora: AGORA }
+    );
+    expect(linha).toMatchObject({ especieId: "e-jatai", codigo: "TETRANGU-003 (provisório)", coloniaMaeId: "m" });
+  });
+
   it("sem espécie: COL", () => {
     const linha = novaColonia("c9", { dataEntrada: "2026-11-01T12:00:00.000Z", origem: "captura", tipoCaixa: "inpa" } as never, { userId: "u1", especies, colonias: [], agora: AGORA });
     expect(linha.codigo).toBe("COL-001 (provisório)");

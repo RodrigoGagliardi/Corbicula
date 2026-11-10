@@ -8,6 +8,13 @@ import { ehErroDeConexao, semRede } from "./leituraLocal";
 import { atualizarAvaliacao, atualizarColonia, atualizarProducao, novaAvaliacao, novaColonia, novaProducao } from "./linhaLocal";
 import { atualizarContagem, sincronizar } from "./sincronizacao";
 import type { AcaoOperacao, LinhaLocal, TipoOperacao } from "./tipos";
+import {
+  validarEdicaoAvaliacao,
+  validarEdicaoColonia,
+  validarExclusaoColonia,
+  validarNovaAvaliacao,
+  validarNovaColonia,
+} from "./validacoes";
 
 // Escritas de colônia, avaliação e colheita, online ou offline.
 //  - Online, sem pendência na fila para a entidade nem para as colônias que ela
@@ -18,6 +25,9 @@ import type { AcaoOperacao, LinhaLocal, TipoOperacao } from "./tipos";
 //    relacionada, vira operação na fila e a mudança aparece na hora na cópia
 //    local. Um create que o servidor já tinha aplicado antes do timeout volta do
 //    /sync como `aplicado` (mesmo id): nada duplica.
+//  - No caminho da fila, as regras do servidor são checadas antes na cópia local
+//    (validacoes.ts): a escrita que ele recusaria não entra na fila e o
+//    formulário mostra a mesma mensagem que ele daria.
 
 export interface ResultadoEscrita {
   id: string;
@@ -119,11 +129,6 @@ async function linhaExistente<T>(linha: Promise<T | undefined>): Promise<T> {
   return encontrada;
 }
 
-// Mesma mensagem do servidor (colonias.service.ts, excluir).
-export const mensagemColoniaComAvaliacoes = (qtd: number) =>
-  `Não é possível excluir: colônia possui ${qtd} avaliação(ões). ` +
-  `Use status "morta" para registrar o encerramento preservando o histórico.`;
-
 type Versao = { id: string; updatedAt: string };
 
 export const escritas = {
@@ -137,7 +142,10 @@ export const escritas = {
       remoto: () => coloniasApi.criar({ ...dados, id }),
       local: async ({ db, usuarioId, agora }) => {
         const [especies, colonias] = await Promise.all([db.getAll("especies"), db.getAll("colonias")]);
-        return { mudancas: [{ store: "colonias", gravar: novaColonia(id, dados, { userId: usuarioId, especies, colonias, agora }) }] };
+        // Espécie final já com a herança da mãe (a regra do servidor, num lugar só).
+        const especieId = validarNovaColonia(id, dados, colonias);
+        const linha = novaColonia(id, { ...dados, especieId }, { userId: usuarioId, especies, colonias, agora });
+        return { mudancas: [{ store: "colonias", gravar: linha }] };
       },
     });
   },
@@ -156,6 +164,7 @@ export const escritas = {
           db.getAll("especies"),
           db.getAll("colonias"),
         ]);
+        validarEdicaoColonia(linha, dados, colonias);
         const gravar = atualizarColonia(linha, dados, { userId: usuarioId, especies, colonias, agora });
         return { mudancas: [{ store: "colonias", gravar }], base: linha };
       },
@@ -175,7 +184,7 @@ export const escritas = {
           db.getAllKeysFromIndex("producoes", "coloniaId", id),
         ]);
         // O servidor recusaria (preservação do histórico): nada entra na fila.
-        if (avaliacoes > 0) throw new ErroApi(409, mensagemColoniaComAvaliacoes(avaliacoes));
+        validarExclusaoColonia(avaliacoes);
         // O cascade do servidor apaga as colheitas da colônia.
         return { mudancas: [{ store: "colonias", remover: [id] }, { store: "producoes", remover: producoes }] };
       },
@@ -191,9 +200,11 @@ export const escritas = {
       coloniaId,
       dados,
       remoto: () => avaliacoesApi.criar(coloniaId, { ...dados, id }),
-      local: async ({ agora }) => ({
-        mudancas: [{ store: "avaliacoes", gravar: novaAvaliacao(id, coloniaId, dados, agora, novoId) }],
-      }),
+      local: async ({ db, agora }) => {
+        const [colonias, parametros] = await Promise.all([db.getAll("colonias"), db.getAll("parametros")]);
+        validarNovaAvaliacao(coloniaId, dados, colonias, parametros);
+        return { mudancas: [{ store: "avaliacoes", gravar: novaAvaliacao(id, coloniaId, dados, agora, novoId) }] };
+      },
     });
   },
 
@@ -207,7 +218,8 @@ export const escritas = {
       updatedAtEditado: avaliacao.updatedAt,
       remoto: () => avaliacoesApi.atualizar(coloniaId, avaliacao.id, dados),
       local: async ({ db, agora }) => {
-        const linha = await linhaExistente(db.get("avaliacoes", avaliacao.id));
+        const [linha, parametros] = await Promise.all([linhaExistente(db.get("avaliacoes", avaliacao.id)), db.getAll("parametros")]);
+        validarEdicaoAvaliacao(linha, dados, parametros, new Date(agora));
         return { mudancas: [{ store: "avaliacoes", gravar: atualizarAvaliacao(linha, dados, agora, novoId) }], base: linha };
       },
     });

@@ -41,10 +41,13 @@ export interface ContextoColonia {
 }
 
 export function novaColonia(id: string, dados: ColoniaInput, ctx: ContextoColonia): ColoniaServidor {
+  // Filha sem espécie herda a da mãe (e o código segue o dela), como no servidor.
+  const mae = dados.coloniaMaeId ? ctx.colonias.find((c) => c.id === dados.coloniaMaeId) : undefined;
+  const especieId = dados.especieId ?? mae?.especieId ?? null;
   return {
     id,
     userId: ctx.userId,
-    codigo: codigoProvisorio(prefixoDa(dados.especieId, ctx.especies), ctx.colonias),
+    codigo: codigoProvisorio(prefixoDa(especieId, ctx.especies), ctx.colonias),
     dataEntrada: iso(dados.dataEntrada),
     origem: dados.origem,
     tipoCaixa: dados.tipoCaixa,
@@ -59,7 +62,7 @@ export function novaColonia(id: string, dados: ColoniaInput, ctx: ContextoColoni
     statusDesde: null,
     motivoStatus: null,
     motivoStatusDetalhe: null,
-    especieId: dados.especieId ?? null,
+    especieId,
     coloniaMaeId: dados.coloniaMaeId ?? null,
     coloniaDoadoraCampeirasId: dados.coloniaDoadoraCampeirasId ?? null,
     createdAt: ctx.agora,

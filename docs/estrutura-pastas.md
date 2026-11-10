@@ -220,6 +220,7 @@ app/frontend/
 │   │       ├── fila.ts        # regra pura da fila: baseUpdatedAt, lote ordenado ≤ 500 com bloqueio, resultados do /sync (+ .test.ts)
 │   │       ├── linhaLocal.ts  # regra pura: aplica create/update/delete à cópia local (código provisório, prévia do score) (+ .test.ts)
 │   │       ├── escrita.ts     # escritas de colônia/avaliação/colheita: REST online, fila offline ou com pendência relacionada (+ .test.ts)
+│   │       ├── validacoes.ts  # regra pura: regras do servidor (genealogia, espécie, 7 dias, parâmetros ativos) checadas antes de enfileirar (+ .test.ts)
 │   │       ├── sincronizacao.ts  # sincronizar (envio da fila + pull, nova tentativa com espera crescente), puxarAlteracoes e pedirArmazenamentoPersistente (+ .test.ts, sincronizacaoCiclo.test.ts)
 │   │       ├── leituras.ts    # regra pura: monta cada resposta REST (colônias, avaliações, histórico, produções, parâmetros, espécies) a partir das linhas locais (+ .test.ts)
 │   │       └── leituraLocal.ts   # comFallbackLocal: com fila não vazia, sem rede ou com ErroApi(0), lê o banco local do usuário da sessão (+ .test.ts)
@@ -369,3 +370,5 @@ Notas:
 - **[2026-11-09 — dados de desfecho e contexto (frontend)]** — Criados `src/utils/vocabularios.ts` (vocabulários e payloads, + teste) e `src/components/features/SeletorMotivo.tsx` (chips de escolha única opcional, + teste); testes de render `pages/avaliacoes/NovaAvaliacao.test.tsx` e `pages/colonias/FormColonia.test.tsx`. Campos novos em `types/api.ts`; formulário e detalhe da colônia, nova/editar avaliação e detalhe da avaliação mostram e coletam data/motivo do status, histórico de status, motivos da inspeção e das ações e procedência do clima.
 
 - **[2026-11-09 — PWA offline: fila de operações e envio pelo /sync]** — Frontend: `services/offline/fila.ts`, `linhaLocal.ts`, `escrita.ts` (+ testes) e `sincronizacaoCiclo.test.ts`; `store/sincronizacao.ts`. Banco local na versão 2 (store `fila`, upgrade sem perder dados); `aplicarPull` protege as entidades da fila lidas na mesma transação. `client.ts` com timeout (30 s; 120 s no upload de foto e no `/sync`); `syncApi.enviar`; `useCargaLocal` sincroniza (envio + pull) e `main.tsx` invalida as queries quando uma sincronização muda dados. As telas de escrita (formulários e exclusões de colônia, avaliação e colheita) usam `escritas`.
+
+- **[2026-11-10 — PWA offline: validações locais]** — Frontend: `services/offline/validacoes.ts` (+ teste) espelha as regras de `colonias.service.ts` e `avaliacoes.service.ts` com os mesmos textos; `escrita.ts` as aplica no caminho da fila (a escrita recusada não entra nela). A colônia filha criada offline sem espécie herda a da mãe na cópia local.

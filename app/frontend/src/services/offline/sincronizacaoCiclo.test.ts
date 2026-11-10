@@ -4,7 +4,7 @@ import { useAuth } from "../../store/auth";
 import { useSincronizacao } from "../../store/sincronizacao";
 import type { Usuario } from "../../types/api";
 import { ErroApi } from "../api/client";
-import type { ColoniaServidor, OperacaoFila, OperacaoSync, RespostaAlteracoes, RespostaSync, StatusSync } from "./tipos";
+import type { ColoniaServidor, ParametroServidor, OperacaoFila, OperacaoSync, RespostaAlteracoes, RespostaSync, StatusSync } from "./tipos";
 
 // Ciclo completo (fila → POST /sync → pull) com IndexedDB em memória e a API mockada.
 const apis = vi.hoisted(() => ({
@@ -28,6 +28,8 @@ afterAll(() => {
   if (descritorOriginal) Object.defineProperty(Navigator.prototype, "onLine", descritorOriginal);
 });
 
+// Parâmetros ativos da cópia local (as avaliações dos testes usam p1 e p2).
+const PARAMETROS = ["p1", "p2"].map((id) => ({ id, nome: id, ativo: true, criteriosEspecie: [] })) as unknown as ParametroServidor[];
 const usuario = (id: string) => ({ id, email: `${id}@x.app`, name: id, createdAt: "", meliponario: null }) as Usuario;
 const colonia = (id: string, codigo: string, observacoes: string | null = null) =>
   ({ id, codigo, observacoes, status: "ativa", especieId: null, coloniaMaeId: null, coloniaDoadoraCampeirasId: null, updatedAt: "2026-11-01T00:00:00.000Z" }) as ColoniaServidor;
@@ -38,8 +40,8 @@ const pull = (parcial: Partial<RespostaAlteracoes> = {}): RespostaAlteracoes => 
   colonias: [],
   avaliacoes: [],
   producoes: [],
-  parametros: [],
-  idsAtuais: { colonias: ["c1"], avaliacoes: [], producoes: [], parametros: [] },
+  parametros: PARAMETROS,
+  idsAtuais: { colonias: ["c1"], avaliacoes: [], producoes: [], parametros: ["p1", "p2"] },
   ...parcial,
 });
 
