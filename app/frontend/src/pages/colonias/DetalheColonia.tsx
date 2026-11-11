@@ -5,6 +5,7 @@ import { Link, useNavigate, useParams } from "react-router";
 import { GraficoScore } from "../../components/charts/GraficoScore";
 import { AvisoPendencia } from "../../components/features/AvisoPendencia";
 import { GaleriaFotos } from "../../components/features/GaleriaFotos";
+import { SeloEnvio } from "../../components/features/SeloEnvio";
 import { BarraScore, SeloScore } from "../../components/features/SeloScore";
 import { Botao, LinkBotao } from "../../components/ui/Botao";
 import { CabecalhoPagina, Cartao, Selo } from "../../components/ui/Cartao";
@@ -67,7 +68,12 @@ export function DetalheColonia() {
             <ArrowLeft className="size-4" aria-hidden /> Colônias
           </Link>
         }
-        titulo={<span className="font-mono">{colonia.codigo}</span>}
+        titulo={
+          <span className="inline-flex flex-wrap items-center gap-2">
+            <span className="font-mono">{colonia.codigo}</span>
+            <SeloEnvio id={colonia.id} />
+          </span>
+        }
         subtitulo={
           colonia.especie ? (
             <>
@@ -226,6 +232,7 @@ export function DetalheColonia() {
                         {a.condicaoClimatica && ` · ${ROTULO_CLIMA[a.condicaoClimatica]}`}
                         {a.temperatura !== null && ` · ${a.temperatura} °C`}
                       </p>
+                      <SeloEnvio id={a.id} className="mt-1" />
                     </div>
                     <SeloScore score={a.scoreGeral} status={a.statusGeral} />
                   </Link>

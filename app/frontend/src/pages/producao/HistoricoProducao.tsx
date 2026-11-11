@@ -6,6 +6,7 @@ import { Selecao } from "../../components/ui/Campo";
 import { CabecalhoPagina, Cartao, Selo } from "../../components/ui/Cartao";
 import { Carregando, ErroCarregamento, EstadoVazio, MensagemErro, NotaSemConexao } from "../../components/ui/Estados";
 import { chaves, useColonias, useProducoes, useResumoProducao } from "../../hooks/useDados";
+import { SeloEnvio } from "../../components/features/SeloEnvio";
 import { escritas } from "../../services/offline/escrita";
 import { ehErroDeConexao } from "../../services/offline/leituraLocal";
 import type { FiltrosProducao, GrupoProducao, Producao, TipoProduto } from "../../types/api";
@@ -182,6 +183,7 @@ function ItemColheita({ producao: p }: { producao: Producao }) {
         <div className="flex flex-wrap items-center gap-2">
           <Selo className={COR_PRODUTO[p.tipoProduto]}>{ROTULO_PRODUTO[p.tipoProduto]}</Selo>
           <span className="font-semibold text-foreground">{formatarQuantidade(p.quantidade, p.unidade)}</span>
+          <SeloEnvio id={p.id} />
           <span className="text-sm text-muted-foreground">{formatarData(p.dataColheita)}</span>
         </div>
         <p className="text-sm text-muted-foreground">

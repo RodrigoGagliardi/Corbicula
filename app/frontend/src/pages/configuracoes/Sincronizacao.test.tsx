@@ -5,16 +5,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { descartarPendencia, listarPendencias, manterAparelho, manterServidor, type Pendencia } from "../../services/offline/decisoes";
 import type { OperacaoFila } from "../../services/offline/tipos";
 import { formatarValorCampo, rotuloCampo } from "../../utils/pendencias";
+import { listarFila } from "../../services/offline/decisoes";
+import { sincronizar } from "../../services/offline/sincronizacao";
+import { useAuth } from "../../store/auth";
+import { useSincronizacao } from "../../store/sincronizacao";
 import { Sincronizacao } from "./Sincronizacao";
 
 vi.mock("../../hooks/useDados", () => ({ useEspecies: () => ({ data: [{ id: "e-jatai", nomePopular: "Jataí" }] }) }));
 vi.mock("../../services/offline/decisoes", () => ({
   listarPendencias: vi.fn(),
+  listarFila: vi.fn(async () => []),
   manterServidor: vi.fn(async () => undefined),
   manterAparelho: vi.fn(async () => undefined),
   descartarPendencia: vi.fn(async () => undefined),
 }));
-vi.mock("../../services/offline/banco", () => ({ indexedDbDisponivel: () => false, abrirBanco: vi.fn() }));
+vi.mock("../../services/offline/banco", () => ({ indexedDbDisponivel: () => false, abrirBanco: vi.fn(), lerMeta: vi.fn() }));
+vi.mock("../../services/offline/sincronizacao", () => ({ sincronizar: vi.fn(async () => ({})) }));
 vi.mock("./Configuracoes", () => ({ VoltarConfiguracoes: () => null }));
 
 const op = (parcial: Partial<OperacaoFila>): OperacaoFila => ({
@@ -52,8 +58,11 @@ function renderizar() {
 }
 
 const confirmar = vi.fn(() => true);
+const ESTADO_INICIAL = useSincronizacao.getState();
 beforeEach(() => {
   window.confirm = confirmar;
+  useSincronizacao.setState(ESTADO_INICIAL, true);
+  useAuth.setState({ token: "t", usuario: { id: "u1" } as never });
 });
 afterEach(() => {
   cleanup();
@@ -64,7 +73,7 @@ describe("Sincronização: pendências", () => {
   it("sem pendências: mensagem de tudo em ordem", async () => {
     vi.mocked(listarPendencias).mockResolvedValue([]);
     renderizar();
-    expect(await screen.findByText(/Nenhuma pendência/)).toBeInTheDocument();
+    expect(await screen.findByText(/Nenhuma mudança esperando decisão/)).toBeInTheDocument();
   });
 
   it("conflito: mostra as duas versões e as três opções", async () => {
@@ -104,6 +113,36 @@ describe("Sincronização: pendências", () => {
     renderizar();
     fireEvent.click(await screen.findByRole("button", { name: "Manter a do servidor" }));
     expect(manterServidor).not.toHaveBeenCalled();
+  });
+});
+
+describe("Sincronização: status, fila e armazenamento", () => {
+  it("status com a última sincronização, progresso e o botão Sincronizar agora", async () => {
+    vi.mocked(listarPendencias).mockResolvedValue([]);
+    useAuth.setState({ token: "t", usuario: { id: "u1" } as never });
+    useSincronizacao.setState({ sincronizando: true, progresso: { feitas: 2, total: 5 }, ultimaSincronizacao: new Date().toISOString() });
+    renderizar();
+    expect(screen.getByRole("heading", { name: "Sincronizando" })).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "Progresso da sincronização" })).toHaveAttribute("aria-valuenow", "2");
+    expect(screen.getByText("2 de 5 itens enviados")).toBeInTheDocument();
+    expect(screen.getByText(/Última sincronização/)).toBeInTheDocument();
+
+    useSincronizacao.setState({ sincronizando: false, progresso: null });
+    fireEvent.click(await screen.findByRole("button", { name: /Sincronizar agora/ }));
+    expect(sincronizar).toHaveBeenCalledWith("u1");
+  });
+
+  it("fila: lista o que aguarda envio (as paradas ficam em Pendências) e as fotos guardadas", async () => {
+    vi.mocked(listarPendencias).mockResolvedValue([]);
+    vi.mocked(listarFila).mockResolvedValue([
+      pendencia({ op: op({ estado: "pendente", operacao: "create", criadoEm: new Date().toISOString() }) }),
+      pendencia({ op: op({ id: "op2", estado: "erro" }), rotulo: "Colônia parada" }),
+    ]);
+    useSincronizacao.setState({ fotosPendentes: 2, naFila: 2 });
+    renderizar();
+    expect(await screen.findByText("Criar")).toBeInTheDocument();
+    expect(screen.queryByText("Colônia parada")).not.toBeInTheDocument();
+    expect(screen.getByText("2 fotos guardadas neste aparelho")).toBeInTheDocument();
   });
 });
 

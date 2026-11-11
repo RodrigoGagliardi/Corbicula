@@ -228,6 +228,30 @@ export async function listarPendencias(): Promise<Pendencia[]> {
   return Promise.all(porOrdem(fila.filter(parada)).map((op) => descrever(db, fila, fotos, op)));
 }
 
+// Toda a fila (aguardando envio e paradas), na ordem de envio, para a tela de Sincronização.
+export async function listarFila(): Promise<Pendencia[]> {
+  const db = await bancoDoUsuario(useAuth.getState().usuario?.id);
+  if (!db) return [];
+  const [fila, fotos] = await Promise.all([lerFila(db), lerFotos(db)]);
+  return Promise.all(porOrdem(fila).map((op) => descrever(db, fila, fotos, op)));
+}
+
+// Estado de envio de cada registro com operação na fila (para as marcas nas
+// listas e detalhes): "parada" vence "pendente".
+export async function estadoDosRegistros(): Promise<Map<string, "pendente" | "parada">> {
+  const db = await bancoDoUsuario(useAuth.getState().usuario?.id);
+  const estados = new Map<string, "pendente" | "parada">();
+  if (!db) return estados;
+  const [fila, fotos] = await Promise.all([lerFila(db), lerFotos(db)]);
+  for (const op of fila) {
+    if (parada(op)) estados.set(op.entidadeId, "parada");
+    else if (!estados.has(op.entidadeId)) estados.set(op.entidadeId, "pendente");
+  }
+  // Foto aguardando envio também deixa o registro "não enviado".
+  for (const f of fotos) if (f.estado === "pendente" && !estados.has(f.entidadeId)) estados.set(f.entidadeId, "pendente");
+  return estados;
+}
+
 // Pendência de um registro (para o aviso no detalhe); null se não há.
 export async function pendenciaDoRegistro(entidadeId: string): Promise<OperacaoFila | null> {
   const db = await bancoDoUsuario(useAuth.getState().usuario?.id);

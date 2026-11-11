@@ -1,19 +1,30 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, TriangleAlert } from "lucide-react";
+import { CheckCircle2, CloudUpload, HardDrive, RefreshCw, TriangleAlert } from "lucide-react";
 import { Link } from "react-router";
 import { Botao, LinkBotao } from "../../components/ui/Botao";
 import { CabecalhoPagina, Cartao, Selo } from "../../components/ui/Cartao";
 import { Carregando, MensagemErro } from "../../components/ui/Estados";
 import { useEspecies } from "../../hooks/useDados";
-import { descartarPendencia, listarPendencias, manterAparelho, manterServidor, type Pendencia } from "../../services/offline/decisoes";
+import { useOnline } from "../../hooks/useOnline";
+import {
+  descartarPendencia,
+  listarFila,
+  listarPendencias,
+  manterAparelho,
+  manterServidor,
+  type Pendencia,
+} from "../../services/offline/decisoes";
+import { sincronizar } from "../../services/offline/sincronizacao";
 import { useAuth } from "../../store/auth";
+import { useSincronizacao } from "../../store/sincronizacao";
+import { formatarDataHora, tempoRelativo } from "../../utils/format";
 import { formatarValorCampo, rotuloCampo, type ContextoValores } from "../../utils/pendencias";
 import { VoltarConfiguracoes } from "./Configuracoes";
-import { abrirBanco, indexedDbDisponivel } from "../../services/offline/banco";
+import { abrirBanco, indexedDbDisponivel, lerMeta } from "../../services/offline/banco";
 
-// Tela 35 — Sincronização. Nesta etapa, a seção de pendências: mudanças que o
-// servidor recusou ou que conflitam com outra versão no mesmo campo, com as
-// decisões do usuário (CAP-6). Status, progresso e espaço usado vêm depois.
+// Tela 35 — Sincronização (CAP-6, CAP-7, CAP-8): status e progresso, botão
+// "Sincronizar agora", última sincronização, fila de envio, fotos aguardando,
+// armazenamento do aparelho e as pendências que esperam decisão do usuário.
 
 const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
 
@@ -141,6 +152,177 @@ function CartaoPendencia({ pendencia, ctx }: { pendencia: Pendencia; ctx: Contex
   );
 }
 
+const ROTULO_ACAO = { create: "Criar", update: "Editar", delete: "Excluir" } as const;
+
+const megabytes = (bytes: number) => `${(bytes / (1024 * 1024)).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} MB`;
+
+function SecaoStatus() {
+  const online = useOnline();
+  const usuarioId = useAuth((s) => s.usuario?.id);
+  const sincronizando = useSincronizacao((s) => s.sincronizando);
+  const progresso = useSincronizacao((s) => s.progresso);
+  const servidorInacessivel = useSincronizacao((s) => s.servidorInacessivel);
+  const ultima = useSincronizacao((s) => s.ultimaSincronizacao);
+  const estado = !online ? "Sem conexão" : sincronizando ? "Sincronizando" : servidorInacessivel ? "Servidor inacessível" : "Conectado";
+  const pct = progresso && progresso.total > 0 ? Math.round((progresso.feitas / progresso.total) * 100) : null;
+
+  return (
+    <Cartao className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="font-semibold text-foreground">{estado}</h2>
+          <p className="text-sm text-muted-foreground">
+            {ultima ? (
+              <>
+                Última sincronização: <time dateTime={ultima} title={formatarDataHora(ultima)}>{tempoRelativo(ultima)}</time>
+              </>
+            ) : (
+              "Ainda não houve sincronização neste aparelho."
+            )}
+          </p>
+        </div>
+        <Botao
+          tamanho="sm"
+          variante="primario"
+          carregando={sincronizando}
+          disabled={!online || !usuarioId}
+          onClick={() => usuarioId && void sincronizar(usuarioId)}
+        >
+          <RefreshCw className="size-4" aria-hidden /> Sincronizar agora
+        </Botao>
+      </div>
+      {sincronizando && progresso && (
+        <div>
+          <div
+            className="h-2 overflow-hidden rounded-full bg-muted"
+            role="progressbar"
+            aria-label="Progresso da sincronização"
+            aria-valuemin={0}
+            aria-valuemax={progresso.total}
+            aria-valuenow={progresso.feitas}
+          >
+            <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct ?? 0}%` }} />
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {progresso.feitas} de {progresso.total} itens enviados
+          </p>
+        </div>
+      )}
+      {!online && <p className="text-sm text-muted-foreground">O que você salvar fica neste aparelho e sobe sozinho quando a conexão voltar.</p>}
+      {online && servidorInacessivel && !sincronizando && (
+        <p className="text-sm text-muted-foreground">O servidor não respondeu. O app tenta de novo sozinho; os dados continuam guardados aqui.</p>
+      )}
+    </Cartao>
+  );
+}
+
+function SecaoFila() {
+  const usuarioId = useAuth((s) => s.usuario?.id);
+  const naFila = useSincronizacao((s) => s.naFila);
+  const fotosPendentes = useSincronizacao((s) => s.fotosPendentes);
+  const concluidas = useSincronizacao((s) => s.concluidas);
+  const { data: fila = [], isLoading, error } = useQuery({
+    queryKey: ["sincronizacao", "fila", usuarioId, naFila, concluidas],
+    queryFn: listarFila,
+    enabled: Boolean(usuarioId),
+  });
+  const aguardando = fila.filter((p) => p.op.estado === "pendente");
+
+  return (
+    <section aria-labelledby="titulo-fila" className="space-y-3">
+      <h2 id="titulo-fila" className="flex items-center gap-2 font-semibold text-foreground">
+        <CloudUpload className="size-4" aria-hidden /> Aguardando envio
+      </h2>
+      {isLoading ? (
+        <Carregando />
+      ) : error ? (
+        <MensagemErro erro={error} />
+      ) : aguardando.length === 0 && fotosPendentes === 0 ? (
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <CheckCircle2 className="size-4" aria-hidden /> Nada aguardando envio.
+        </p>
+      ) : (
+        <Cartao className="space-y-2">
+          {aguardando.length > 0 && (
+            <ul className="divide-y divide-border text-sm">
+              {aguardando.map(({ op, rotulo, rotaDetalhe }) => (
+                <li key={op.id} className="flex flex-wrap items-baseline justify-between gap-2 py-2">
+                  <span className="text-foreground">
+                    <span className="font-medium">{ROTULO_ACAO[op.operacao]}</span> ·{" "}
+                    {rotaDetalhe ? (
+                      <Link to={rotaDetalhe} className="hover:underline">
+                        {rotulo}
+                      </Link>
+                    ) : (
+                      rotulo
+                    )}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    feita {tempoRelativo(op.criadoEm)}
+                    {op.tentativas > 0 && ` · ${op.tentativas} tentativa${op.tentativas > 1 ? "s" : ""}`}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {fotosPendentes > 0 && (
+            <p className="text-sm text-foreground">
+              {fotosPendentes} foto{fotosPendentes > 1 ? "s" : ""} guardada{fotosPendentes > 1 ? "s" : ""} neste aparelho
+            </p>
+          )}
+        </Cartao>
+      )}
+    </section>
+  );
+}
+
+function SecaoArmazenamento() {
+  const usuarioId = useAuth((s) => s.usuario?.id);
+  const { data } = useQuery({
+    queryKey: ["sincronizacao", "armazenamento", usuarioId],
+    enabled: Boolean(usuarioId),
+    queryFn: async () => {
+      const estimativa = await navigator.storage?.estimate?.().catch(() => undefined);
+      // Banco bloqueado (ex.: modo privado) não esconde a estimativa de espaço.
+      const persistente = indexedDbDisponivel()
+        ? await abrirBanco(usuarioId!)
+            .then(lerMeta)
+            .then((m) => m.armazenamentoPersistente)
+            .catch(() => null)
+        : null;
+      return { usado: estimativa?.usage ?? null, cota: estimativa?.quota ?? null, persistente };
+    },
+  });
+
+  return (
+    <section aria-labelledby="titulo-armazenamento" className="space-y-3">
+      <h2 id="titulo-armazenamento" className="flex items-center gap-2 font-semibold text-foreground">
+        <HardDrive className="size-4" aria-hidden /> Armazenamento neste aparelho
+      </h2>
+      <Cartao className="space-y-2 text-sm">
+        <p className="text-foreground">
+          {data?.usado != null
+            ? `Espaço usado: ${megabytes(data.usado)}${data.cota ? ` de ${megabytes(data.cota)} disponíveis` : ""}`
+            : "O navegador não informa o espaço usado."}
+        </p>
+        <p className="text-foreground">
+          {data?.persistente === true
+            ? "Armazenamento persistente: o navegador não apaga estes dados para liberar espaço."
+            : data?.persistente === false
+              ? "Armazenamento não persistente."
+              : "Persistência do armazenamento ainda não verificada."}
+        </p>
+        {data?.persistente === false && (
+          <p className="rounded-xl border border-border bg-muted px-3 py-2 text-foreground" role="status">
+            Sem armazenamento persistente, o navegador pode apagar os dados guardados neste aparelho se faltar espaço ou
+            depois de dias sem uso (no Safari/iOS). Instale o app ("Adicionar à tela inicial") para protegê-los.
+          </p>
+        )}
+      </Cartao>
+    </section>
+  );
+}
+
 export function Sincronizacao() {
   const { data: pendencias, isLoading, error } = useQuery({
     queryKey: ["sincronizacao", "pendencias"],
@@ -153,8 +335,10 @@ export function Sincronizacao() {
       <CabecalhoPagina
         voltar={<VoltarConfiguracoes />}
         titulo="Sincronização"
-        subtitulo="O que foi registrado sem conexão sobe sozinho quando ela volta. Aqui ficam as mudanças que precisam de uma decisão sua."
+        subtitulo="O que foi registrado sem conexão sobe sozinho quando ela volta. Aqui você acompanha o envio e decide o que precisar."
       />
+      <div className="space-y-6">
+      <SecaoStatus />
       <section aria-labelledby="titulo-pendencias" className="space-y-3">
         <h2 id="titulo-pendencias" className="flex items-center gap-2 font-semibold text-foreground">
           <TriangleAlert className="size-4" aria-hidden /> Pendências
@@ -165,12 +349,15 @@ export function Sincronizacao() {
           <MensagemErro erro={error} />
         ) : !pendencias?.length ? (
           <p className="flex items-center gap-2 text-sm text-muted-foreground">
-            <CheckCircle2 className="size-4" aria-hidden /> Nenhuma pendência: tudo o que foi registrado neste aparelho chegou ao servidor ou está na fila de envio.
+            <CheckCircle2 className="size-4" aria-hidden /> Nenhuma mudança esperando decisão.
           </p>
         ) : (
           pendencias.map((p) => <CartaoPendencia key={p.op.id} pendencia={p} ctx={ctx} />)
         )}
       </section>
+      <SecaoFila />
+      <SecaoArmazenamento />
+      </div>
     </>
   );
 }

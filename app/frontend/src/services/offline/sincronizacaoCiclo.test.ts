@@ -109,7 +109,15 @@ describe("sincronizar", () => {
     expect(enviadas[1]).toMatchObject({ coloniaId: "c1", dados: AVALIACAO });
     expect(apis.syncApi.alteracoes).toHaveBeenCalledTimes(1);
     expect(await banco.contarFila(db)).toBe(0);
-    expect(useSincronizacao.getState()).toMatchObject({ sincronizando: false, naFila: 0, concluidas: concluidasAntes + 1 });
+    expect(useSincronizacao.getState()).toMatchObject({
+      sincronizando: false,
+      naFila: 0,
+      decisoes: 0,
+      progresso: null,
+      servidorInacessivel: false,
+      concluidas: concluidasAntes + 1,
+    });
+    expect(useSincronizacao.getState().ultimaSincronizacao).toEqual(expect.any(String));
   });
 
   it("envio interrompido: o reenvio usa os mesmos ids e `duplicado` tira da fila", async () => {
@@ -139,6 +147,7 @@ describe("sincronizar", () => {
     expect(apis.syncApi.alteracoes).not.toHaveBeenCalled();
     expect(await banco.contarFila(db)).toBe(3);
     expect(agendadas().map(([, ms]) => ms)).toEqual([ESPERAS_MS[0]]);
+    expect(useSincronizacao.getState().servidorInacessivel).toBe(true);
 
     await sincronizar("fora-do-ar");
     expect(agendadas().map(([, ms]) => ms)).toEqual([ESPERAS_MS[0], ESPERAS_MS[1]]);
@@ -174,6 +183,7 @@ describe("sincronizar", () => {
     expect(r.naFila).toBe(2);
     const [parada] = await banco.lerFila(db);
     expect(parada).toMatchObject({ estado: "erro", ultimoErro: "A espécie deve ser a mesma da colônia mãe" });
+    expect(useSincronizacao.getState()).toMatchObject({ naFila: 2, decisoes: 1 });
   });
 
   it("conflito: fica parado com a versão do servidor e o pull não sobrescreve a cópia local", async () => {
@@ -225,10 +235,16 @@ describe("ciclos, lotes e nova tentativa", () => {
     relacionadas: [],
   });
 
-  it("mais de 500 operações: todas enviadas num ciclo, em dois lotes", async () => {
+  it("mais de 500 operações: todas enviadas num ciclo, em dois lotes, com o progresso subindo", async () => {
     const db = await entrarCarregado("muitas");
     for (let i = 0; i < 501; i++) await banco.enfileirar(db, opFila(i), []);
+    const vistos: string[] = [];
+    const parar = useSincronizacao.subscribe((s) => {
+      if (s.progresso) vistos.push(`${s.progresso.feitas}/${s.progresso.total}`);
+    });
     const r = await sincronizar("muitas");
+    parar();
+    expect([...new Set(vistos)]).toEqual(["0/501", "500/501", "501/501"]);
     expect(apis.syncApi.enviar.mock.calls.map(([ops]) => (ops as OperacaoSync[]).length)).toEqual([500, 1]);
     expect(r).toMatchObject({ enviadas: 501, naFila: 0 });
   });

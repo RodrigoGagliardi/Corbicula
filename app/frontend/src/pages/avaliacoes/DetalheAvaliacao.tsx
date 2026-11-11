@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { AvisoPendencia } from "../../components/features/AvisoPendencia";
 import { GaleriaFotos } from "../../components/features/GaleriaFotos";
+import { SeloEnvio } from "../../components/features/SeloEnvio";
 import { BarraScore } from "../../components/features/SeloScore";
 import { Botao, LinkBotao } from "../../components/ui/Botao";
 import { CabecalhoPagina, Cartao, Selo } from "../../components/ui/Cartao";
@@ -71,7 +72,11 @@ export function DetalheAvaliacao() {
             <ArrowLeft className="size-4" aria-hidden /> {colonia?.codigo ?? "Colônia"}
           </Link>
         }
-        titulo="Avaliação"
+        titulo={
+          <span className="inline-flex flex-wrap items-center gap-2">
+            Avaliação <SeloEnvio id={avaliacao.id} />
+          </span>
+        }
         subtitulo={formatarDataHora(avaliacao.dataAvaliacao)}
         acoes={
           podeEditar(avaliacao.createdAt) && (

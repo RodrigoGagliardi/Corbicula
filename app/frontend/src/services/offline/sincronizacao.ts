@@ -205,18 +205,32 @@ export function sincronizar(usuarioId: string): Promise<ResultadoSincronizacao> 
   return ciclo;
 }
 
-// Atualiza os contadores (fila e fotos) do usuário da sessão; devolve o da fila. Nunca lança.
+// Contadores do banco local: fila, fotos aguardando, decisões e a última sincronização.
+async function contagens(db: BancoOffline) {
+  const [fila, fotosPendentes, meta] = await Promise.all([lerFila(db), contarFotosPendentes(db), lerMeta(db)]);
+  return {
+    naFila: fila.length,
+    fotosPendentes,
+    decisoes: fila.filter((o) => o.estado !== "pendente").length,
+    ultimaSincronizacao: meta.ultimoPull,
+  };
+}
+
+// Atualiza os contadores do usuário da sessão; devolve o da fila. Nunca lança.
 export async function atualizarContagem(usuarioId: string): Promise<number> {
   if (!indexedDbDisponivel()) return 0;
   try {
-    const db = await abrirBanco(usuarioId);
-    const [naFila, fotosPendentes] = await Promise.all([contarFila(db), contarFotosPendentes(db)]);
-    if (sessaoDoUsuario(usuarioId)) useSincronizacao.setState({ naFila, fotosPendentes });
-    return naFila;
+    const c = await contagens(await abrirBanco(usuarioId));
+    if (sessaoDoUsuario(usuarioId)) useSincronizacao.setState(c);
+    return c.naFila;
   } catch {
     return 0;
   }
 }
+
+// Progresso do ciclo em andamento (itens enviados / total).
+const avancar = (n: number) =>
+  useSincronizacao.setState((s) => (s.progresso ? { progresso: { ...s.progresso, feitas: Math.min(s.progresso.total, s.progresso.feitas + n) } } : {}));
 
 type ResultadoEnvio = Pick<ResultadoSincronizacao, "enviadas" | "paradas" | "falhaEnvio">;
 
@@ -236,6 +250,7 @@ async function enviarFila(db: BancoOffline, usuarioId: string): Promise<Resultad
     }
     const mudancas = aplicarResultados(lote, resposta.resultados);
     await atualizarFila(db, mudancas);
+    avancar(lote.length);
     envio.enviadas += mudancas.remover.length;
     envio.paradas += mudancas.atualizar.filter((o) => o.estado !== "pendente").length;
     // Nenhum resultado casou com o lote: parar evita reenviar o mesmo lote sem fim.
@@ -268,21 +283,25 @@ async function enviarFotos(
       await fotosApi.enviar(new Blob([foto.bytes], { type: foto.tipo }), foto.vinculo);
       await removerFoto(db, foto.id);
       enviadas += 1;
+      avancar(1);
     } catch (erro) {
       if (!(erro instanceof ErroApi)) {
         const ultimoErro = erro instanceof Error ? erro.message : String(erro);
         await guardarFoto(db, { ...foto, estado: "erro", tentativas: foto.tentativas + 1, ultimoErro });
         alteradas += 1;
+        avancar(1);
         continue;
       }
       if (erro.status === 404) {
         await removerFoto(db, foto.id);
         alteradas += 1;
+        avancar(1);
         continue;
       }
       if (erro.status >= 400 && erro.status < 500 && ![401, 408, 429].includes(erro.status)) {
         await guardarFoto(db, { ...foto, estado: "erro", tentativas: foto.tentativas + 1, ultimoErro: erro.message });
         alteradas += 1;
+        avancar(1);
         continue;
       }
       return { enviadas, alteradas, falha: falha(erro) as FalhaPull };
@@ -314,10 +333,14 @@ async function executarSincronizacao(usuarioId: string): Promise<ResultadoSincro
   // Sem rede não há o que tentar; o evento "online" dispara a próxima.
   if (semRede()) return { ...vazio, naFila: await atualizarContagem(usuarioId), falhaEnvio: SEM_REDE };
 
-  useSincronizacao.setState({ sincronizando: true });
+  useSincronizacao.setState({ sincronizando: true, progresso: null });
   let resultado: ResultadoSincronizacao;
   try {
     const db = await abrirBanco(usuarioId);
+    // Total do ciclo: operações a enviar e fotos aguardando.
+    const [filaInicial, fotosIniciais] = await Promise.all([lerFila(db), contarFotosPendentes(db)]);
+    const total = filaInicial.filter((o) => o.estado === "pendente").length + fotosIniciais;
+    useSincronizacao.setState({ progresso: total > 0 ? { feitas: 0, total } : null });
     const envio = await enviarFila(db, usuarioId);
     const fotos = envio.falhaEnvio ? { enviadas: 0, alteradas: 0, falha: null } : await enviarFotos(db, usuarioId);
     const pull = envio.falhaEnvio ? null : await puxarAlteracoes(usuarioId);
@@ -337,17 +360,20 @@ async function executarSincronizacao(usuarioId: string): Promise<ResultadoSincro
     const mudou =
       resultado.enviadas + resultado.paradas + resultado.fotosEnviadas + resultado.fotosAlteradas > 0 ||
       (resultado.pull?.ok === true && resultado.pull.alterados > 0);
-    const fotosPendentes = await abrirBanco(usuarioId)
-      .then(contarFotosPendentes)
-      .catch(() => useSincronizacao.getState().fotosPendentes);
+    const c = await abrirBanco(usuarioId)
+      .then(contagens)
+      .catch(() => ({}));
     useSincronizacao.setState((s) => ({
+      ...c,
       sincronizando: false,
+      progresso: null,
       naFila: resultado.naFila,
-      fotosPendentes,
+      // Rede ou servidor falhou com o navegador online: o servidor não está respondendo.
+      servidorInacessivel: falhaTransitoria(resultado) && !semRede(),
       concluidas: mudou ? s.concluidas + 1 : s.concluidas,
     }));
   } else {
-    useSincronizacao.setState({ sincronizando: false });
+    useSincronizacao.setState({ sincronizando: false, progresso: null });
   }
 
   if (!falhaTransitoria(resultado)) {

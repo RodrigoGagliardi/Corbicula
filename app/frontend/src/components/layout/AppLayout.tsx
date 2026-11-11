@@ -1,13 +1,11 @@
-import { Ellipsis, Info, LogOut, Monitor, Moon, PanelLeftClose, PanelLeftOpen, RefreshCw, Settings, Sun, User, Wifi, WifiOff, X } from "lucide-react";
+import { Ellipsis, Info, LogOut, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Settings, Sun, User, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { useCargaLocal } from "../../hooks/useCargaLocal";
 import { useAlertas } from "../../hooks/useDados";
-import { useOnline } from "../../hooks/useOnline";
-import { sincronizar } from "../../services/offline/sincronizacao";
 import { useAuth } from "../../store/auth";
-import { useSincronizacao } from "../../store/sincronizacao";
 import { usePreferencias, type Tema } from "../../store/preferencias";
+import { IndicadorConexao } from "./IndicadorConexao";
 import { Marca } from "./Marca";
 import { ACAO_PRINCIPAL, ITENS_BARRA_INFERIOR, ITENS_NAV, type ItemNav } from "./navegacao";
 
@@ -29,48 +27,6 @@ export function AppLayout() {
       </div>
       <BarraInferior />
     </div>
-  );
-}
-
-// Status da conexão. Online, é também o botão "Sincronizar agora" (envia a fila
-// offline e traz o que mudou); gira enquanto sincroniza. O contador de pendências
-// e o progresso entram com a tela de Sincronização.
-function IndicadorConexao({ compacto = false, className = "" }: { compacto?: boolean; className?: string }) {
-  const online = useOnline();
-  const usuarioId = useAuth((s) => s.usuario?.id);
-  const sincronizando = useSincronizacao((s) => s.sincronizando);
-  const rotulo = online ? "Online" : "Offline";
-  const texto = compacto ? <span className="sr-only">{rotulo}</span> : rotulo;
-
-  if (!online || !usuarioId) {
-    return (
-      <span
-        className={`inline-flex items-center gap-1.5 text-xs font-medium ${className}`}
-        role="status"
-        title={
-          online
-            ? "Conectado"
-            : "Sem conexão — os dados exibidos podem estar desatualizados; colônias, avaliações e colheitas salvas ficam no aparelho e são enviadas quando a conexão voltar"
-        }
-      >
-        {online ? <Wifi className="size-4 shrink-0" aria-hidden /> : <WifiOff className="size-4 shrink-0" aria-hidden />}
-        {texto}
-      </span>
-    );
-  }
-  const Icone = sincronizando ? RefreshCw : Wifi;
-  return (
-    <button
-      type="button"
-      onClick={() => void sincronizar(usuarioId)}
-      disabled={sincronizando}
-      className={`inline-flex items-center gap-1.5 rounded-md text-xs font-medium hover:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-wait ${className}`}
-      title={sincronizando ? "Sincronizando…" : "Conectado — toque para sincronizar agora"}
-      aria-label={sincronizando ? "Sincronizando" : `${rotulo}. Sincronizar agora`}
-    >
-      <Icone className={`size-4 shrink-0 ${sincronizando ? "animate-spin" : ""}`} aria-hidden />
-      {texto}
-    </button>
   );
 }
 
@@ -275,7 +231,8 @@ function BarraSuperiorMobile() {
       <Link to="/app">
         <Marca claro />
       </Link>
-      <IndicadorConexao compacto className="opacity-80" />
+      {/* No mobile o estado e o progresso aparecem por escrito, como na sidebar. */}
+      <IndicadorConexao className="max-w-[65%] justify-end text-right opacity-80" />
     </header>
   );
 }
