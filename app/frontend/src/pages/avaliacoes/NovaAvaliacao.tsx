@@ -9,12 +9,11 @@ import { AreaTexto, Campo, CLASSE_ENTRADA, Entrada } from "../../components/ui/C
 import { CabecalhoPagina, Cartao } from "../../components/ui/Cartao";
 import { Carregando, ErroCarregamento, EstadoVazio, MensagemErro } from "../../components/ui/Estados";
 import { chaves, useColonias, useParametros } from "../../hooks/useDados";
-import { fotosApi } from "../../services/api/endpoints";
 import { escritas } from "../../services/offline/escrita";
+import { anexarFoto } from "../../services/offline/fotos";
 import type { AvaliacaoDetalhada, Classificacao, Colonia, Parametro } from "../../types/api";
 import { correspondeBusca } from "../../utils/colonias";
 import { formatarData, paraInputDataHora, tempoRelativo } from "../../utils/format";
-import { comprimirImagem } from "../../utils/imagem";
 import { calcularScore } from "../../utils/score";
 import { SeletorMotivo } from "../../components/features/SeletorMotivo";
 import {
@@ -215,30 +214,30 @@ export function FormularioAvaliacao({
         // Edição: o servidor recalcula o score com o conjunto enviado. Fotos são
         // gerenciadas no detalhe da avaliação.
         // Offline, a edição fica na fila e aparece na hora na cópia local.
-        return { avaliacao: await escritas.atualizarAvaliacao(colonia.id, avaliacao, dados), fotoFalhou: false };
+        return { avaliacao: await escritas.atualizarAvaliacao(colonia.id, avaliacao, dados), fotoFalhou: false, fotoPendente: false };
       }
       const criada = await escritas.criarAvaliacao(colonia.id, dados);
 
-      // A foto é enviada depois e nunca desfaz a avaliação: se falhar, a
-      // avaliação continua salva e o aviso aparece no detalhe. Avaliação salva
-      // offline: a foto ainda não é guardada (fotos offline vêm depois) e o
-      // mesmo aviso aparece.
-      let fotoFalhou = Boolean(foto) && criada.offline;
-      if (foto && !criada.offline) {
+      // A foto vai depois e nunca desfaz a avaliação. Sem conexão (ou com a
+      // avaliação ainda na fila), fica guardada no aparelho e sobe na
+      // sincronização; se falhar, a avaliação continua salva e o detalhe avisa.
+      let fotoFalhou = false;
+      let fotoPendente = false;
+      if (foto) {
         try {
-          await fotosApi.enviar(await comprimirImagem(foto), { avaliacaoId: criada.id });
+          fotoPendente = (await anexarFoto(foto, { avaliacaoId: criada.id })).pendente;
         } catch {
           fotoFalhou = true;
         }
       }
-      return { avaliacao: criada, fotoFalhou };
+      return { avaliacao: criada, fotoFalhou, fotoPendente };
     },
-    onSuccess: ({ avaliacao: salva, fotoFalhou }) => {
+    onSuccess: ({ avaliacao: salva, fotoFalhou, fotoPendente }) => {
       queryClient.invalidateQueries({ queryKey: chaves.colonias });
       queryClient.invalidateQueries({ queryKey: ["fotos"] });
       navegar(`/app/colonias/${colonia.id}/avaliacoes/${salva.id}`, {
         replace: true,
-        state: editando ? { editada: true } : { nova: true, fotoFalhou },
+        state: editando ? { editada: true } : { nova: true, fotoFalhou, fotoPendente },
       });
     },
   });

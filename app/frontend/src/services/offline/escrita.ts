@@ -69,7 +69,7 @@ interface Pedido {
   local: (ctx: ContextoLocal) => Promise<{ mudancas: MudancaLocal[]; base?: LinhaLocal }>;
 }
 
-async function bancoDoUsuario(usuarioId: string | undefined): Promise<BancoOffline | null> {
+export async function bancoDoUsuario(usuarioId: string | undefined): Promise<BancoOffline | null> {
   if (!usuarioId || !indexedDbDisponivel()) return null;
   try {
     return await abrirBanco(usuarioId);

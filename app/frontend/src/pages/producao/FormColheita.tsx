@@ -8,11 +8,10 @@ import { AreaTexto, Campo, Entrada, Selecao } from "../../components/ui/Campo";
 import { CabecalhoPagina, Cartao } from "../../components/ui/Cartao";
 import { Carregando, ErroCarregamento, MensagemErro } from "../../components/ui/Estados";
 import { chaves, useColonias, useProducao } from "../../hooks/useDados";
-import { fotosApi } from "../../services/api/endpoints";
 import { escritas } from "../../services/offline/escrita";
+import { anexarFoto } from "../../services/offline/fotos";
 import type { Producao, ProducaoInput, TipoProduto, Unidade } from "../../types/api";
 import { paraInputData } from "../../utils/format";
-import { comprimirImagem } from "../../utils/imagem";
 import { ROTULO_PRODUTO, TIPOS_PRODUTO, UNIDADE_PADRAO } from "../../utils/producao";
 
 interface Estado {
@@ -110,26 +109,28 @@ function Formulario({ producao }: { producao?: Producao | undefined }) {
       const dados = paraPayload(estado);
       if (producao) {
         const { coloniaId: _colonia, ...resto } = dados;
-        return { salva: await escritas.atualizarProducao(producao, resto), fotoFalhou: false };
+        return { salva: await escritas.atualizarProducao(producao, resto), fotoFalhou: false, fotoPendente: false };
       }
       const salva = await escritas.criarProducao(dados);
       // A foto sobe depois e nunca desfaz a colheita (foto é opcional — CLAUDE.md §8).
-      // Colheita salva offline: a foto ainda não é guardada (fotos offline vêm depois).
-      let fotoFalhou = Boolean(foto) && salva.offline;
-      if (foto && !salva.offline) {
+      // Sem conexão (ou com a colheita ainda na fila), fica guardada no aparelho.
+      let fotoFalhou = false;
+      let fotoPendente = false;
+      if (foto) {
         try {
-          await fotosApi.enviar(await comprimirImagem(foto), { producaoId: salva.id });
+          fotoPendente = (await anexarFoto(foto, { producaoId: salva.id })).pendente;
         } catch {
           fotoFalhou = true;
         }
       }
-      return { salva, fotoFalhou };
+      return { salva, fotoFalhou, fotoPendente };
     },
-    onSuccess: ({ fotoFalhou }) => {
+    onSuccess: ({ fotoFalhou, fotoPendente }) => {
       queryClient.invalidateQueries({ queryKey: chaves.producoes });
       queryClient.invalidateQueries({ queryKey: chaves.colonias });
       queryClient.invalidateQueries({ queryKey: ["fotos"] });
       if (fotoFalhou) window.alert("A colheita foi salva, mas a foto não pôde ser enviada. Você pode adicioná-la editando a colheita.");
+      if (fotoPendente) window.alert("A colheita foi salva. A foto ficou guardada no aparelho e será enviada quando a conexão voltar.");
       navegar("/app/producao", { replace: true });
     },
   });

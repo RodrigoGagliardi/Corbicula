@@ -73,7 +73,7 @@ describe("banco local (IndexedDB)", () => {
   it("cria os stores e o índice coloniaId; meta começa vazia", async () => {
     const db = await abrirBanco("estrutura");
     expect(db.name).toBe("corbicula-offline-estrutura");
-    expect([...db.objectStoreNames].sort()).toEqual(["avaliacoes", "colonias", "especies", "fila", "meta", "parametros", "producoes"]);
+    expect([...db.objectStoreNames].sort()).toEqual(["avaliacoes", "colonias", "especies", "fila", "fotos", "meta", "parametros", "producoes"]);
 
     const tx = db.transaction(["avaliacoes", "producoes"]);
     expect([...tx.objectStore("avaliacoes").indexNames]).toEqual(["coloniaId"]);
@@ -312,6 +312,29 @@ describe("fila de operações", () => {
     reaberto.close();
   });
 
+  it("um banco da versão 2 ganha o store de fotos e mantém a fila", async () => {
+    const v2 = await openDB(nomeBanco("versao-2"), 2, {
+      upgrade(db) {
+        db.createObjectStore("colonias", { keyPath: "id" });
+        db.createObjectStore("avaliacoes", { keyPath: "id" }).createIndex("coloniaId", "coloniaId");
+        db.createObjectStore("producoes", { keyPath: "id" }).createIndex("coloniaId", "coloniaId");
+        db.createObjectStore("parametros", { keyPath: "id" });
+        db.createObjectStore("especies", { keyPath: "id" });
+        db.createObjectStore("meta");
+        db.createObjectStore("fila", { keyPath: "id" }).createIndex("ordem", "ordem");
+      },
+    });
+    await v2.put("fila", { ...operacao("op1", "c1"), ordem: 1 });
+    v2.close();
+
+    const db = await abrirBanco("versao-2");
+    expect(db.version).toBe(3);
+    expect((await lerFila(db)).map((o) => o.id)).toEqual(["op1"]);
+    const tx = db.transaction("fotos");
+    expect([...tx.store.indexNames]).toEqual(["entidadeId"]);
+    expect(await db.count("fotos")).toBe(0);
+  });
+
   it("um banco da versão 1 ganha a fila e mantém os dados", async () => {
     const v1 = await openDB(nomeBanco("versao-1"), 1, {
       upgrade(db) {
@@ -327,7 +350,7 @@ describe("fila de operações", () => {
     v1.close();
 
     const db = await abrirBanco("versao-1");
-    expect(db.version).toBe(2);
+    expect(db.version).toBe(3);
     expect(await chaves(db, "colonias")).toEqual(["c1"]);
     expect(await contarFila(db)).toBe(0);
   });

@@ -8,6 +8,7 @@ import {
   type AvaliacaoServidor,
   type ColoniaServidor,
   type IdsPorTipo,
+  type FotoPendente,
   type LinhaLocal,
   type MetaOffline,
   type OperacaoFila,
@@ -29,11 +30,13 @@ interface EsquemaOffline extends DBSchema {
   meta: { key: string; value: MetaOffline };
   // Fila de operações offline (versão 2), na ordem em que foram feitas.
   fila: { key: string; value: OperacaoFila; indexes: { ordem: number } };
+  // Fotos guardadas offline (versão 3), esperando o POST /fotos.
+  fotos: { key: string; value: FotoPendente; indexes: { entidadeId: string } };
 }
 
 export type BancoOffline = IDBPDatabase<EsquemaOffline>;
 
-const VERSAO = 2;
+const VERSAO = 3;
 const CHAVE_META = "meta";
 
 export const nomeBanco = (usuarioId: string) => `corbicula-offline-${usuarioId}`;
@@ -61,6 +64,7 @@ export function abrirBanco(usuarioId: string): Promise<BancoOffline> {
         db.createObjectStore("meta");
       }
       if (versaoAntiga < 2) db.createObjectStore("fila", { keyPath: "id" }).createIndex("ordem", "ordem");
+      if (versaoAntiga < 3) db.createObjectStore("fotos", { keyPath: "id" }).createIndex("entidadeId", "entidadeId");
     },
     // Outra aba quer uma versão mais nova do banco: fecha esta conexão para não travá-la.
     blocking() {
@@ -205,3 +209,13 @@ export async function atualizarFila(db: BancoOffline, mudancas: MudancasFila): P
     tx.done,
   ]);
 }
+
+// ─── Fotos guardadas offline ──────────────────────────────────────────────────
+
+export const guardarFoto = (db: BancoOffline, foto: FotoPendente) => db.put("fotos", foto);
+export const lerFotos = (db: BancoOffline): Promise<FotoPendente[]> => db.getAll("fotos");
+export const fotosDoRegistro = (db: BancoOffline, entidadeId: string): Promise<FotoPendente[]> =>
+  db.getAllFromIndex("fotos", "entidadeId", entidadeId);
+export const removerFoto = (db: BancoOffline, id: string) => db.delete("fotos", id);
+export const contarFotosPendentes = async (db: BancoOffline) =>
+  (await db.getAll("fotos")).filter((f) => f.estado === "pendente").length;

@@ -7,6 +7,8 @@ interface EstadoSincronizacao {
   sincronizando: boolean;
   // Operações na fila do usuário da sessão (pendentes e paradas).
   naFila: number;
+  // Fotos guardadas offline esperando envio.
+  fotosPendentes: number;
   // Incrementado quando uma sincronização muda dados (algo enviado ou trazido
   // pelo pull): o main.tsx invalida as queries para as telas relerem.
   concluidas: number;
@@ -15,5 +17,6 @@ interface EstadoSincronizacao {
 export const useSincronizacao = create<EstadoSincronizacao>()(() => ({
   sincronizando: false,
   naFila: 0,
+  fotosPendentes: 0,
   concluidas: 0,
 }));

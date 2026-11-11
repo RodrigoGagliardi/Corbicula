@@ -134,3 +134,23 @@ export interface RespostaSync {
   erros: number;
   resultados: ResultadoOperacaoSync[];
 }
+
+// ─── Fotos guardadas offline (POST /fotos depois do /sync) ───────────────────
+
+// Registro a que a foto se liga (um só, como o upload aceita).
+export type VinculoFoto = { coloniaId: string } | { avaliacaoId: string } | { producaoId: string };
+
+export interface FotoPendente {
+  id: string;
+  vinculo: VinculoFoto;
+  // Id do registro do vínculo (índice para a galeria e para esperar o create).
+  entidadeId: string;
+  // Bytes da foto comprimida e o tipo: um Blob no IndexedDB falha em alguns navegadores.
+  bytes: ArrayBuffer;
+  tipo: string;
+  criadoEm: string;
+  // pendente: sobe na próxima sincronização; erro: recusada pelo servidor (4xx), parada.
+  estado: "pendente" | "erro";
+  tentativas: number;
+  ultimoErro?: string;
+}

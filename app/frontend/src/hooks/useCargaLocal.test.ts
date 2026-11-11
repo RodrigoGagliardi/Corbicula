@@ -18,7 +18,16 @@ vi.mock("../services/offline/sincronizacao", () => sinc);
 const { useCargaLocal } = await import("./useCargaLocal");
 
 // Ciclo sem nada na fila; só o resultado do pull importa para o hook.
-const ciclo = (pull: ResultadoPull): ResultadoSincronizacao => ({ enviadas: 0, paradas: 0, falhaEnvio: null, pull, naFila: 0 });
+const ciclo = (pull: ResultadoPull): ResultadoSincronizacao => ({
+  enviadas: 0,
+  paradas: 0,
+  falhaEnvio: null,
+  fotosEnviadas: 0,
+  fotosAlteradas: 0,
+  falhaFotos: null,
+  pull,
+  naFila: 0,
+});
 const OK = ciclo({ ok: true, servidorEm: "2026-11-05T10:00:00.000Z", cargaCompleta: true, alterados: 0 });
 const FALHA = ciclo({ ok: false, motivo: "sem-conexao", mensagem: "Sem conexão com o servidor." });
 

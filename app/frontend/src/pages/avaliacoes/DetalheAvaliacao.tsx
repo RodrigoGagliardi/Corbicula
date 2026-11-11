@@ -24,7 +24,7 @@ export function DetalheAvaliacao() {
   const { coloniaId = "", id = "" } = useParams();
   const navegar = useNavigate();
   const queryClient = useQueryClient();
-  const estado = useLocation().state as { nova?: boolean; editada?: boolean; fotoFalhou?: boolean } | null;
+  const estado = useLocation().state as { nova?: boolean; editada?: boolean; fotoFalhou?: boolean; fotoPendente?: boolean } | null;
   const { data: avaliacao, isLoading, error, refetch } = useAvaliacao(coloniaId, id);
   const { data: colonia } = useColonia(coloniaId);
   const { data: historico } = useAvaliacoes(coloniaId);
@@ -95,6 +95,7 @@ export function DetalheAvaliacao() {
         <p className="mb-4 flex items-center gap-2 rounded-xl bg-green-50 px-4 py-3 text-sm text-green-800 dark:bg-green-950/50 dark:text-green-300" role="status">
           <CheckCircle2 className="size-4" aria-hidden /> Avaliação salva.
           {estado.fotoFalhou && " A foto não pôde ser enviada — tente adicioná-la abaixo."}
+          {estado.fotoPendente && " A foto ficou guardada no aparelho e será enviada quando a conexão voltar."}
         </p>
       )}
 

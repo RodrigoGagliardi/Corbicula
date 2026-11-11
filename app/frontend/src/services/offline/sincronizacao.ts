@@ -1,7 +1,7 @@
 import { useAuth } from "../../store/auth";
 import { useSincronizacao } from "../../store/sincronizacao";
 import { ErroApi } from "../api/client";
-import { especiesApi, syncApi } from "../api/endpoints";
+import { especiesApi, fotosApi, syncApi } from "../api/endpoints";
 import {
   abrirBanco,
   aplicarPull,
@@ -9,9 +9,13 @@ import {
   atualizarMeta,
   contarEspecies,
   contarFila,
+  contarFotosPendentes,
+  guardarFoto,
   indexedDbDisponivel,
   lerFila,
+  lerFotos,
   lerMeta,
+  removerFoto,
   type BancoOffline,
 } from "./banco";
 import { aplicarResultados, paraEnvio, proximoLote } from "./fila";
@@ -133,12 +137,18 @@ export interface ResultadoSincronizacao {
   paradas: number;
   // Falha que interrompeu o envio; null = enviou tudo o que podia.
   falhaEnvio: FalhaPull | null;
+  // Fotos guardadas que subiram, que saíram ou pararam (404/4xx), e a falha
+  // transitória que parou o envio delas.
+  fotosEnviadas: number;
+  fotosAlteradas: number;
+  falhaFotos: FalhaPull | null;
   // null = pull não tentado (o envio falhou antes).
   pull: ResultadoPull | null;
   naFila: number;
 }
 
-export const sincronizacaoOk = (r: ResultadoSincronizacao) => r.falhaEnvio === null && r.pull?.ok === true;
+export const sincronizacaoOk = (r: ResultadoSincronizacao) =>
+  r.falhaEnvio === null && r.falhaFotos === null && r.pull?.ok === true;
 
 // Esperas entre tentativas depois de falhas transitórias seguidas (rede, timeout, 5xx).
 export const ESPERAS_MS = [15_000, 30_000, 60_000, 120_000, 300_000];
@@ -188,12 +198,13 @@ export function sincronizar(usuarioId: string): Promise<ResultadoSincronizacao> 
   return ciclo;
 }
 
-// Atualiza o contador da fila do usuário da sessão. Nunca lança.
+// Atualiza os contadores (fila e fotos) do usuário da sessão; devolve o da fila. Nunca lança.
 export async function atualizarContagem(usuarioId: string): Promise<number> {
   if (!indexedDbDisponivel()) return 0;
   try {
-    const naFila = await contarFila(await abrirBanco(usuarioId));
-    if (sessaoDoUsuario(usuarioId)) useSincronizacao.setState({ naFila });
+    const db = await abrirBanco(usuarioId);
+    const [naFila, fotosPendentes] = await Promise.all([contarFila(db), contarFotosPendentes(db)]);
+    if (sessaoDoUsuario(usuarioId)) useSincronizacao.setState({ naFila, fotosPendentes });
     return naFila;
   } catch {
     return 0;
@@ -226,11 +237,58 @@ async function enviarFila(db: BancoOffline, usuarioId: string): Promise<Resultad
   return envio;
 }
 
+// Fotos guardadas cujo registro já existe no servidor (nenhum create dele na
+// fila), da mais antiga para a mais nova. Roda depois do envio da fila: as fotos
+// apontam para os ids gerados no cliente.
+//  - 404: o registro sumiu do servidor; a foto é descartada.
+//  - Outro 4xx (exceto 401, 408, 429): arquivo recusado; a foto para com a mensagem.
+//  - Rede, timeout, 5xx, 401, 408, 429: para o envio; a foto fica para a próxima.
+//  - Erro que não vem da API (ex.: bytes ilegíveis): a foto para, para não segurar as outras.
+async function enviarFotos(
+  db: BancoOffline,
+  usuarioId: string
+): Promise<{ enviadas: number; alteradas: number; falha: FalhaPull | null }> {
+  const [fotos, fila] = await Promise.all([lerFotos(db), lerFila(db)]);
+  const aguardandoCreate = new Set(fila.filter((op) => op.operacao === "create").map((op) => op.entidadeId));
+  const prontas = fotos
+    .filter((f) => f.estado === "pendente" && !aguardandoCreate.has(f.entidadeId))
+    .sort((a, b) => a.criadoEm.localeCompare(b.criadoEm));
+  let enviadas = 0;
+  let alteradas = 0;
+  for (const foto of prontas) {
+    if (!sessaoDoUsuario(usuarioId)) return { enviadas, alteradas, falha: SESSAO_TROCADA as FalhaPull };
+    try {
+      await fotosApi.enviar(new Blob([foto.bytes], { type: foto.tipo }), foto.vinculo);
+      await removerFoto(db, foto.id);
+      enviadas += 1;
+    } catch (erro) {
+      if (!(erro instanceof ErroApi)) {
+        const ultimoErro = erro instanceof Error ? erro.message : String(erro);
+        await guardarFoto(db, { ...foto, estado: "erro", tentativas: foto.tentativas + 1, ultimoErro });
+        alteradas += 1;
+        continue;
+      }
+      if (erro.status === 404) {
+        await removerFoto(db, foto.id);
+        alteradas += 1;
+        continue;
+      }
+      if (erro.status >= 400 && erro.status < 500 && ![401, 408, 429].includes(erro.status)) {
+        await guardarFoto(db, { ...foto, estado: "erro", tentativas: foto.tentativas + 1, ultimoErro: erro.message });
+        alteradas += 1;
+        continue;
+      }
+      return { enviadas, alteradas, falha: falha(erro) as FalhaPull };
+    }
+  }
+  return { enviadas, alteradas, falha: null };
+}
+
 // Falha que vale nova tentativa sozinha: rede/timeout ou servidor (5xx, 4xx do lote).
 // Sessão (401) não: o novo login dispara a sincronização.
 function falhaTransitoria(r: ResultadoSincronizacao): boolean {
-  const motivo = r.falhaEnvio?.motivo ?? (r.pull && !r.pull.ok ? r.pull.motivo : null);
-  return motivo === "sem-conexao" || motivo === "servidor";
+  const motivos = [r.falhaEnvio?.motivo, r.falhaFotos?.motivo, r.pull && !r.pull.ok ? r.pull.motivo : undefined];
+  return motivos.some((m) => m === "sem-conexao" || m === "servidor");
 }
 
 async function executarSincronizacao(usuarioId: string): Promise<ResultadoSincronizacao> {
@@ -238,7 +296,7 @@ async function executarSincronizacao(usuarioId: string): Promise<ResultadoSincro
   if (timer) clearTimeout(timer);
   novasTentativas.delete(usuarioId);
 
-  const vazio = { enviadas: 0, paradas: 0, pull: null, naFila: 0 };
+  const vazio = { enviadas: 0, paradas: 0, fotosEnviadas: 0, fotosAlteradas: 0, falhaFotos: null, pull: null, naFila: 0 };
   if (!indexedDbDisponivel()) {
     return {
       ...vazio,
@@ -254,18 +312,31 @@ async function executarSincronizacao(usuarioId: string): Promise<ResultadoSincro
   try {
     const db = await abrirBanco(usuarioId);
     const envio = await enviarFila(db, usuarioId);
+    const fotos = envio.falhaEnvio ? { enviadas: 0, alteradas: 0, falha: null } : await enviarFotos(db, usuarioId);
     const pull = envio.falhaEnvio ? null : await puxarAlteracoes(usuarioId);
-    resultado = { ...envio, pull, naFila: await contarFila(db) };
+    resultado = {
+      ...envio,
+      fotosEnviadas: fotos.enviadas,
+      fotosAlteradas: fotos.alteradas,
+      falhaFotos: fotos.falha,
+      pull,
+      naFila: await contarFila(db),
+    };
   } catch (erro) {
     resultado = { ...vazio, falhaEnvio: falha(erro) as FalhaPull };
   }
 
   if (sessaoDoUsuario(usuarioId)) {
     const mudou =
-      resultado.enviadas + resultado.paradas > 0 || (resultado.pull?.ok === true && resultado.pull.alterados > 0);
+      resultado.enviadas + resultado.paradas + resultado.fotosEnviadas + resultado.fotosAlteradas > 0 ||
+      (resultado.pull?.ok === true && resultado.pull.alterados > 0);
+    const fotosPendentes = await abrirBanco(usuarioId)
+      .then(contarFotosPendentes)
+      .catch(() => useSincronizacao.getState().fotosPendentes);
     useSincronizacao.setState((s) => ({
       sincronizando: false,
       naFila: resultado.naFila,
+      fotosPendentes,
       concluidas: mudou ? s.concluidas + 1 : s.concluidas,
     }));
   } else {

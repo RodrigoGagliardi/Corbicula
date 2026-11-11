@@ -274,6 +274,15 @@ describe("ciclos, lotes e nova tentativa", () => {
   });
 });
 
+describe("sincronizacaoOk", () => {
+  it("falha só nas fotos não conta como sincronização completa", async () => {
+    const { sincronizacaoOk } = await import("./sincronizacao");
+    const base = { enviadas: 0, paradas: 0, falhaEnvio: null, fotosEnviadas: 0, fotosAlteradas: 0, naFila: 0, pull: { ok: true as const, servidorEm: "x", cargaCompleta: false, alterados: 0 } };
+    expect(sincronizacaoOk({ ...base, falhaFotos: null })).toBe(true);
+    expect(sincronizacaoOk({ ...base, falhaFotos: { ok: false, motivo: "servidor", mensagem: "Erro 503" } })).toBe(false);
+  });
+});
+
 describe("esperaDaTentativa", () => {
   it("cresce de 15 s até 5 min e para aí", () => {
     expect([1, 2, 3, 4, 5, 9].map(esperaDaTentativa)).toEqual([15_000, 30_000, 60_000, 120_000, 300_000, 300_000]);
