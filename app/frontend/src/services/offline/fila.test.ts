@@ -58,6 +58,12 @@ describe("baseUpdatedAt", () => {
     expect(baseParaUpdate([op({ entidadeId: "c2" })], "c1", "2026-11-01T00:00:00.000Z")).toBe("2026-11-01T00:00:00.000Z");
   });
 
+  it("update leva só os campos mudados em relação à base (o formulário manda todos)", () => {
+    const base = { id: "c1", observacoes: "antes", localizacao: "igual" } as ColoniaServidor;
+    const o = montarOperacao([], { id: "x", tipo: "colonia", operacao: "update", entidadeId: "c1", dados: { observacoes: "nova", localizacao: "igual" }, criadoEm: "", base });
+    expect(o.dados).toEqual({ observacoes: "nova" });
+  });
+
   it("montarOperacao: update guarda base e baseUpdatedAt; create e delete não", () => {
     const base = { id: "c1", codigo: "COL-001" } as ColoniaServidor;
     const comum = { id: "x", tipo: "colonia" as const, entidadeId: "c1", dados: { coloniaMaeId: "m1" }, criadoEm: "2026-11-09T10:00:00.000Z", base, updatedAtEditado: "2026-11-01T00:00:00.000Z" };

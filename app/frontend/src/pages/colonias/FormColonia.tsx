@@ -100,7 +100,7 @@ function Formulario({ colonia }: { colonia?: ColoniaDetalhada | undefined }) {
   const queryClient = useQueryClient();
   const [params] = useSearchParams();
   // "Editar manualmente" uma pendência (tela de Sincronização): salvar a substitui.
-  const pendencia = params.get("pendencia");
+  const pendencia = colonia ? params.get("pendencia") : null;
   const { data: especies } = useEspecies();
   const { data: colonias } = useColonias();
   const [estado, setEstado] = useState(() => estadoInicial(colonia, params.get("mae")));

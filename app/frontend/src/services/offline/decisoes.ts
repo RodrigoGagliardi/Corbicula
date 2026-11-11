@@ -49,7 +49,9 @@ export function planoServidor(fila: readonly OperacaoFila[], op: OperacaoFila): 
   const plano = vazio();
   plano.removerOperacoes = [op.id, ...seguintesDoRegistro(fila, op).map((o) => o.id)];
   if (op.servidor) plano.mudancas.push({ store: STORE_DO_TIPO[op.tipo], gravar: linhaDoServidor(op.tipo, op.servidor) });
-  else plano.recarregarTudo = true;
+  // Enquanto o registro esperava, os pulls o pularam: a recarga completa traz o
+  // que mudou no servidor depois da versão do conflito.
+  plano.recarregarTudo = true;
   return plano;
 }
 
@@ -87,6 +89,7 @@ export function dependentesDoDescarte(fila: readonly OperacaoFila[], fotos: read
       if (removidas.has(o.id)) continue;
       if (criadas.has(o.entidadeId) || o.relacionadas.some((id) => criadas.has(id))) {
         removidas.set(o.id, o);
+        for (const seguinte of seguintesDoRegistro(fila, o)) removidas.set(seguinte.id, seguinte);
         if (o.operacao === "create" && !criadas.has(o.entidadeId)) criadas.add(o.entidadeId);
         mudou = true;
       }
@@ -116,8 +119,11 @@ export function planoDescartar(fila: readonly OperacaoFila[], fotos: readonly Fo
     const store = STORE_DO_TIPO[o.tipo];
     if (o.operacao === "create") plano.mudancas.push({ store, remover: [o.entidadeId] });
     else if (o.operacao === "update" && o.base) plano.mudancas.push({ store, gravar: o.base });
-    else plano.recarregarTudo = true;
   }
+  // Um update descartado volta à linha anterior, mas o servidor pode ter mudado
+  // o registro enquanto ele esperava; uma exclusão descartada precisa da linha de
+  // volta. A recarga completa resolve os dois.
+  if (todas.some((o) => o.operacao !== "create")) plano.recarregarTudo = true;
   return plano;
 }
 
@@ -171,7 +177,7 @@ export interface Pendencia {
   dependentes: { operacoes: number; fotos: number };
 }
 
-const dataCurta = (iso: string | undefined) => (iso ? new Date(iso).toLocaleDateString("pt-BR") : "");
+const dataCurta = (iso: string | undefined) => (iso ? ` de ${new Date(iso).toLocaleDateString("pt-BR")}` : "");
 
 async function descrever(db: BancoOffline, fila: OperacaoFila[], fotos: FotoPendente[], op: OperacaoFila): Promise<Pendencia> {
   const base = { op, seguintes: seguintesDoRegistro(fila, op).length };
@@ -186,7 +192,7 @@ async function descrever(db: BancoOffline, fila: OperacaoFila[], fotos: FotoPend
       ...base,
       dependentes,
       rotulo: `Colônia ${codigo}`.trim(),
-      rotaEdicao: editavel ? `/app/colonias/${op.entidadeId}/editar${q}` : null,
+      rotaEdicao: editavel && c ? `/app/colonias/${op.entidadeId}/editar${q}` : null,
       rotaDetalhe: c ? `/app/colonias/${op.entidadeId}` : null,
     };
   }
@@ -195,10 +201,10 @@ async function descrever(db: BancoOffline, fila: OperacaoFila[], fotos: FotoPend
     return {
       ...base,
       dependentes,
-      rotulo: `Avaliação de ${dataCurta(a?.dataAvaliacao ?? (op.dados.dataAvaliacao as string | undefined))}${c ? ` · ${c.codigo}` : ""}`,
+      rotulo: `Avaliação${dataCurta(a?.dataAvaliacao ?? (op.dados.dataAvaliacao as string | undefined))}${c ? ` · ${c.codigo}` : ""}`,
       // Fora da janela de 7 dias a edição não abre (nem o servidor aceitaria): resta descartar.
       rotaEdicao:
-        editavel && op.coloniaId && (!a || podeEditar(a.createdAt))
+        editavel && op.coloniaId && a && podeEditar(a.createdAt)
           ? `/app/colonias/${op.coloniaId}/avaliacoes/${op.entidadeId}/editar${q}`
           : null,
       rotaDetalhe: a && op.coloniaId ? `/app/colonias/${op.coloniaId}/avaliacoes/${op.entidadeId}` : null,
@@ -208,8 +214,8 @@ async function descrever(db: BancoOffline, fila: OperacaoFila[], fotos: FotoPend
   return {
     ...base,
     dependentes,
-    rotulo: `Colheita de ${dataCurta(p?.dataColheita ?? (op.dados.dataColheita as string | undefined))}`,
-    rotaEdicao: editavel ? `/app/producao/${op.entidadeId}/editar${q}` : null,
+    rotulo: `Colheita${dataCurta(p?.dataColheita ?? (op.dados.dataColheita as string | undefined))}`,
+    rotaEdicao: editavel && p ? `/app/producao/${op.entidadeId}/editar${q}` : null,
     rotaDetalhe: null,
   };
 }
@@ -229,15 +235,21 @@ export async function pendenciaDoRegistro(entidadeId: string): Promise<OperacaoF
   return porOrdem(await lerFila(db)).find((o) => parada(o) && o.entidadeId === entidadeId) ?? null;
 }
 
+function exigirConflito(op: OperacaoFila) {
+  if (op.estado !== "conflito") throw new ErroApi(409, "Esta pendência foi recusada pelo servidor: edite ou descarte.");
+}
+
 export async function manterServidor(opId: string): Promise<void> {
   const { db, usuarioId } = await contexto();
   const { fila, op } = await operacaoParada(db, opId);
+  exigirConflito(op);
   await concluir(db, usuarioId, planoServidor(fila, op));
 }
 
 export async function manterAparelho(opId: string): Promise<void> {
   const { db, usuarioId } = await contexto();
   const { op } = await operacaoParada(db, opId);
+  exigirConflito(op);
   await concluir(db, usuarioId, planoAparelho(op));
 }
 
@@ -262,7 +274,9 @@ export async function substituirPendencia(opId: string, dados: DadosEdicao): Pro
   if (!linha) throw new ErroApi(404, "O registro desta pendência não está mais na cópia local.");
 
   const criacao = op.operacao === "create";
-  let dadosFinais = (criacao ? { ...op.dados, ...dados } : dados) as Record<string, unknown>;
+  // A operação parada fica por baixo do formulário: uma mudança que ele não reenvia
+  // (ex.: o status, já aplicado na linha local) não se perde.
+  let dadosFinais = { ...op.dados, ...dados } as Record<string, unknown>;
   // Conflito: o formulário traz todos os campos, preenchidos com a versão do
   // aparelho. Vão só os que diferem do servidor e que o usuário mudou (em relação
   // à base) ou que estavam em conflito; o resto fica como o servidor tem.

@@ -1,4 +1,4 @@
-import { juntar } from "./juncao";
+import { camposDoAparelho, juntar } from "./juncao";
 import { linhaDoServidor } from "./linhaLocal";
 import type {
   AcaoOperacao,
@@ -64,7 +64,10 @@ export function montarOperacao(fila: readonly OperacaoFila[], nova: NovaOperacao
     operacao: nova.operacao,
     entidadeId: nova.entidadeId,
     ...(nova.coloniaId && { coloniaId: nova.coloniaId }),
-    dados: nova.dados,
+    // Update: só o que mudou em relação à linha anterior. Os formulários mandam
+    // todos os campos; numa edição encadeada (sem baseUpdatedAt) os não alterados
+    // desfariam, sem checagem, o que outro aparelho mudou.
+    dados: nova.operacao === "update" && nova.base ? camposDoAparelho({ dados: nova.dados, base: nova.base }) : nova.dados,
     ...(baseUpdatedAt && { baseUpdatedAt }),
     criadoEm: nova.criadoEm,
     estado: "pendente",

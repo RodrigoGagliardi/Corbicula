@@ -26,6 +26,8 @@ export type ResultadoJuncao =
   | { tipo: "decisao"; campos: CampoConflito[] };
 
 const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
+// Campos que valem pelo dia (o formulário grava o meio-dia local; o instante exato não importa).
+const DATAS_DE_DIA = new Set(["dataEntrada", "dataColheita"]);
 
 type Parametro = { parametroId: string; classificacao: string; observacoes?: string | null };
 
@@ -45,6 +47,7 @@ function estavel(valor: unknown): unknown {
 // Forma comparável de um valor de campo.
 export function normalizar(campo: string, valor: unknown): string {
   if (valor === undefined || valor === null || valor === "") return "null";
+  if (Array.isArray(valor) && valor.length === 0) return "null";
   if (campo === "parametros" && Array.isArray(valor)) {
     // Linhas locais, payload do formulário e versão REST têm parametroId/classificacao/observacoes.
     const lista = (valor as Parametro[])
@@ -54,7 +57,7 @@ export function normalizar(campo: string, valor: unknown): string {
   }
   if (typeof valor === "string" && ISO.test(valor)) {
     const t = Date.parse(valor);
-    if (!Number.isNaN(t)) return `t:${t}`;
+    if (!Number.isNaN(t)) return DATAS_DE_DIA.has(campo) ? `d:${new Date(t).toISOString().slice(0, 10)}` : `t:${t}`;
   }
   if (typeof valor === "object") {
     // Objeto vazio conta como ausente (ex.: motivosAcoes {} = nada registrado).

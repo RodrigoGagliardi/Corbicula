@@ -75,7 +75,7 @@ function Formulario({ producao }: { producao?: Producao | undefined }) {
   const queryClient = useQueryClient();
   const [params] = useSearchParams();
   // "Editar manualmente" uma pendência (tela de Sincronização): salvar a substitui.
-  const pendencia = params.get("pendencia");
+  const pendencia = producao ? params.get("pendencia") : null;
   const { data: colonias } = useColonias();
   const [estado, setEstado] = useState(() => estadoInicial(producao, params.get("colonia")));
   const [tentou, setTentou] = useState(false);

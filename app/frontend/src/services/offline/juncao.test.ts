@@ -13,6 +13,10 @@ describe("normalizar / iguais", () => {
     expect(iguais("motivosAcoes", {}, null)).toBe(true);
     expect(iguais("dimensoesCaixa", { altura: 1, largura: 2 }, { largura: 2, altura: 1 })).toBe(true);
     expect(iguais("acoesTomadas", ["a", "b"], ["b", "a"])).toBe(false);
+    expect(iguais("acoesTomadas", [], null)).toBe(true);
+    // Datas de dia: o mesmo dia em instantes diferentes é igual; data-hora não.
+    expect(iguais("dataEntrada", "2026-01-01T12:00:00.000Z", "2026-01-01T03:00:00.000Z")).toBe(true);
+    expect(iguais("dataAvaliacao", "2026-01-01T12:00:00.000Z", "2026-01-01T03:00:00.000Z")).toBe(false);
   });
 
   it("parâmetros: um campo só, pela classificação e observação de cada parâmetro, sem ordem", () => {

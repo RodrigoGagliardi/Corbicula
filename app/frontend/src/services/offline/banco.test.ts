@@ -301,6 +301,15 @@ describe("fila de operações", () => {
     expect(alterados).toBe(2);
   });
 
+  it("pedido de recarga só sai numa carga completa (um pull incremental no meio não o apaga)", async () => {
+    const db = await bancoCarregado("recarga");
+    await atualizarMeta(db, { recarregar: true });
+    await aplicarPull(db, resposta(), SEM_PENDENCIAS, null, false);
+    expect((await lerMeta(db)).recarregar).toBe(true);
+    await aplicarPull(db, resposta(), SEM_PENDENCIAS, null, true);
+    expect((await lerMeta(db)).recarregar).toBeUndefined();
+  });
+
   it("a fila sobrevive a fechar e reabrir o banco (app recarregado)", async () => {
     const db = await bancoCarregado("fila-reabrir");
     await enfileirar(db, operacao("op1", "c1"), [{ store: "colonias", gravar: colonia("c1", "offline") }]);

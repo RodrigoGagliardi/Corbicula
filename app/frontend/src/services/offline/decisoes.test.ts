@@ -2,7 +2,7 @@ import "fake-indexeddb/auto";
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useAuth } from "../../store/auth";
 import type { Usuario } from "../../types/api";
-import type { ColoniaServidor, FotoPendente, OperacaoFila, OperacaoSync, ParametroServidor, RespostaAlteracoes, StatusSync } from "./tipos";
+import type { AvaliacaoServidor, ColoniaServidor, FotoPendente, OperacaoFila, OperacaoSync, ParametroServidor, RespostaAlteracoes, StatusSync } from "./tipos";
 
 // Decisões sobre operações paradas e a junção automática no ciclo, com
 // IndexedDB em memória e a API mockada.
@@ -252,6 +252,89 @@ describe("decisões", () => {
   });
 });
 
+describe("regras das decisões", () => {
+  it("manter a deste aparelho não reenvia campo que só o servidor mudou", () => {
+    const op = {
+      id: "o", tipo: "colonia", operacao: "update", entidadeId: "c1", criadoEm: "", ordem: 1, estado: "conflito", tentativas: 1, relacionadas: [],
+      dados: { observacoes: "A", localizacao: "antiga" },
+      base: { id: "c1", observacoes: "antes", localizacao: "antiga" },
+      servidor: { id: "c1", observacoes: "B", localizacao: "do servidor", updatedAt: "2026-11-09T10:00:00.000Z" },
+    } as unknown as OperacaoFila;
+    const [nova] = decisoes.planoAparelho(op).gravarOperacoes;
+    expect(nova!.dados).toEqual({ observacoes: "A" });
+    expect(nova!.baseUpdatedAt).toBe("2026-11-09T10:00:00.000Z");
+  });
+
+  it("servidor e descarte de update pedem recarga completa; descarte só de create não", () => {
+    const base = { tipo: "colonia", entidadeId: "c1", criadoEm: "", tentativas: 1, relacionadas: [], dados: {} };
+    const upd = { ...base, id: "u", operacao: "update", ordem: 1, estado: "erro", base: { id: "c1" } } as unknown as OperacaoFila;
+    const cre = { ...base, id: "c", entidadeId: "c2", operacao: "create", ordem: 2, estado: "erro" } as unknown as OperacaoFila;
+    expect(decisoes.planoServidor([upd], upd).recarregarTudo).toBe(true);
+    expect(decisoes.planoDescartar([upd], [], upd).recarregarTudo).toBe(true);
+    expect(decisoes.planoDescartar([cre], [], cre).recarregarTudo).toBe(false);
+  });
+});
+
+describe("decisões sobre avaliação e colheita", () => {
+  it("manter a do servidor numa avaliação: a linha local fica com os parâmetros, sem objetos embutidos", async () => {
+    const db = await entrarCarregado("av-servidor");
+    // Avaliação que já está no servidor (como viria do pull).
+    const a = { id: "a1" };
+    const linha = {
+      id: "a1", coloniaId: "c1", dataAvaliacao: "2026-11-10T12:00:00.000Z", duracaoMinutos: null, temperatura: null, umidade: null,
+      condicaoClimatica: null, observacoesGerais: null, acoesTomadas: [], motivoInspecao: null, motivoInspecaoDetalhe: null,
+      motivosAcoes: null, climaFonte: null, protocoloId: null, scoreGeral: 100, statusGeral: "excelente",
+      createdAt: new Date().toISOString(), updatedAt: "2026-11-01T00:00:00.000Z",
+      parametros: [{ id: "ap1", avaliacaoId: "a1", parametroId: "p1", classificacao: "bom", valorNumerico: null, observacoes: null, createdAt: "" }],
+    } as AvaliacaoServidor;
+    await db.put("avaliacoes", linha);
+    const versaoServidor = {
+      ...linha,
+      observacoesGerais: "do servidor",
+      updatedAt: "2026-11-11T10:00:00.000Z",
+      colonia: { id: "c1", codigo: "TETRANGU-001" },
+      _count: { parametros: 1 },
+      parametros: [{ id: "ap9", avaliacaoId: a.id, parametroId: "p1", classificacao: "ruim", valorNumerico: null, observacoes: null, createdAt: "", parametro: { id: "p1", nome: "Fluxo" } }],
+    };
+    await pararComo("av-servidor", () => escritas.atualizarAvaliacao("c1", linha, { observacoesGerais: "do aparelho" }), "conflito", () => versaoServidor);
+    const [p] = await decisoes.listarPendencias();
+    await decisoes.manterServidor(p!.op.id);
+    const nova = (await db.get("avaliacoes", a.id))!;
+    expect(nova).toMatchObject({ observacoesGerais: "do servidor" });
+    expect(nova).not.toHaveProperty("colonia");
+    expect(nova.parametros).toEqual([expect.objectContaining({ parametroId: "p1", classificacao: "ruim" })]);
+    expect(nova.parametros[0]).not.toHaveProperty("parametro");
+  });
+
+  it("editar manualmente uma colheita recusada; e só conflito tem servidor/aparelho", async () => {
+    const db = await entrarCarregado("colheita");
+    conexao.online = false;
+    const p = await escritas.criarProducao({ coloniaId: "c1", dataColheita: "2026-11-10T12:00:00.000Z", tipoProduto: "mel", quantidade: 10, unidade: "ml" });
+    conexao.online = true;
+    servidor(() => "erro", undefined, "Recusada");
+    await sincronizar("colheita");
+    const [pend] = await decisoes.listarPendencias();
+    expect(pend!.rotaEdicao).toBe(`/app/producao/${p.id}/editar?pendencia=${pend!.op.id}`);
+    await expect(decisoes.manterServidor(pend!.op.id)).rejects.toMatchObject({ status: 409 });
+
+    conexao.online = false;
+    await decisoes.substituirPendencia(pend!.op.id, { quantidade: 25 });
+    const [op] = await banco.lerFila(db);
+    expect(op).toMatchObject({ operacao: "create", dados: expect.objectContaining({ quantidade: 25, coloniaId: "c1" }) });
+    expect((await db.get("producoes", p.id))?.quantidade).toBe(25);
+  });
+
+  it("editar manualmente não perde a mudança de status feita offline", async () => {
+    const db = await entrarCarregado("status-offline");
+    await pararComo("status-offline", () => escritas.atualizarColonia(C1, { status: "morta", motivoStatus: "fome_escassez" }), "erro", undefined, "Recusada");
+    const [p] = await decisoes.listarPendencias();
+    conexao.online = false;
+    await decisoes.substituirPendencia(p!.op.id, { observacoes: "corrigida" });
+    const [op] = await banco.lerFila(db);
+    expect(op!.dados).toMatchObject({ status: "morta", motivoStatus: "fome_escassez", observacoes: "corrigida" });
+  });
+});
+
 describe("dependentesDoDescarte (cascata)", () => {
   const op = (id: string, entidadeId: string, parcial: Partial<OperacaoFila> = {}): OperacaoFila => ({
     id,
@@ -275,6 +358,9 @@ describe("dependentesDoDescarte (cascata)", () => {
     const fotos = [{ id: "f1", entidadeId: "av" }, { id: "f2", entidadeId: "outra" }] as FotoPendente[];
     const r = decisoes.dependentesDoDescarte([mae, filha, avDaFilha, outra], fotos, mae);
     expect(r.operacoes.map((o) => o.id)).toEqual(["o2", "o3"]);
+    // A edição seguinte de um registro que sai junto também sai.
+    const edicaoDaFilha = op("o5", "filha", { operacao: "update" });
+    expect(decisoes.dependentesDoDescarte([mae, filha, avDaFilha, outra, edicaoDaFilha], [], mae).operacoes.map((o) => o.id)).toEqual(["o2", "o3", "o5"]);
     expect(r.fotos.map((f) => f.id)).toEqual(["f1"]);
   });
 });

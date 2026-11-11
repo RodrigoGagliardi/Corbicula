@@ -237,7 +237,7 @@ async function enviarFila(db: BancoOffline, usuarioId: string): Promise<Resultad
     const mudancas = aplicarResultados(lote, resposta.resultados);
     await atualizarFila(db, mudancas);
     envio.enviadas += mudancas.remover.length;
-    envio.paradas += mudancas.atualizar.length;
+    envio.paradas += mudancas.atualizar.filter((o) => o.estado !== "pendente").length;
     // Nenhum resultado casou com o lote: parar evita reenviar o mesmo lote sem fim.
     if (mudancas.remover.length + mudancas.atualizar.length === 0) break;
   }

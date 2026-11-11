@@ -18,6 +18,10 @@ vi.mock("../../store/preferencias", () => ({
   usePreferencias: (seletor: (s: { diasInspecaoAtrasada: number }) => unknown) => seletor({ diasInspecaoAtrasada: 30 }),
 }));
 vi.mock("../../services/api/endpoints", () => ({ coloniasApi: { criar: vi.fn(), atualizar: vi.fn() } }));
+vi.mock("../../services/offline/decisoes", () => ({
+  substituirPendencia: vi.fn(async () => ({ id: "c1" })),
+  pendenciaDoRegistro: vi.fn(async () => null),
+}));
 
 const criar = vi.mocked(coloniasApi.criar);
 const atualizar = vi.mocked(coloniasApi.atualizar);
@@ -72,6 +76,22 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+});
+
+describe("FormColonia: editar manualmente uma pendência", () => {
+  it("com ?pendencia=: avisa e salva substituindo a pendência, sem a escrita normal", async () => {
+    const { substituirPendencia } = await import("../../services/offline/decisoes");
+    renderizar("/app/colonias/c1/editar?pendencia=op9");
+    expect(screen.getByText(/Você está resolvendo uma pendência/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Salvar alterações" }));
+    await waitFor(() => expect(substituirPendencia).toHaveBeenCalledWith("op9", expect.objectContaining({ origem: expect.any(String) })));
+    expect(atualizar).not.toHaveBeenCalled();
+  });
+
+  it("?pendencia= na criação é ignorado", async () => {
+    renderizar("/app/colonias/nova?pendencia=op9");
+    expect(screen.queryByText(/Você está resolvendo uma pendência/)).not.toBeInTheDocument();
+  });
 });
 
 describe("FormColonia: status, data e motivo", () => {
