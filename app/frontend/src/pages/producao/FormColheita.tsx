@@ -2,12 +2,14 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Camera, X } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
+import { AvisoPendencia, NotaResolvendoPendencia } from "../../components/features/AvisoPendencia";
 import { GaleriaFotos } from "../../components/features/GaleriaFotos";
 import { Botao } from "../../components/ui/Botao";
 import { AreaTexto, Campo, Entrada, Selecao } from "../../components/ui/Campo";
 import { CabecalhoPagina, Cartao } from "../../components/ui/Cartao";
 import { Carregando, ErroCarregamento, MensagemErro } from "../../components/ui/Estados";
 import { chaves, useColonias, useProducao } from "../../hooks/useDados";
+import { substituirPendencia } from "../../services/offline/decisoes";
 import { escritas } from "../../services/offline/escrita";
 import { anexarFoto } from "../../services/offline/fotos";
 import type { Producao, ProducaoInput, TipoProduto, Unidade } from "../../types/api";
@@ -72,6 +74,8 @@ function Formulario({ producao }: { producao?: Producao | undefined }) {
   const navegar = useNavigate();
   const queryClient = useQueryClient();
   const [params] = useSearchParams();
+  // "Editar manualmente" uma pendência (tela de Sincronização): salvar a substitui.
+  const pendencia = params.get("pendencia");
   const { data: colonias } = useColonias();
   const [estado, setEstado] = useState(() => estadoInicial(producao, params.get("colonia")));
   const [tentou, setTentou] = useState(false);
@@ -109,7 +113,8 @@ function Formulario({ producao }: { producao?: Producao | undefined }) {
       const dados = paraPayload(estado);
       if (producao) {
         const { coloniaId: _colonia, ...resto } = dados;
-        return { salva: await escritas.atualizarProducao(producao, resto), fotoFalhou: false, fotoPendente: false };
+        const salva = pendencia ? await substituirPendencia(pendencia, resto) : await escritas.atualizarProducao(producao, resto);
+        return { salva, fotoFalhou: false, fotoPendente: false };
       }
       const salva = await escritas.criarProducao(dados);
       // A foto sobe depois e nunca desfaz a colheita (foto é opcional — CLAUDE.md §8).
@@ -129,6 +134,7 @@ function Formulario({ producao }: { producao?: Producao | undefined }) {
       queryClient.invalidateQueries({ queryKey: chaves.producoes });
       queryClient.invalidateQueries({ queryKey: chaves.colonias });
       queryClient.invalidateQueries({ queryKey: ["fotos"] });
+      if (pendencia) queryClient.invalidateQueries({ queryKey: ["sincronizacao"] });
       if (fotoFalhou) window.alert("A colheita foi salva, mas a foto não pôde ser enviada. Você pode adicioná-la editando a colheita.");
       if (fotoPendente) window.alert("A colheita foi salva. A foto ficou guardada no aparelho e será enviada quando a conexão voltar.");
       navegar("/app/producao", { replace: true });
@@ -152,6 +158,8 @@ function Formulario({ producao }: { producao?: Producao | undefined }) {
         titulo={producao ? "Editar colheita" : "Registrar colheita"}
         subtitulo={producao ? `Colônia ${producao.colonia.codigo}` : "Registro rápido: colônia, produto e quantidade."}
       />
+      {producao && !pendencia && <AvisoPendencia entidadeId={producao.id} />}
+      {pendencia && <NotaResolvendoPendencia />}
 
       <form onSubmit={enviar} className="space-y-4" noValidate>
         <Cartao className="space-y-4">

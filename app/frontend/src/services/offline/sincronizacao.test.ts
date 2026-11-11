@@ -58,7 +58,7 @@ describe("puxarAlteracoes", () => {
     expect(banco.abrirBanco).toHaveBeenCalledWith("u1");
     expect(apis.alteracoes).toHaveBeenCalledWith(undefined);
     expect(apis.listarEspecies).toHaveBeenCalledTimes(1);
-    expect(banco.aplicarPull).toHaveBeenCalledWith({}, RESPOSTA, expect.any(Set), [{ id: "e1" }]);
+    expect(banco.aplicarPull).toHaveBeenCalledWith({}, RESPOSTA, expect.any(Set), [{ id: "e1" }], expect.any(Boolean));
   });
 
   it("incremental: usa o desde gravado (menos a margem) e não busca espécies se já existem", async () => {
@@ -70,13 +70,13 @@ describe("puxarAlteracoes", () => {
     expect(resultado).toMatchObject({ ok: true, cargaCompleta: false });
     expect(apis.alteracoes).toHaveBeenCalledWith("2026-11-03T23:55:00.000Z");
     expect(apis.listarEspecies).not.toHaveBeenCalled();
-    expect(banco.aplicarPull).toHaveBeenCalledWith({}, RESPOSTA, expect.any(Set), null);
+    expect(banco.aplicarPull).toHaveBeenCalledWith({}, RESPOSTA, expect.any(Set), null, expect.any(Boolean));
   });
 
   it("repassa as pendências para a aplicação", async () => {
     const pendentes = new Set(["c1"]);
     await puxarAlteracoes("u1", pendentes);
-    expect(banco.aplicarPull).toHaveBeenCalledWith({}, RESPOSTA, pendentes, [{ id: "e1" }]);
+    expect(banco.aplicarPull).toHaveBeenCalledWith({}, RESPOSTA, pendentes, [{ id: "e1" }], expect.any(Boolean));
   });
 
   it("chamadas simultâneas fazem uma request só e recebem o mesmo resultado", async () => {
@@ -105,7 +105,7 @@ describe("puxarAlteracoes", () => {
   it("falha só nas espécies: aplica os dados e deixa as espécies para o próximo pull", async () => {
     apis.listarEspecies.mockRejectedValue(new ErroApi(500, "Erro 500"));
     await expect(puxarAlteracoes("u1")).resolves.toMatchObject({ ok: true });
-    expect(banco.aplicarPull).toHaveBeenCalledWith({}, RESPOSTA, expect.any(Set), null);
+    expect(banco.aplicarPull).toHaveBeenCalledWith({}, RESPOSTA, expect.any(Set), null, expect.any(Boolean));
   });
 
   it("falha ao gravar no banco local: resolve sem lançar", async () => {
@@ -185,7 +185,7 @@ describe("puxarAlteracoes", () => {
     const pedido = apis.alteracoes.mock.calls[0]![0] as string;
     expect(Date.parse(desdeGravado) - Date.parse(pedido)).toBe(MARGEM_DESDE_MS);
     // A aplicação recebe a resposta intacta: o `desde` gravado vem do servidorEm (mesclar/aplicarPull).
-    expect(banco.aplicarPull).toHaveBeenCalledWith({}, RESPOSTA, expect.any(Set), [{ id: "e1" }]);
+    expect(banco.aplicarPull).toHaveBeenCalledWith({}, RESPOSTA, expect.any(Set), [{ id: "e1" }], expect.any(Boolean));
   });
 });
 

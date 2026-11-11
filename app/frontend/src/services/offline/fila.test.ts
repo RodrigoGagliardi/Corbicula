@@ -112,7 +112,9 @@ describe("proximoLote", () => {
 
 describe("aplicarResultados", () => {
   it("aplicado e duplicado saem; conflito e erro ficam parados; sem resultado continua pendente", () => {
-    const [a, b, c, d, e] = ["c1", "c2", "c3", "c4", "c5"].map((entidadeId) => op({ entidadeId }));
+    const [a, b, , d, e] = ["c1", "c2", "c3", "c4", "c5"].map((entidadeId) => op({ entidadeId }));
+    // Conflito no mesmo campo (base "antes", aparelho "local", servidor "do servidor").
+    const c = op({ entidadeId: "c3", dados: { observacoes: "local" }, base: { id: "c3", observacoes: "antes" } as ColoniaServidor });
     const mudancas = aplicarResultados(
       [a!, b!, c!, d!, e!],
       [
@@ -124,9 +126,40 @@ describe("aplicarResultados", () => {
     );
     expect(mudancas.remover).toEqual([a!.id, b!.id]);
     expect(mudancas.atualizar).toEqual([
-      { ...c, estado: "conflito", tentativas: 1, ultimoErro: "alterado no servidor", servidor: { id: "c3", observacoes: "do servidor" } },
+      {
+        ...c,
+        estado: "conflito",
+        tentativas: 1,
+        ultimoErro: "alterado no servidor",
+        servidor: { id: "c3", observacoes: "do servidor" },
+        conflitos: [{ campo: "observacoes", local: "local", servidor: "do servidor" }],
+      },
       { ...d, estado: "erro", tentativas: 1, ultimoErro: "A espécie deve ser a mesma" },
     ]);
+  });
+});
+
+describe("aplicarResultados: junção por campos no conflito", () => {
+  const SERVIDOR = { id: "c1", observacoes: "antes", localizacao: "nova do servidor", updatedAt: "2026-11-09T10:00:00.000Z", especie: { id: "e" }, _count: {} };
+  const base = { id: "c1", observacoes: "antes", localizacao: "antiga" } as ColoniaServidor;
+
+  it("campos distintos: volta a pendente só com o que mudou no aparelho, sobre a versão do servidor", () => {
+    const o = op({ entidadeId: "c1", dados: { observacoes: "do aparelho", localizacao: "antiga" }, base, baseUpdatedAt: "2026-11-01T00:00:00.000Z" });
+    const { remover, atualizar } = aplicarResultados([o], [{ id: o.id, status: "conflito", entidadeId: "c1", servidor: SERVIDOR }]);
+    expect(remover).toEqual([]);
+    expect(atualizar).toEqual([
+      expect.objectContaining({ estado: "pendente", dados: { observacoes: "do aparelho" }, baseUpdatedAt: "2026-11-09T10:00:00.000Z", tentativas: 1 }),
+    ]);
+    // A nova base é a versão do servidor em formato de linha (sem os campos embutidos pela rota).
+    expect(atualizar[0]!.base).toEqual({ id: "c1", observacoes: "antes", localizacao: "nova do servidor", updatedAt: "2026-11-09T10:00:00.000Z" });
+    expect(atualizar[0]).not.toHaveProperty("servidor");
+  });
+
+  it("o servidor já tem os valores (update que expirou depois de aplicado): sai da fila", () => {
+    const o = op({ entidadeId: "c1", dados: { localizacao: "nova do servidor" }, base });
+    const { remover, atualizar } = aplicarResultados([o], [{ id: o.id, status: "conflito", entidadeId: "c1", servidor: SERVIDOR }]);
+    expect(remover).toEqual([o.id]);
+    expect(atualizar).toEqual([]);
   });
 });
 

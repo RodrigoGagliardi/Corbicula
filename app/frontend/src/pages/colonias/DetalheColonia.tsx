@@ -3,6 +3,7 @@ import { ArrowLeft, ClipboardCheck, Droplets, GitBranchPlus, Pencil, Plus, Trash
 import type { ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { GraficoScore } from "../../components/charts/GraficoScore";
+import { AvisoPendencia } from "../../components/features/AvisoPendencia";
 import { GaleriaFotos } from "../../components/features/GaleriaFotos";
 import { BarraScore, SeloScore } from "../../components/features/SeloScore";
 import { Botao, LinkBotao } from "../../components/ui/Botao";
@@ -89,6 +90,7 @@ export function DetalheColonia() {
           </>
         }
       />
+      <AvisoPendencia entidadeId={colonia.id} />
 
       <div className="grid gap-4 md:grid-cols-3">
         <Cartao className="md:col-span-2">

@@ -220,6 +220,8 @@ app/frontend/
 │   │       ├── fila.ts        # regra pura da fila: baseUpdatedAt, lote ordenado ≤ 500 com bloqueio, resultados do /sync (+ .test.ts)
 │   │       ├── linhaLocal.ts  # regra pura: aplica create/update/delete à cópia local (código provisório, prévia do score) (+ .test.ts)
 │   │       ├── escrita.ts     # escritas de colônia/avaliação/colheita: REST online, fila offline ou com pendência relacionada (+ .test.ts)
+│   │       ├── juncao.ts      # regra pura: junção por campos de um conflito (aparelho × servidor × base) (+ .test.ts)
+│   │       ├── decisoes.ts    # pendências paradas: manter servidor/aparelho, descartar (com dependentes), substituir pela edição manual (+ .test.ts)
 │   │       ├── fotos.ts       # anexarFoto: comprime e sobe na hora, ou guarda no aparelho para subir depois do /sync (+ .test.ts)
 │   │       ├── validacoes.ts  # regra pura: regras do servidor (genealogia, espécie, 7 dias, parâmetros ativos) checadas antes de enfileirar (+ .test.ts)
 │   │       ├── sincronizacao.ts  # sincronizar (envio da fila, fotos guardadas e pull, nova tentativa com espera crescente), puxarAlteracoes e pedirArmazenamentoPersistente (+ .test.ts, sincronizacaoCiclo.test.ts)
@@ -375,3 +377,5 @@ Notas:
 - **[2026-11-10 — PWA offline: validações locais]** — Frontend: `services/offline/validacoes.ts` (+ teste) espelha as regras de `colonias.service.ts` e `avaliacoes.service.ts` com os mesmos textos; `escrita.ts` as aplica no caminho da fila (a escrita recusada não entra nela). A colônia filha criada offline sem espécie herda a da mãe na cópia local.
 
 - **[2026-11-10 — PWA offline: fotos offline]** — Frontend: `services/offline/fotos.ts` (+ teste); banco local na versão 3 (store `fotos`, bytes + tipo); `sincronizacao.ts` envia as fotos guardadas entre a fila e o pull (404 descarta, outro 4xx para, falha transitória retenta); `GaleriaFotos` mostra as fotos guardadas (+ teste) e Nova Avaliação/colheita avisam quando a foto fica para depois.
+
+- **[2026-11-10 — PWA offline: conflitos e decisões]** — Frontend: `services/offline/juncao.ts` e `decisoes.ts` (+ testes); `fila.ts` passa o conflito pela junção (campos distintos voltam a ser enviados no mesmo ciclo); `banco.ts` ganhou `aplicarDecisao` e a recarga completa (`meta.recarregar`). Tela 35 em `pages/configuracoes/Sincronizacao.tsx` (rota real, seção Pendências; saiu de `telasPlanejadas.ts`), `components/features/AvisoPendencia.tsx` nos detalhes e `utils/pendencias.ts` (rótulos e valores dos campos). "Editar manualmente" usa os formulários de colônia, avaliação e colheita com `?pendencia=`.

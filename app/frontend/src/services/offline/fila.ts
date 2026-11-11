@@ -1,3 +1,5 @@
+import { juntar } from "./juncao";
+import { linhaDoServidor } from "./linhaLocal";
 import type {
   AcaoOperacao,
   LinhaLocal,
@@ -118,9 +120,13 @@ export interface MudancasFila {
   atualizar: OperacaoFila[];
 }
 
-// Resultado do servidor → mudanças na fila. `aplicado` e `duplicado` saem;
-// `conflito` e `erro` ficam parados, com a versão do servidor ou a mensagem.
-// Operação enviada sem resultado na resposta continua pendente.
+// Resultado do servidor → mudanças na fila. `aplicado` e `duplicado` saem.
+// `conflito` passa pela junção por campos (juncao.ts):
+//  - campos distintos → volta a `pendente` só com o que mudou no aparelho, sobre a
+//    versão do servidor (reenviada na rodada seguinte do mesmo ciclo);
+//  - o servidor já tem os valores → sai da fila;
+//  - mesmo campo com valores diferentes → para, esperando decisão (`conflitos`).
+// `erro` para com a mensagem. Operação sem resultado na resposta continua pendente.
 export function aplicarResultados(lote: readonly OperacaoFila[], resultados: readonly ResultadoOperacaoSync[]): MudancasFila {
   const porId = new Map(resultados.map((r) => [r.id, r]));
   const mudancas: MudancasFila = { remover: [], atualizar: [] };
@@ -129,6 +135,34 @@ export function aplicarResultados(lote: readonly OperacaoFila[], resultados: rea
     if (!r) continue;
     if (r.status === "aplicado" || r.status === "duplicado") {
       mudancas.remover.push(op.id);
+      continue;
+    }
+    if (r.status === "conflito" && r.servidor) {
+      const juncao = juntar({ ...op, servidor: r.servidor });
+      if (juncao.tipo === "resolvida") {
+        mudancas.remover.push(op.id);
+        continue;
+      }
+      if (juncao.tipo === "juntada") {
+        const { servidor: _s, conflitos: _c, ultimoErro: _e, ...resto } = op;
+        mudancas.atualizar.push({
+          ...resto,
+          estado: "pendente",
+          dados: juncao.dados,
+          baseUpdatedAt: juncao.baseUpdatedAt,
+          base: linhaDoServidor(op.tipo, r.servidor),
+          tentativas: op.tentativas + 1,
+        });
+        continue;
+      }
+      mudancas.atualizar.push({
+        ...op,
+        estado: "conflito",
+        tentativas: op.tentativas + 1,
+        ultimoErro: r.erro ?? "Conflito com a versão do servidor.",
+        servidor: r.servidor,
+        conflitos: juncao.campos,
+      });
       continue;
     }
     mudancas.atualizar.push({

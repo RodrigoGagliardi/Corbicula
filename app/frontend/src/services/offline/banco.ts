@@ -102,7 +102,9 @@ export async function aplicarPull(
   db: BancoOffline,
   resposta: RespostaAlteracoes,
   pendentes: ReadonlySet<string>,
-  especies: Especie[] | null
+  especies: Especie[] | null,
+  // Carga completa (sem `desde`): só ela atende um pedido de recarga (`meta.recarregar`).
+  cargaCompleta = false
 ): Promise<number> {
   const tx = db.transaction([...TIPOS_PULL, "especies", "meta", "fila"], "readwrite");
   const escritas: Promise<unknown>[] = [];
@@ -137,7 +139,14 @@ export async function aplicarPull(
       for (const e of especies) escritas.push(store.put(e));
     }
 
-    const meta: MetaOffline = { ...META_VAZIA, ...metaAtual, desde: plano.desde, ultimoPull: new Date().toISOString() };
+    const { recarregar, ...metaSemRecarga } = { ...META_VAZIA, ...metaAtual };
+    // Um pull incremental não apaga o pedido de recarga (pode ter chegado durante ele).
+    const meta: MetaOffline = {
+      ...metaSemRecarga,
+      ...(recarregar && !cargaCompleta && { recarregar }),
+      desde: plano.desde,
+      ultimoPull: new Date().toISOString(),
+    };
     escritas.push(tx.objectStore("meta").put(meta, CHAVE_META));
 
     await Promise.all([...escritas, tx.done]);
@@ -219,3 +228,44 @@ export const fotosDoRegistro = (db: BancoOffline, entidadeId: string): Promise<F
 export const removerFoto = (db: BancoOffline, id: string) => db.delete("fotos", id);
 export const contarFotosPendentes = async (db: BancoOffline) =>
   (await db.getAll("fotos")).filter((f) => f.estado === "pendente").length;
+
+// ─── Decisões sobre operações paradas (decisoes.ts) ──────────────────────────
+
+export interface PlanoDecisao {
+  removerOperacoes: string[];
+  // Operações gravadas (substituem pela chave; trazem a própria `ordem`).
+  gravarOperacoes: OperacaoFila[];
+  mudancas: MudancaLocal[];
+  removerFotos: string[];
+  // Próximo pull completo (uma linha removida localmente precisa voltar).
+  recarregarTudo: boolean;
+}
+
+// Aplica uma decisão numa transação só: fila, cópia local, fotos e meta.
+export async function aplicarDecisao(db: BancoOffline, plano: PlanoDecisao): Promise<void> {
+  const tx = db.transaction(["fila", "colonias", "avaliacoes", "producoes", "fotos", "meta"], "readwrite");
+  const escritas: Promise<unknown>[] = [];
+  try {
+    for (const id of plano.removerOperacoes) escritas.push(tx.objectStore("fila").delete(id));
+    for (const op of plano.gravarOperacoes) escritas.push(tx.objectStore("fila").put(op));
+    for (const m of plano.mudancas) {
+      const store = tx.objectStore(m.store);
+      for (const id of m.remover ?? []) escritas.push(store.delete(id));
+      if (m.gravar) escritas.push(store.put(m.gravar as never));
+    }
+    for (const id of plano.removerFotos) escritas.push(tx.objectStore("fotos").delete(id));
+    if (plano.recarregarTudo) {
+      const atual = await tx.objectStore("meta").get(CHAVE_META);
+      escritas.push(tx.objectStore("meta").put({ ...META_VAZIA, ...atual, recarregar: true }, CHAVE_META));
+    }
+    await Promise.all([...escritas, tx.done]);
+  } catch (erro) {
+    try {
+      tx.abort();
+    } catch {
+      // Já abortada.
+    }
+    for (const p of [...escritas, tx.done]) p.catch(() => undefined);
+    throw erro;
+  }
+}

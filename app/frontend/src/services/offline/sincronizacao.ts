@@ -84,7 +84,8 @@ async function executarPull(usuarioId: string, pendentes: ReadonlySet<string>): 
     const db = await abrirBanco(usuarioId);
     const [meta, qtdEspecies] = await Promise.all([lerMeta(db), contarEspecies(db)]);
     // undefined = carga completa (nunca houve pull ou o `desde` gravado é inválido).
-    const desdePedido = desdeDoPedido(meta.desde);
+    // `recarregar`: uma decisão pediu carga completa (ex.: exclusão local descartada).
+    const desdePedido = meta.recarregar ? undefined : desdeDoPedido(meta.desde);
 
     // O catálogo de espécies não vem no pull; é buscado enquanto o store estiver vazio.
     // Se só ele falhar, os dados são aplicados e as espécies ficam para o próximo pull.
@@ -97,7 +98,13 @@ async function executarPull(usuarioId: string, pendentes: ReadonlySet<string>): 
     // sem esta segunda checagem, a resposta poderia ir para o banco errado.
     if (!sessaoDoUsuario(usuarioId)) return SESSAO_TROCADA;
 
-    const alterados = await aplicarPull(db, alteracoes.value, pendentes, especies.status === "fulfilled" ? especies.value : null);
+    const alterados = await aplicarPull(
+      db,
+      alteracoes.value,
+      pendentes,
+      especies.status === "fulfilled" ? especies.value : null,
+      desdePedido === undefined
+    );
     return { ok: true, servidorEm: alteracoes.value.servidorEm, cargaCompleta: desdePedido === undefined, alterados };
   } catch (erro) {
     return falha(erro);

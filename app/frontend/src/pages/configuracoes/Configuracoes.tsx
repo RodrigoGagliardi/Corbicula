@@ -23,9 +23,8 @@ const ITENS: ItemConfiguracao[] = [
   {
     rota: "sync",
     titulo: "Sincronização offline",
-    descricao: "Fila de dados registrados sem conexão.",
+    descricao: "Pendências que esperam uma decisão sua (conflitos e mudanças recusadas).",
     icone: RefreshCw,
-    emConstrucao: true,
   },
 ];
 

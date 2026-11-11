@@ -70,6 +70,9 @@ export interface MetaOffline {
   ultimoPull: string | null;
   // Resultado do pedido de armazenamento persistente; null = ainda não pedido.
   armazenamentoPersistente: boolean | null;
+  // true = o próximo pull é uma carga completa (ex.: uma exclusão local foi
+  // descartada e a linha precisa voltar do servidor).
+  recarregar?: boolean;
 }
 
 export const META_VAZIA: MetaOffline = { desde: null, ultimoPull: null, armazenamentoPersistente: null };
@@ -111,6 +114,8 @@ export interface OperacaoFila extends OperacaoSync {
   ultimoErro?: string;
   // Versão do servidor devolvida num conflito.
   servidor?: unknown;
+  // Campos alterados nos dois lados para valores diferentes (conflito que espera decisão).
+  conflitos?: { campo: string; local: unknown; servidor: unknown }[];
   // Linha local antes de um update (base da junção por campos, story 6).
   base?: LinhaLocal;
 }

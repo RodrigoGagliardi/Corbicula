@@ -7,6 +7,8 @@ import { AreaTexto, Campo, Entrada, Selecao } from "../../components/ui/Campo";
 import { CabecalhoPagina, Cartao } from "../../components/ui/Cartao";
 import { Carregando, ErroCarregamento, MensagemErro } from "../../components/ui/Estados";
 import { chaves, useColonia, useColonias, useEspecies } from "../../hooks/useDados";
+import { AvisoPendencia, NotaResolvendoPendencia } from "../../components/features/AvisoPendencia";
+import { substituirPendencia } from "../../services/offline/decisoes";
 import { escritas } from "../../services/offline/escrita";
 import { usePreferencias } from "../../store/preferencias";
 import { SeletorMotivo } from "../../components/features/SeletorMotivo";
@@ -97,6 +99,8 @@ function Formulario({ colonia }: { colonia?: ColoniaDetalhada | undefined }) {
   const navegar = useNavigate();
   const queryClient = useQueryClient();
   const [params] = useSearchParams();
+  // "Editar manualmente" uma pendência (tela de Sincronização): salvar a substitui.
+  const pendencia = params.get("pendencia");
   const { data: especies } = useEspecies();
   const { data: colonias } = useColonias();
   const [estado, setEstado] = useState(() => estadoInicial(colonia, params.get("mae")));
@@ -175,10 +179,13 @@ function Formulario({ colonia }: { colonia?: ColoniaDetalhada | undefined }) {
     mutationFn: () =>
       // A versão editada é a do momento em que o formulário abriu (`statusBase`).
       colonia
-        ? escritas.atualizarColonia(statusBase ?? colonia, { ...paraPayload(estado), ...(statusBase && payloadStatus(statusBase, st)) })
+        ? pendencia
+          ? substituirPendencia(pendencia, { ...paraPayload(estado), ...(statusBase && payloadStatus(statusBase, st)) })
+          : escritas.atualizarColonia(statusBase ?? colonia, { ...paraPayload(estado), ...(statusBase && payloadStatus(statusBase, st)) })
         : escritas.criarColonia({ ...paraPayload(estado), status: st.status }),
     onSuccess: (salva) => {
       queryClient.invalidateQueries({ queryKey: chaves.colonias });
+      if (pendencia) queryClient.invalidateQueries({ queryKey: ["sincronizacao"] });
       navegar(`/app/colonias/${salva.id}`, { replace: true });
     },
   });
@@ -238,6 +245,8 @@ function Formulario({ colonia }: { colonia?: ColoniaDetalhada | undefined }) {
         titulo={colonia ? `Editar ${colonia.codigo}` : "Nova colônia"}
         subtitulo={colonia ? undefined : "O código é gerado automaticamente a partir da espécie (ex.: TETRANGU-001)."}
       />
+      {pendencia && <NotaResolvendoPendencia />}
+      {colonia && !pendencia && <AvisoPendencia entidadeId={colonia.id} />}
 
       <form onSubmit={enviar} className="space-y-4" noValidate>
         <Cartao className="space-y-4">

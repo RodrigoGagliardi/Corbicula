@@ -1,6 +1,13 @@
 import type { AvaliacaoInput, ColoniaInput, Especie, ProducaoInput } from "../../types/api";
 import { calcularScore } from "../../utils/score";
-import type { AvaliacaoParametroServidor, AvaliacaoServidor, ColoniaServidor, ProducaoServidor } from "./tipos";
+import type {
+  AvaliacaoParametroServidor,
+  AvaliacaoServidor,
+  ColoniaServidor,
+  LinhaLocal,
+  ProducaoServidor,
+  TipoOperacao,
+} from "./tipos";
 
 // Aplica uma escrita offline à cópia local, no formato das linhas do pull
 // (funções puras). Os valores que o servidor calcula aparecem como prévia ou
@@ -218,4 +225,35 @@ export function atualizarProducao(linha: ProducaoServidor, dados: Partial<Omit<P
   const nova = copiarDefinidos(linha, dados, CAMPOS_PRODUCAO);
   if (dados.dataColheita !== undefined) nova.dataColheita = iso(dados.dataColheita);
   return nova;
+}
+
+// Versão REST devolvida pelo servidor num conflito (`ColoniaDetalhada`,
+// `AvaliacaoDetalhada`, `Producao`) → linha no formato do pull: sem os campos
+// que as rotas embutem ou derivam; parâmetros avaliados só com o `parametroId`.
+export function linhaDoServidor(tipo: TipoOperacao, versao: unknown): LinhaLocal {
+  const v = versao as Record<string, unknown>;
+  if (tipo === "colonia") {
+    const {
+      especie: _e,
+      ultimaAvaliacao: _u,
+      _count: _c,
+      coloniaMae: _m,
+      coloniasFilhas: _f,
+      coloniaDoadoraCampeiras: _d,
+      coloniasReceptorasCampeiras: _r,
+      historicoStatus: _h,
+      ...linha
+    } = v;
+    return linha as unknown as ColoniaServidor;
+  }
+  if (tipo === "producao") {
+    const { colonia: _col, _count: _c, ...linha } = v;
+    return linha as unknown as ProducaoServidor;
+  }
+  const { colonia: _col, _count: _c, parametros, ...linha } = v;
+  const linhas = ((parametros as Record<string, unknown>[] | undefined) ?? []).map((p) => {
+    const { parametro: _p, ...resto } = p;
+    return resto as unknown as AvaliacaoParametroServidor;
+  });
+  return { ...(linha as unknown as AvaliacaoServidor), parametros: linhas };
 }

@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowLeft, ArrowUp, CheckCircle2, CloudSun, Minus, Pencil, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
+import { AvisoPendencia } from "../../components/features/AvisoPendencia";
 import { GaleriaFotos } from "../../components/features/GaleriaFotos";
 import { BarraScore } from "../../components/features/SeloScore";
 import { Botao, LinkBotao } from "../../components/ui/Botao";
@@ -84,6 +85,7 @@ export function DetalheAvaliacao() {
           )
         }
       />
+      <AvisoPendencia entidadeId={avaliacao.id} />
 
       {estado?.editada && (
         <p className="mb-4 flex items-center gap-2 rounded-xl bg-green-50 px-4 py-3 text-sm text-green-800 dark:bg-green-950/50 dark:text-green-300" role="status">

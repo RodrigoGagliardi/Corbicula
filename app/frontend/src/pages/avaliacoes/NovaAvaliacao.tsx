@@ -9,6 +9,8 @@ import { AreaTexto, Campo, CLASSE_ENTRADA, Entrada } from "../../components/ui/C
 import { CabecalhoPagina, Cartao } from "../../components/ui/Cartao";
 import { Carregando, ErroCarregamento, EstadoVazio, MensagemErro } from "../../components/ui/Estados";
 import { chaves, useColonias, useParametros } from "../../hooks/useDados";
+import { AvisoPendencia, NotaResolvendoPendencia } from "../../components/features/AvisoPendencia";
+import { substituirPendencia } from "../../services/offline/decisoes";
 import { escritas } from "../../services/offline/escrita";
 import { anexarFoto } from "../../services/offline/fotos";
 import type { AvaliacaoDetalhada, Classificacao, Colonia, Parametro } from "../../types/api";
@@ -168,6 +170,9 @@ export function FormularioAvaliacao({
 }) {
   const navegar = useNavigate();
   const queryClient = useQueryClient();
+  // "Editar manualmente" uma pendência (tela de Sincronização): salvar a substitui.
+  const [params] = useSearchParams();
+  const pendencia = avaliacao ? params.get("pendencia") : null;
   const [inicial] = useState(() => estadoInicial(avaliacao));
   const [classificacoes, setClassificacoes] = useState(inicial.classificacoes);
   const [notas, setNotas] = useState(inicial.notas);
@@ -214,7 +219,8 @@ export function FormularioAvaliacao({
         // Edição: o servidor recalcula o score com o conjunto enviado. Fotos são
         // gerenciadas no detalhe da avaliação.
         // Offline, a edição fica na fila e aparece na hora na cópia local.
-        return { avaliacao: await escritas.atualizarAvaliacao(colonia.id, avaliacao, dados), fotoFalhou: false, fotoPendente: false };
+        const salva = pendencia ? await substituirPendencia(pendencia, dados) : await escritas.atualizarAvaliacao(colonia.id, avaliacao, dados);
+        return { avaliacao: salva, fotoFalhou: false, fotoPendente: false };
       }
       const criada = await escritas.criarAvaliacao(colonia.id, dados);
 
@@ -235,6 +241,7 @@ export function FormularioAvaliacao({
     onSuccess: ({ avaliacao: salva, fotoFalhou, fotoPendente }) => {
       queryClient.invalidateQueries({ queryKey: chaves.colonias });
       queryClient.invalidateQueries({ queryKey: ["fotos"] });
+      if (pendencia) queryClient.invalidateQueries({ queryKey: ["sincronizacao"] });
       navegar(`/app/colonias/${colonia.id}/avaliacoes/${salva.id}`, {
         replace: true,
         state: editando ? { editada: true } : { nova: true, fotoFalhou, fotoPendente },
@@ -260,6 +267,8 @@ export function FormularioAvaliacao({
             : (colonia.especie?.nomePopular ?? "Espécie não identificada")
         }
       />
+      {pendencia && <NotaResolvendoPendencia />}
+      {avaliacao && !pendencia && <AvisoPendencia entidadeId={avaliacao.id} />}
 
       {/* Progresso + prévia do score, sempre visível no topo durante a rolagem */}
       <div className="sticky top-[57px] z-10 -mx-4 mb-4 border-b border-border bg-background/95 px-4 py-3 backdrop-blur md:top-0 md:mx-0 md:rounded-2xl md:border">

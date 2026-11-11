@@ -1,4 +1,4 @@
-import { Activity, ChartLine, GitBranch, RefreshCw, Sparkles } from "lucide-react";
+import { Activity, ChartLine, GitBranch, Sparkles } from "lucide-react";
 import type { TelaPlanejada } from "./EmConstrucao";
 
 // Telas do MVP/roadmap que ainda não foram implementadas (ver docs/telas.md).
@@ -45,11 +45,5 @@ export const TELAS_PLANEJADAS: Record<string, TelaPlanejada> = {
       "Sempre rotuladas como estimativas, com tamanho de amostra e incerteza visíveis",
       "Dependem de uma base histórica grande: melhoram com o tempo de uso",
     ],
-  },
-  "configuracoes/sync": {
-    titulo: "Sincronização offline",
-    descricao: "Fila de dados registrados sem conexão.",
-    icone: RefreshCw,
-    previsto: ["Status e última sincronização", "Fila de pendências e botão “Sincronizar agora”", "Resolução de conflitos"],
   },
 };

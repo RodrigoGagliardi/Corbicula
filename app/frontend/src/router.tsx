@@ -23,6 +23,7 @@ import { Dados } from "./pages/configuracoes/Dados";
 import { PaginaMeliponario } from "./pages/configuracoes/Meliponario";
 import { Perfil } from "./pages/configuracoes/Perfil";
 import { Preferencias } from "./pages/configuracoes/Preferencias";
+import { Sincronizacao } from "./pages/configuracoes/Sincronizacao";
 import { FormColonia } from "./pages/colonias/FormColonia";
 import { ListaColonias } from "./pages/colonias/ListaColonias";
 import { MapaColonias } from "./pages/colonias/MapaColonias";
@@ -115,6 +116,7 @@ export const router = createBrowserRouter([
       { path: "configuracoes/meliponario", element: <PaginaMeliponario /> },
       { path: "configuracoes/preferencias", element: <Preferencias /> },
       { path: "configuracoes/dados", element: <Dados /> },
+      { path: "configuracoes/sync", element: <Sincronizacao /> },
       ...telasPlanejadas,
       { path: "*", element: <NaoEncontrado /> },
     ],
