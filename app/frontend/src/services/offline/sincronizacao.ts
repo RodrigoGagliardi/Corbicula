@@ -20,6 +20,7 @@ import {
 } from "./banco";
 import { aplicarResultados, paraEnvio, proximoLote } from "./fila";
 import { semRede } from "./leituraLocal";
+import { pedirSincronizacaoEmSegundoPlano } from "./segundoPlano";
 
 // Orquestração do pull (GET /sync/alteracoes) para o banco local do usuário.
 // Nunca lança: falha de rede, 5xx ou navegador sem IndexedDB só deixam o banco
@@ -200,9 +201,28 @@ export function sincronizar(usuarioId: string): Promise<ResultadoSincronizacao> 
     repeticoes.set(usuarioId, nova);
     return nova;
   }
-  const ciclo = executarSincronizacao(usuarioId).finally(() => sincronizacoes.delete(usuarioId));
+  const ciclo = comTrava(usuarioId, () => executarSincronizacao(usuarioId)).finally(() => sincronizacoes.delete(usuarioId));
   sincronizacoes.set(usuarioId, ciclo);
   return ciclo;
+}
+
+// Um ciclo por usuário também entre abas e o Service Worker (Web Locks, onde
+// houver): quem chega espera o ciclo em andamento e encontra a fila já enviada.
+// Sem Web Locks, só a deduplicação deste contexto. `executarSincronizacao` nunca
+// lança: uma rejeição aqui é da própria trava, e o ciclo roda sem ela.
+export function comTrava<T>(usuarioId: string, ciclo: () => Promise<T>): Promise<T> {
+  const travas = typeof navigator !== "undefined" ? navigator.locks : undefined;
+  if (!travas?.request) return ciclo();
+  let rodou = false;
+  return travas
+    .request(`corbicula-sincronizacao-${usuarioId}`, () => {
+      rodou = true;
+      return ciclo();
+    })
+    .catch((erro: unknown) => {
+      if (rodou) throw erro;
+      return ciclo();
+    }) as Promise<T>;
 }
 
 // Contadores do banco local: fila, fotos aguardando, decisões e a última sincronização.
@@ -216,9 +236,21 @@ async function contagens(db: BancoOffline) {
   };
 }
 
-// Espera o ciclo (e a repetição agendada) em andamento do usuário terminar. Nunca lança.
+// Prazo para esperar o ciclo de outra aba ou do Service Worker: um ciclo longo
+// (vários lotes e fotos, até 120 s cada) não pode segurar o logout.
+export const PRAZO_TRAVA_MS = 5_000;
+
+// Espera o ciclo (e a repetição agendada) em andamento do usuário terminar, neste
+// contexto e, com Web Locks, também em outra aba ou no Service Worker (este com
+// prazo). Nunca lança.
 export async function aguardarSincronizacao(usuarioId: string): Promise<void> {
   await Promise.allSettled([sincronizacoes.get(usuarioId), repeticoes.get(usuarioId), emAndamento.get(usuarioId)]);
+  let prazo: ReturnType<typeof setTimeout> | undefined;
+  await Promise.race([
+    // Pegar a trava espera o ciclo de outro contexto terminar.
+    comTrava(usuarioId, async () => undefined).catch(() => undefined),
+    new Promise<void>((resolver) => (prazo = setTimeout(resolver, PRAZO_TRAVA_MS))),
+  ]).finally(() => clearTimeout(prazo));
 }
 
 // Atualiza os contadores do usuário da sessão; devolve o da fila. Nunca lança.
@@ -317,7 +349,7 @@ async function enviarFotos(
 
 // Falha que vale nova tentativa sozinha: rede/timeout ou servidor (5xx, 4xx do lote).
 // Sessão (401) não: o novo login dispara a sincronização.
-function falhaTransitoria(r: ResultadoSincronizacao): boolean {
+export function falhaTransitoria(r: ResultadoSincronizacao): boolean {
   const motivos = [r.falhaEnvio?.motivo, r.falhaFotos?.motivo, r.pull && !r.pull.ok ? r.pull.motivo : undefined];
   return motivos.some((m) => m === "sem-conexao" || m === "servidor");
 }
@@ -335,8 +367,14 @@ async function executarSincronizacao(usuarioId: string): Promise<ResultadoSincro
     };
   }
   if (!sessaoDoUsuario(usuarioId)) return { ...vazio, falhaEnvio: SESSAO_TROCADA as FalhaPull };
-  // Sem rede não há o que tentar; o evento "online" dispara a próxima.
-  if (semRede()) return { ...vazio, naFila: await atualizarContagem(usuarioId), falhaEnvio: SEM_REDE };
+  // Sem rede não há o que tentar; o evento "online" dispara a próxima (e, com o
+  // app fechado, o Background Sync onde houver).
+  if (semRede()) {
+    const naFila = await atualizarContagem(usuarioId);
+    // Operações ou só fotos guardadas (atualizarContagem acabou de contá-las).
+    if (naFila > 0 || useSincronizacao.getState().fotosPendentes > 0) void pedirSincronizacaoEmSegundoPlano();
+    return { ...vazio, naFila, falhaEnvio: SEM_REDE };
+  }
 
   useSincronizacao.setState({ sincronizando: true, progresso: null });
   let resultado: ResultadoSincronizacao;
@@ -384,6 +422,8 @@ async function executarSincronizacao(usuarioId: string): Promise<ResultadoSincro
   if (!falhaTransitoria(resultado)) {
     falhasSeguidas.delete(usuarioId);
   } else if (!semRede() && sessaoDoUsuario(usuarioId)) {
+    // Se o app fechar antes da nova tentativa, o Background Sync a faz.
+    void pedirSincronizacaoEmSegundoPlano();
     const falhas = (falhasSeguidas.get(usuarioId) ?? 0) + 1;
     falhasSeguidas.set(usuarioId, falhas);
     novasTentativas.set(

@@ -16,6 +16,7 @@ import {
   novaColonia,
   novaProducao,
 } from "./linhaLocal";
+import { pedirSincronizacaoEmSegundoPlano } from "./segundoPlano";
 import { atualizarContagem, sincronizar } from "./sincronizacao";
 import type { FotoPendente, LinhaLocal, OperacaoFila } from "./tipos";
 import { validarEdicaoAvaliacao, validarEdicaoColonia, validarNovaAvaliacao, validarNovaColonia } from "./validacoes";
@@ -163,7 +164,9 @@ async function operacaoParada(db: BancoOffline, opId: string): Promise<{ fila: O
 async function concluir(db: BancoOffline, usuarioId: string, plano: PlanoDecisao) {
   await aplicarDecisao(db, plano);
   await atualizarContagem(usuarioId);
+  // Sem rede: o Background Sync (onde houver) envia mesmo com o app fechado.
   if (!semRede()) void sincronizar(usuarioId);
+  else void pedirSincronizacaoEmSegundoPlano();
 }
 
 export interface Pendencia {

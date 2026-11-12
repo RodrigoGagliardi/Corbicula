@@ -15,6 +15,8 @@ const apis = vi.hoisted(() => ({
   producoesApi: { criar: vi.fn(), atualizar: vi.fn(), excluir: vi.fn() },
 }));
 vi.mock("../api/endpoints", () => apis);
+const segundoPlano = vi.hoisted(() => ({ pedirSincronizacaoEmSegundoPlano: vi.fn(async () => undefined) }));
+vi.mock("./segundoPlano", () => segundoPlano);
 vi.mock("../../utils/imagem", () => ({ comprimirImagem: vi.fn(async () => new Blob([new Uint8Array([1])], { type: "image/jpeg" })) }));
 
 const banco = await import("./banco");
@@ -141,8 +143,11 @@ describe("decisões", () => {
     conexao.online = false;
     await escritas.atualizarColonia(C1, { localizacao: "depois" });
     const [p] = await decisoes.listarPendencias();
+    segundoPlano.pedirSincronizacaoEmSegundoPlano.mockClear();
 
     await decisoes.manterServidor(p!.op.id);
+    // Resolvida offline: o Background Sync (onde houver) leva o resultado ao servidor.
+    expect(segundoPlano.pedirSincronizacaoEmSegundoPlano).toHaveBeenCalled();
     expect(await banco.contarFila(db)).toBe(0);
     const linha = await db.get("colonias", "c1");
     expect(linha).toMatchObject({ observacoes: "do servidor", localizacao: "antiga", updatedAt: "2026-11-09T10:00:00.000Z" });

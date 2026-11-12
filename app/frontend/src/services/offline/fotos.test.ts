@@ -18,6 +18,8 @@ const apis = vi.hoisted(() => ({
   producoesApi: { criar: vi.fn(), atualizar: vi.fn(), excluir: vi.fn() },
 }));
 vi.mock("../api/endpoints", () => apis);
+const segundoPlano = vi.hoisted(() => ({ pedirSincronizacaoEmSegundoPlano: vi.fn(async () => undefined) }));
+vi.mock("./segundoPlano", () => segundoPlano);
 // A compressão usa canvas, ausente no jsdom: devolve 3 bytes JPEG.
 vi.mock("../../utils/imagem", () => ({ comprimirImagem: vi.fn(async () => new Blob([new Uint8Array([1, 2, 3])], { type: "image/jpeg" })) }));
 
@@ -96,6 +98,8 @@ describe("anexarFoto", () => {
     conexao.online = false;
     expect(await anexarFoto(arquivo(), { coloniaId: "c1" })).toEqual({ pendente: true });
     expect(apis.fotosApi.enviar).not.toHaveBeenCalled();
+    // Única pendência é a foto: ela mesma pede o envio em segundo plano.
+    expect(segundoPlano.pedirSincronizacaoEmSegundoPlano).toHaveBeenCalledTimes(1);
     const [foto] = await banco.lerFotos(db);
     expect(foto).toMatchObject({ vinculo: { coloniaId: "c1" }, entidadeId: "c1", tipo: "image/jpeg", estado: "pendente", tentativas: 0 });
     expect(new Uint8Array(foto!.bytes)).toEqual(new Uint8Array([1, 2, 3]));

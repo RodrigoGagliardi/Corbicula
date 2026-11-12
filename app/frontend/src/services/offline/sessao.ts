@@ -2,6 +2,7 @@ import { deleteDB } from "idb";
 import { useAuth } from "../../store/auth";
 import { resetarSincronizacao } from "../../store/sincronizacao";
 import { abrirBanco, fecharBanco, indexedDbDisponivel, lerFila, lerFotos, nomeBanco } from "./banco";
+import { espelharSessao, lerSessaoEspelhada } from "./sessaoSegundoPlano";
 import { aguardarSincronizacao, cancelarNovaTentativa } from "./sincronizacao";
 
 // Fim da sessão pelo usuário (logout ou exclusão da conta). Expiração do token
@@ -40,6 +41,9 @@ export const PRAZO_APAGAR_MS = 5_000;
 export async function apagarDadosLocais(usuarioId: string): Promise<void> {
   cancelarNovaTentativa(usuarioId);
   if (useAuth.getState().usuario?.id === usuarioId) useAuth.getState().sair();
+  // A cópia da sessão para o Service Worker sai antes do banco: um Background
+  // Sync pendente não reabre (e recria) o banco apagado.
+  if ((await lerSessaoEspelhada())?.usuarioId === usuarioId) await espelharSessao(null);
   await aguardarSincronizacao(usuarioId);
   resetarSincronizacao();
   if (!indexedDbDisponivel()) return;

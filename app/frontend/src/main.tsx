@@ -3,6 +3,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { RouterProvider } from "react-router";
 import { opcoesConsulta } from "./services/api/opcoesConsulta";
+import { observarSessao } from "./services/offline/sessaoSegundoPlano";
 import { router } from "./router";
 import { aplicarTema } from "./store/preferencias";
 import { useAuth } from "./store/auth";
@@ -25,6 +26,10 @@ useAuth.subscribe((atual, anterior) => {
   queryClient.clear();
   resetarSincronizacao();
 });
+
+// Cópia da sessão para o Service Worker (Background Sync), que não lê o
+// localStorage. Sem sessão (logout, 401), a cópia sai e o SW não sincroniza.
+observarSessao();
 
 aplicarTema();
 

@@ -5,6 +5,7 @@ import { fotosApi } from "../api/endpoints";
 import { fotosDoRegistro, guardarFoto, lerFila } from "./banco";
 import { bancoDoUsuario, novoId } from "./escrita";
 import { ehErroDeConexao, semRede } from "./leituraLocal";
+import { pedirSincronizacaoEmSegundoPlano } from "./segundoPlano";
 import { atualizarContagem, sincronizar } from "./sincronizacao";
 import type { FotoPendente, VinculoFoto } from "./tipos";
 
@@ -68,7 +69,9 @@ export async function anexarFoto(arquivo: File, vinculo: VinculoFoto): Promise<R
     tentativas: 0,
   });
   void atualizarContagem(usuarioId);
+  // Sem rede: o Background Sync (onde houver) envia mesmo com o app fechado.
   if (!semRede()) void sincronizar(usuarioId);
+  else void pedirSincronizacaoEmSegundoPlano();
   return { pendente: true };
 }
 

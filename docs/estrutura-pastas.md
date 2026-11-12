@@ -219,6 +219,7 @@ app/frontend/
 │   │       ├── tipos.ts       # linhas do GET /sync/alteracoes, registro meta e operações da fila (contrato do POST /sync)
 │   │       ├── mesclar.ts     # regra pura do pull: grava por id, remove o que saiu de idsAtuais, protege pendências (+ .test.ts)
 │   │       ├── banco.ts       # banco corbicula-offline-<usuarioId> (versão 3: stores fila e fotos), pull e enfileirar numa transação (+ .test.ts com fake-indexeddb)
+│   │       ├── eventoSync.ts  # ligações do evento sync do SW com o ciclo do app (sessão espelhada, 401 apaga a cópia) (+ .test.ts com o ciclo real)
 │   │       ├── fila.ts        # regra pura da fila: baseUpdatedAt, lote ordenado ≤ 500 com bloqueio, resultados do /sync (+ .test.ts)
 │   │       ├── linhaLocal.ts  # regra pura: aplica create/update/delete à cópia local (código provisório, prévia do score) (+ .test.ts)
 │   │       ├── escrita.ts     # escritas de colônia/avaliação/colheita: REST online, fila offline ou com pendência relacionada (+ .test.ts)
@@ -226,8 +227,10 @@ app/frontend/
 │   │       ├── decisoes.ts    # pendências paradas: manter servidor/aparelho, descartar (com dependentes), substituir pela edição manual (+ .test.ts)
 │   │       ├── fotos.ts       # anexarFoto: comprime e sobe na hora, ou guarda no aparelho para subir depois do /sync (+ .test.ts)
 │   │       ├── validacoes.ts  # regra pura: regras do servidor (genealogia, espécie, 7 dias, parâmetros ativos) checadas antes de enfileirar (+ .test.ts)
+│   │       ├── segundoPlano.ts   # Background Sync: pedirSincronizacaoEmSegundoPlano (registra a tag onde houver suporte) e o corpo do evento sync do SW (com janela aberta, rejeita para o navegador tentar depois) (+ .test.ts)
 │   │       ├── sessao.ts      # fim da sessão: pendências do aparelho e apagarDadosLocais (fecha e apaga o banco do usuário) (+ .test.ts)
-│   │       ├── sincronizacao.ts  # sincronizar (envio da fila, fotos guardadas e pull, nova tentativa com espera crescente), puxarAlteracoes e pedirArmazenamentoPersistente (+ .test.ts, sincronizacaoCiclo.test.ts)
+│   │       ├── sessaoSegundoPlano.ts  # cópia da sessão (usuário + token) no IndexedDB corbicula-sessao, para o Service Worker; observarSessao (main.tsx) a mantém (+ .test.ts)
+│   │       ├── sincronizacao.ts  # sincronizar (envio da fila, fotos guardadas e pull, nova tentativa com espera crescente, trava Web Locks entre abas e SW), puxarAlteracoes e pedirArmazenamentoPersistente (+ .test.ts, sincronizacaoCiclo.test.ts)
 │   │       ├── leituras.ts    # regra pura: monta cada resposta REST (colônias, avaliações, histórico, produções, parâmetros, espécies) a partir das linhas locais (+ .test.ts)
 │   │       └── leituraLocal.ts   # comFallbackLocal: com fila não vazia, sem rede ou com ErroApi(0), lê o banco local do usuário da sessão (+ .test.ts)
 │   ├── store/
@@ -248,7 +251,8 @@ app/frontend/
 │   │   ├── score.ts           # faixas do score (Excelente/Boa/Atenção/Crítica) e prazo de edição (7 dias)
 │   │   └── vocabularios.ts    # motivos de status/inspeção/ação e procedência do clima (mesmos códigos do backend) + payloads (+ .test.ts)
 │   ├── index.css              # Tailwind + tokens do tema (claro/escuro): verde floresta + amarelo do logo
-│   ├── main.tsx               # entry point: QueryClient + RouterProvider; na troca de usuário limpa o cache e zera a sincronização
+│   ├── main.tsx               # entry point: QueryClient + RouterProvider; na troca de usuário limpa o cache e zera a sincronização; espelha a sessão para o SW
+│   ├── sw.ts                  # Service Worker (injectManifest): precache do app shell, fallback de navegação, fontes, evento sync (Background Sync)
 │   ├── router.tsx             # rotas públicas + /app/* privadas, guardas e redirecionamento dos endereços antigos
 │   └── test-setup.ts          # jest-dom para o Vitest (testes ao lado do código: utils/*.test.ts)
 ├── node_modules/              # volume Docker frontend_modules
@@ -258,7 +262,7 @@ app/frontend/
 ├── index.html
 ├── package.json               # scripts: dev, build, typecheck, test, icones
 ├── tsconfig.json
-└── vite.config.ts             # React, Tailwind, PWA (manifest + workbox), Vitest, polling p/ Docker no Windows
+└── vite.config.ts             # React, Tailwind, PWA (manifest + src/sw.ts via injectManifest), Vitest, polling p/ Docker no Windows
 ```
 
 Notas:
@@ -387,4 +391,4 @@ Notas:
 
 - **[2026-11-11 — PWA offline: logout com pendências]** — Frontend: `services/offline/sessao.ts` (+ teste) conta as pendências do aparelho (operações, fotos e decisões) e apaga o banco local do usuário: encerra a sessão, espera o ciclo de sincronização em andamento (`aguardarSincronizacao`), cancela a nova tentativa, zera o store, `fecharBanco` em `banco.ts` e `deleteDB` com prazo de 5 s (outra aba presa no banco não trava o logout); `components/layout/DialogoSair.tsx` (+ teste) assume o `useSair` do `AppLayout`: sem pendências sai direto, com pendências avisa e oferece sincronizar agora (online e só se houver o que enviar), cancelar ou sair descartando (com confirmação); mudanças esperando decisão ganham um atalho para a tela de Sincronização. A exclusão da conta (`Perfil.tsx`) também apaga os dados locais. `main.tsx` limpa o cache das telas e zera `store/sincronizacao.ts` (`resetarSincronizacao`) quando o usuário da sessão muda. O 401 continua só encerrando a sessão: a fila e a cópia local ficam para o próximo login do mesmo usuário.
 
-- **[2026-11-11 — PWA offline: logout com pendências e isolamento entre contas]** — Frontend: `services/offline/sessao.ts` (pendências do aparelho; apagar o banco local do usuário, + teste), `banco.ts` com `fecharBanco`; `components/layout/DialogoSair.tsx` (`useSair` saiu do `AppLayout`; aviso com sincronizar agora, cancelar ou sair descartando, + teste); `main.tsx` limpa o cache das telas e zera o estado de sincronização na troca de usuário; excluir a conta apaga os dados locais.
+- **[2026-11-12 — PWA offline: Background Sync progressivo]** — Frontend: o PWA passa de `generateSW` a `injectManifest` com `src/sw.ts` (mesmo precache, fallback de navegação, cache das fontes e atualização automática, mais o evento `sync`); `workbox-*` (`^7.4.1`, a mesma faixa do `workbox-build` do plugin) viraram devDependencies diretas (já vinham com o `vite-plugin-pwa`). `services/offline/sessaoSegundoPlano.ts` espelha a sessão no IndexedDB (o SW não lê o localStorage): `observarSessao`, chamado no `main.tsx`, grava a cada mudança e apaga no logout e no 401; um 401 dentro do SW também apaga a cópia (`eventoSync.ts`), e o logout a apaga antes do banco. `services/offline/segundoPlano.ts` registra a tag onde há `SyncManager` (depois de uma escrita, foto ou decisão offline, de um ciclo offline com pendências e de um ciclo com falha transitória) e, no SW, roda o mesmo `sincronizar` do app; com uma janela do app aberta ou em falha transitória, rejeita para o navegador tentar de novo. `sincronizacao.ts` passa a usar Web Locks (`comTrava`) para um ciclo por usuário entre abas e o SW; o logout espera o ciclo de outro contexto por até 5 s (`PRAZO_TRAVA_MS`). Testes em `segundoPlano.test.ts`, `sessaoSegundoPlano.test.ts`, `eventoSync.test.ts` (ciclo real), `sincronizacaoCiclo.test.ts`, `fotos.test.ts` e `decisoes.test.ts`.

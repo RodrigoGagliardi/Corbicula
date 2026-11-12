@@ -15,10 +15,13 @@ const apis = vi.hoisted(() => ({
   producoesApi: { criar: vi.fn(), atualizar: vi.fn(), excluir: vi.fn() },
 }));
 vi.mock("../api/endpoints", () => apis);
+const segundoPlano = vi.hoisted(() => ({ pedirSincronizacaoEmSegundoPlano: vi.fn(async () => undefined) }));
+vi.mock("./segundoPlano", () => segundoPlano);
 
 const banco = await import("./banco");
 const { escritas } = await import("./escrita");
-const { cancelarNovaTentativa, ESPERAS_MS, esperaDaTentativa, sincronizacaoOk, sincronizar } = await import("./sincronizacao");
+const { aguardarSincronizacao, cancelarNovaTentativa, comTrava, ESPERAS_MS, esperaDaTentativa, falhaTransitoria, PRAZO_TRAVA_MS, sincronizacaoOk, sincronizar } = await import("./sincronizacao");
+const pedirSegundoPlano = segundoPlano.pedirSincronizacaoEmSegundoPlano;
 
 const conexao = { online: true };
 const descritorOriginal = Object.getOwnPropertyDescriptor(Navigator.prototype, "onLine");
@@ -140,14 +143,20 @@ describe("sincronizar", () => {
     const db = await entrarCarregado("fora-do-ar");
     await tresEscritasOffline();
     apis.syncApi.enviar.mockRejectedValue(new ErroApi(503, "Erro 503"));
+    pedirSegundoPlano.mockClear();
 
     const r = await sincronizar("fora-do-ar");
     expect(r.falhaEnvio).toMatchObject({ motivo: "servidor" });
+    // No Service Worker, isto rejeita o evento sync e o navegador tenta de novo.
+    expect(falhaTransitoria(r)).toBe(true);
     expect(r.pull).toBeNull();
     expect(apis.syncApi.alteracoes).not.toHaveBeenCalled();
     expect(await banco.contarFila(db)).toBe(3);
     expect(agendadas().map(([, ms]) => ms)).toEqual([ESPERAS_MS[0]]);
     expect(useSincronizacao.getState().servidorInacessivel).toBe(true);
+
+    // Se o app fechar antes da nova tentativa, o Background Sync (onde houver) a faz.
+    expect(pedirSegundoPlano).toHaveBeenCalled();
 
     await sincronizar("fora-do-ar");
     expect(agendadas().map(([, ms]) => ms)).toEqual([ESPERAS_MS[0], ESPERAS_MS[1]]);
@@ -157,11 +166,16 @@ describe("sincronizar", () => {
     const db = await entrarCarregado("expirado");
     await tresEscritasOffline();
     apis.syncApi.enviar.mockRejectedValue(new ErroApi(401, "Token inválido"));
+    // As escritas offline já pediram o envio em segundo plano; o ciclo com 401 não pede de novo.
+    pedirSegundoPlano.mockClear();
 
     const r = await sincronizar("expirado");
     expect(r.falhaEnvio).toMatchObject({ motivo: "sessao" });
+    // No Service Worker, o evento sync encerra sem nova tentativa.
+    expect(falhaTransitoria(r)).toBe(false);
     expect(await banco.contarFila(db)).toBe(3);
     expect(agendadas()).toEqual([]);
+    expect(pedirSegundoPlano).not.toHaveBeenCalled();
   });
 
   it("recusa no create da colônia: fica parada e a avaliação dela não é enviada depois", async () => {
@@ -205,11 +219,16 @@ describe("sincronizar", () => {
   it("offline: não chama a API nem agenda tentativa", async () => {
     await entrarCarregado("sem-rede");
     await tresEscritasOffline();
+    // Cada escrita offline pediu o envio em segundo plano.
+    expect(pedirSegundoPlano).toHaveBeenCalledTimes(3);
+    pedirSegundoPlano.mockClear();
     conexao.online = false;
     const r = await sincronizar("sem-rede");
     expect(r).toMatchObject({ naFila: 3, falhaEnvio: { motivo: "sem-conexao" } });
     expect(apis.syncApi.enviar).not.toHaveBeenCalled();
     expect(agendadas()).toEqual([]);
+    // O ciclo offline com fila também pede (cobre o app reaberto offline).
+    expect(pedirSegundoPlano).toHaveBeenCalledTimes(1);
   });
 
   it("outro usuário na sessão: não envia a fila de quem saiu", async () => {
@@ -287,6 +306,89 @@ describe("ciclos, lotes e nova tentativa", () => {
     expect(terceiro).toBe(segundo);
     await Promise.all([primeiro, segundo]);
     expect(apis.syncApi.alteracoes).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("comTrava (Web Locks)", () => {
+  const locksOriginal = Object.getOwnPropertyDescriptor(navigator, "locks");
+  afterEach(() => {
+    if (locksOriginal) Object.defineProperty(navigator, "locks", locksOriginal);
+    else delete (navigator as { locks?: unknown }).locks;
+  });
+
+  // Gerente de travas mínimo: uma fila por nome, como o do navegador.
+  function instalarTravas() {
+    const filas = new Map<string, Promise<unknown>>();
+    const nomes: string[] = [];
+    const request = vi.fn((nome: string, f: () => Promise<unknown>) => {
+      nomes.push(nome);
+      const anterior = filas.get(nome) ?? Promise.resolve();
+      const atual = anterior.then(f, f);
+      filas.set(nome, atual.catch(() => undefined));
+      return atual;
+    });
+    Object.defineProperty(navigator, "locks", { configurable: true, value: { request } });
+    return { request, nomes };
+  }
+
+  it("sem Web Locks: roda o ciclo direto", async () => {
+    delete (navigator as { locks?: unknown }).locks;
+    expect(await comTrava("u", async () => 7)).toBe(7);
+  });
+
+  it("outro contexto (SW ou aba) com o ciclo em andamento: o seguinte espera e não reenvia", async () => {
+    const { nomes } = instalarTravas();
+    const db = await entrarCarregado("trava");
+    await tresEscritasOffline();
+    vi.clearAllMocks();
+    servidor();
+    let soltar!: () => void;
+    const ordem: string[] = [];
+    // O ciclo "do outro contexto" segura a trava até ser solto.
+    const outro = comTrava("trava", () => new Promise<void>((r) => (soltar = () => { ordem.push("outro"); r(); })));
+    const meu = sincronizar("trava").then((r) => { ordem.push("meu"); return r; });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(apis.syncApi.enviar).not.toHaveBeenCalled();
+    soltar();
+    await Promise.all([outro, meu]);
+    expect(ordem).toEqual(["outro", "meu"]);
+    expect(nomes).toEqual(["corbicula-sincronizacao-trava", "corbicula-sincronizacao-trava"]);
+    expect(await banco.contarFila(db)).toBe(0);
+  });
+
+  it("aguardarSincronizacao (logout): espera o ciclo de outro contexto soltar a trava", async () => {
+    instalarTravas();
+    let soltar!: () => void;
+    const outro = comTrava("logout", () => new Promise<void>((r) => (soltar = r)));
+    let terminou = false;
+    const espera = aguardarSincronizacao("logout").then(() => (terminou = true));
+    await new Promise((r) => setTimeout(r, 10));
+    expect(terminou).toBe(false);
+    soltar();
+    await Promise.all([outro, espera]);
+    expect(terminou).toBe(true);
+  });
+
+  it("aguardarSincronizacao: um ciclo longo de outro contexto não segura o logout além do prazo", async () => {
+    instalarTravas();
+    void comTrava("preso", () => new Promise<void>(() => undefined));
+    vi.useFakeTimers();
+    try {
+      let terminou = false;
+      const espera = aguardarSincronizacao("preso").then(() => (terminou = true));
+      await vi.advanceTimersByTimeAsync(PRAZO_TRAVA_MS - 1);
+      expect(terminou).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      await espera;
+      expect(terminou).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("falha da própria trava: o ciclo roda sem ela", async () => {
+    Object.defineProperty(navigator, "locks", { configurable: true, value: { request: vi.fn(async () => { throw new Error("SecurityError"); }) } });
+    expect(await comTrava("u", async () => "rodou")).toBe("rodou");
   });
 });
 
