@@ -185,6 +185,8 @@ app/frontend/
 │   │   ├── ui/                # Botao, Campo, Cartao, Estados (carregando/erro/vazio)
 │   │   ├── layout/
 │   │   │   ├── AppLayout.tsx      # /app: sidebar verde recolhível (desktop) ↔ barra inferior + "Mais" (mobile)
+│   │   │   ├── DialogoSair.tsx    # useSair + aviso de pendências no logout: sincronizar agora, cancelar ou sair descartando (+ .test.tsx)
+│   │   │   ├── IndicadorConexao.tsx  # estado da conexão/sincronização, progresso, não enviados e atalho das decisões (+ .test.tsx)
 │   │   │   ├── LayoutPublico.tsx  # páginas públicas: cabeçalho + rodapé + <Outlet/>
 │   │   │   ├── CartaoAutenticacao.tsx  # cartão de login/cadastro/recuperar senha
 │   │   │   ├── Marca.tsx          # logo do favo + nome
@@ -224,6 +226,7 @@ app/frontend/
 │   │       ├── decisoes.ts    # pendências paradas: manter servidor/aparelho, descartar (com dependentes), substituir pela edição manual (+ .test.ts)
 │   │       ├── fotos.ts       # anexarFoto: comprime e sobe na hora, ou guarda no aparelho para subir depois do /sync (+ .test.ts)
 │   │       ├── validacoes.ts  # regra pura: regras do servidor (genealogia, espécie, 7 dias, parâmetros ativos) checadas antes de enfileirar (+ .test.ts)
+│   │       ├── sessao.ts      # fim da sessão: pendências do aparelho e apagarDadosLocais (fecha e apaga o banco do usuário) (+ .test.ts)
 │   │       ├── sincronizacao.ts  # sincronizar (envio da fila, fotos guardadas e pull, nova tentativa com espera crescente), puxarAlteracoes e pedirArmazenamentoPersistente (+ .test.ts, sincronizacaoCiclo.test.ts)
 │   │       ├── leituras.ts    # regra pura: monta cada resposta REST (colônias, avaliações, histórico, produções, parâmetros, espécies) a partir das linhas locais (+ .test.ts)
 │   │       └── leituraLocal.ts   # comFallbackLocal: com fila não vazia, sem rede ou com ErroApi(0), lê o banco local do usuário da sessão (+ .test.ts)
@@ -245,7 +248,7 @@ app/frontend/
 │   │   ├── score.ts           # faixas do score (Excelente/Boa/Atenção/Crítica) e prazo de edição (7 dias)
 │   │   └── vocabularios.ts    # motivos de status/inspeção/ação e procedência do clima (mesmos códigos do backend) + payloads (+ .test.ts)
 │   ├── index.css              # Tailwind + tokens do tema (claro/escuro): verde floresta + amarelo do logo
-│   ├── main.tsx               # entry point: QueryClient + RouterProvider
+│   ├── main.tsx               # entry point: QueryClient + RouterProvider; na troca de usuário limpa o cache e zera a sincronização
 │   ├── router.tsx             # rotas públicas + /app/* privadas, guardas e redirecionamento dos endereços antigos
 │   └── test-setup.ts          # jest-dom para o Vitest (testes ao lado do código: utils/*.test.ts)
 ├── node_modules/              # volume Docker frontend_modules
@@ -381,3 +384,7 @@ Notas:
 - **[2026-11-10 — PWA offline: conflitos e decisões]** — Frontend: `services/offline/juncao.ts` e `decisoes.ts` (+ testes); `fila.ts` passa o conflito pela junção (campos distintos voltam a ser enviados no mesmo ciclo); `banco.ts` ganhou `aplicarDecisao` e a recarga completa (`meta.recarregar`). Tela 35 em `pages/configuracoes/Sincronizacao.tsx` (rota real, seção Pendências; saiu de `telasPlanejadas.ts`), `components/features/AvisoPendencia.tsx` nos detalhes e `utils/pendencias.ts` (rótulos e valores dos campos). "Editar manualmente" usa os formulários de colônia, avaliação e colheita com `?pendencia=`.
 
 - **[2026-11-11 — PWA offline: indicadores e tela de Sincronização]** — Frontend: `components/layout/IndicadorConexao.tsx` (saiu do `AppLayout`; estado, progresso, contador de não enviados e atalho das decisões, + teste), `hooks/useRegistrosNaFila.ts` e `components/features/SeloEnvio.tsx` (marca "Não enviado"/"Precisa de decisão" em colônias, avaliações e colheitas, + teste); `store/sincronizacao.ts` com progresso, decisões, servidor inacessível e última sincronização; tela 35 com status, "Sincronizar agora", fila de envio, fotos aguardando e armazenamento.
+
+- **[2026-11-11 — PWA offline: logout com pendências]** — Frontend: `services/offline/sessao.ts` (+ teste) conta as pendências do aparelho (operações, fotos e decisões) e apaga o banco local do usuário: encerra a sessão, espera o ciclo de sincronização em andamento (`aguardarSincronizacao`), cancela a nova tentativa, zera o store, `fecharBanco` em `banco.ts` e `deleteDB` com prazo de 5 s (outra aba presa no banco não trava o logout); `components/layout/DialogoSair.tsx` (+ teste) assume o `useSair` do `AppLayout`: sem pendências sai direto, com pendências avisa e oferece sincronizar agora (online e só se houver o que enviar), cancelar ou sair descartando (com confirmação); mudanças esperando decisão ganham um atalho para a tela de Sincronização. A exclusão da conta (`Perfil.tsx`) também apaga os dados locais. `main.tsx` limpa o cache das telas e zera `store/sincronizacao.ts` (`resetarSincronizacao`) quando o usuário da sessão muda. O 401 continua só encerrando a sessão: a fila e a cópia local ficam para o próximo login do mesmo usuário.
+
+- **[2026-11-11 — PWA offline: logout com pendências e isolamento entre contas]** — Frontend: `services/offline/sessao.ts` (pendências do aparelho; apagar o banco local do usuário, + teste), `banco.ts` com `fecharBanco`; `components/layout/DialogoSair.tsx` (`useSair` saiu do `AppLayout`; aviso com sincronizar agora, cancelar ou sair descartando, + teste); `main.tsx` limpa o cache das telas e zera o estado de sincronização na troca de usuário; excluir a conta apaga os dados locais.

@@ -79,6 +79,18 @@ export function abrirBanco(usuarioId: string): Promise<BancoOffline> {
   return conexao;
 }
 
+// Fecha a conexão do usuário (antes de apagar o banco, que esperaria por ela).
+export async function fecharBanco(usuarioId: string): Promise<void> {
+  const conexao = conexoes.get(usuarioId);
+  conexoes.delete(usuarioId);
+  if (!conexao) return;
+  try {
+    (await conexao).close();
+  } catch {
+    // A conexão nem chegou a abrir.
+  }
+}
+
 export async function lerMeta(db: BancoOffline): Promise<MetaOffline> {
   return { ...META_VAZIA, ...(await db.get("meta", CHAVE_META)) };
 }

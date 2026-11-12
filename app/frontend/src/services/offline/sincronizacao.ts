@@ -216,6 +216,11 @@ async function contagens(db: BancoOffline) {
   };
 }
 
+// Espera o ciclo (e a repetição agendada) em andamento do usuário terminar. Nunca lança.
+export async function aguardarSincronizacao(usuarioId: string): Promise<void> {
+  await Promise.allSettled([sincronizacoes.get(usuarioId), repeticoes.get(usuarioId), emAndamento.get(usuarioId)]);
+}
+
 // Atualiza os contadores do usuário da sessão; devolve o da fila. Nunca lança.
 export async function atualizarContagem(usuarioId: string): Promise<number> {
   if (!indexedDbDisponivel()) return 0;

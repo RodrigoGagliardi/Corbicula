@@ -5,7 +5,8 @@ import { RouterProvider } from "react-router";
 import { opcoesConsulta } from "./services/api/opcoesConsulta";
 import { router } from "./router";
 import { aplicarTema } from "./store/preferencias";
-import { useSincronizacao } from "./store/sincronizacao";
+import { useAuth } from "./store/auth";
+import { resetarSincronizacao, useSincronizacao } from "./store/sincronizacao";
 import "./index.css";
 
 const queryClient = new QueryClient({ defaultOptions: opcoesConsulta });
@@ -14,6 +15,15 @@ const queryClient = new QueryClient({ defaultOptions: opcoesConsulta });
 // fila esvaziou, ou da cópia local atualizada).
 useSincronizacao.subscribe((atual, anterior) => {
   if (atual.concluidas !== anterior.concluidas) void queryClient.invalidateQueries();
+});
+
+// Troca de usuário na sessão (logout, 401, outra conta): nada da conta anterior
+// fica no cache das telas nem nos contadores. Os dados locais (IndexedDB) são
+// por usuário e só saem no logout (services/offline/sessao.ts).
+useAuth.subscribe((atual, anterior) => {
+  if (atual.usuario?.id === anterior.usuario?.id) return;
+  queryClient.clear();
+  resetarSincronizacao();
 });
 
 aplicarTema();

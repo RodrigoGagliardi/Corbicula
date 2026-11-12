@@ -8,6 +8,7 @@ import { CabecalhoPagina, Cartao } from "../../components/ui/Cartao";
 import { AvisoSemConexao, Carregando, ErroCarregamento, MensagemErro } from "../../components/ui/Estados";
 import { chaves, useEu } from "../../hooks/useDados";
 import { usuariosApi } from "../../services/api/endpoints";
+import { apagarDadosLocais } from "../../services/offline/sessao";
 import { useAuth } from "../../store/auth";
 import type { Usuario } from "../../types/api";
 import { formatarData } from "../../utils/format";
@@ -177,10 +178,14 @@ function ExcluirConta() {
 
   const excluir = useMutation({
     mutationFn: () => usuariosApi.excluirConta(senha),
-    onSuccess: () => {
+    onSuccess: async () => {
+      // LGPD: com a conta, saem também os dados guardados neste aparelho. A sessão
+      // termina antes, para uma sincronização em andamento não recriar o banco.
+      const usuarioId = useAuth.getState().usuario?.id;
       navegar("/", { replace: true });
       sair();
       queryClient.clear();
+      if (usuarioId) await apagarDadosLocais(usuarioId);
     },
   });
 

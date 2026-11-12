@@ -22,6 +22,17 @@ interface EstadoSincronizacao {
   concluidas: number;
 }
 
+const INICIAL: EstadoSincronizacao = {
+  sincronizando: false,
+  naFila: 0,
+  fotosPendentes: 0,
+  decisoes: 0,
+  progresso: null,
+  servidorInacessivel: false,
+  ultimaSincronizacao: null,
+  concluidas: 0,
+};
+
 export const useSincronizacao = create<EstadoSincronizacao>()(() => ({
   sincronizando: false,
   naFila: 0,
@@ -32,3 +43,9 @@ export const useSincronizacao = create<EstadoSincronizacao>()(() => ({
   ultimaSincronizacao: null,
   concluidas: 0,
 }));
+
+// Zera tudo (logout, troca de usuário): os números da conta anterior não aparecem
+// para a próxima. `concluidas` continua crescendo, para a invalidação das telas.
+export function resetarSincronizacao(): void {
+  useSincronizacao.setState((s) => ({ ...INICIAL, concluidas: s.concluidas }));
+}

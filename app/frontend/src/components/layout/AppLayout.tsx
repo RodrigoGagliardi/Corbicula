@@ -1,10 +1,11 @@
 import { Ellipsis, Info, LogOut, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Settings, Sun, User, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router";
+import { Link, NavLink, Outlet, useLocation } from "react-router";
 import { useCargaLocal } from "../../hooks/useCargaLocal";
 import { useAlertas } from "../../hooks/useDados";
 import { useAuth } from "../../store/auth";
 import { usePreferencias, type Tema } from "../../store/preferencias";
+import { DialogoSair, useSair } from "./DialogoSair";
 import { IndicadorConexao } from "./IndicadorConexao";
 import { Marca } from "./Marca";
 import { ACAO_PRINCIPAL, ITENS_BARRA_INFERIOR, ITENS_NAV, type ItemNav } from "./navegacao";
@@ -26,17 +27,9 @@ export function AppLayout() {
         </main>
       </div>
       <BarraInferior />
+      <DialogoSair />
     </div>
   );
-}
-
-function useSair() {
-  const sair = useAuth((s) => s.sair);
-  const navegar = useNavigate();
-  return () => {
-    sair();
-    navegar("/login", { replace: true });
-  };
 }
 
 const TEMAS: { valor: Tema; rotulo: string; icone: typeof Sun }[] = [
