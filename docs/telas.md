@@ -33,7 +33,7 @@ Legenda: ✅ pronta · ◐ parcial · 🚧 rota com página "em construção"
 | 32 | Dados do Meliponário | ✅ |
 | 33 | Preferências | ◐ tema e frequência de inspeção; sem idioma, unidades, formato de data e notificações |
 | 34 | Exportar/Importar Dados | ◐ exportação CSV/JSON e backup completo; sem importar, fotos em zip, Excel e PDF |
-| 35 | Sincronização Offline | 🚧 |
+| 35 | Sincronização Offline | ✅ (12/11/2026; demonstração em `docs/demonstracao-offline.md`) |
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -207,7 +207,7 @@ Legenda: ✅ pronta · ◐ parcial · 🚧 rota com página "em construção"
 **Header:**
 - Nome do meliponário
 - Botão [Nova Avaliação Rápida]
-- Indicador offline/online
+- Indicador offline/online — implementado no layout, não no cabeçalho do dashboard: fica na sidebar (desktop) e na barra superior (mobile) de todas as telas, com o contador de não enviados e o atalho das decisões (tela 35)
 
 **Cards de Resumo (4):**
 1. **Total de Colônias**
@@ -573,7 +573,7 @@ Para cada parâmetro configurado:
 **Features:**
 - Progresso visual (barra)
 - Salvar como rascunho
-- Modo offline (salva local, sincroniza depois)
+- Modo offline (salva local, sincroniza depois) — ✅ desde 09/11/2026: sem conexão, a avaliação entra na fila com prévia do score e sobe ao reconectar (tela 35)
 - Swipe para próximo parâmetro (mobile)
 
 ---
@@ -1169,7 +1169,7 @@ MAND-005
 - **Calendário:** grade mensal (domingo a sábado) com inspeções (cor do score), colheitas, divisões e inspeções sugeridas; clicar num dia abre o painel com links (inspeção, colheita, colônia, "Avaliar"). Mês e dia na URL. Sugestão = última inspeção (ou a entrada, se nunca avaliada) + frequência da colônia (`frequenciaInspecaoDias`, campo opcional no cadastro) ou a preferência geral; vencidas aparecem hoje como atrasadas. Datas agrupadas pelo dia local. O detalhe da colônia mostra a próxima inspeção sugerida. **Não implementado:** agendar atividades num dia e lembretes (exigem input manual — decisão do autor, 04/11/2026).
 - **Alertas** (`GET /alertas`, calculados das inspeções — nada é digitado): `nunca_avaliada` (1ª inspeção atrasada desde a entrada), `sem_inspecao` (alta se passar do dobro da frequência), `score_baixo` (Crítica = alta, Atenção = média, lista os parâmetros Ruim), `queda_score` (≥ 20 pontos em relação à inspeção anterior) e `parametro_ruim` (parâmetro Ruim num score Boa/Excelente — cobre "rainha ausente", "infestação" e "reservas baixas" sem depender do nome do parâmetro). Só a última inspeção de cada colônia ativa conta.
 - Marcar como resolvido / reabrir (`POST`/`DELETE /alertas/resolvidos`, tabela `alertas_resolvidos`, vale em todos os aparelhos). A chave identifica a ocorrência (ex.: `score_baixo:<avaliacaoId>`): o mesmo problema numa inspeção nova gera alerta novo. Filtro por tipo e "mostrar resolvidos" na URL; contador de abertos na sidebar e no "Mais" do mobile. A tela mostra os critérios usados.
-- **Não implementado:** escolher quais alertas receber e avisos por e-mail/push (dependem do PWA offline e de um serviço de e-mail).
+- **Não implementado:** escolher quais alertas receber e avisos por e-mail/push (dependem de um serviço de e-mail e de notificações push; o PWA offline já existe, mas não usa push).
 
 ---
 
@@ -1242,6 +1242,23 @@ MAND-005
 - Última sincronização bem-sucedida
 - Espaço usado no armazenamento local
 - Resolver conflitos (quando houver edições concorrentes)
+
+> **Implementado (11–12/11/2026)** — `pages/configuracoes/Sincronizacao.tsx`, sobre `services/offline/`
+> (funcionamento em `docs/estrutura-pastas.md`; roteiro de demonstração em `docs/demonstracao-offline.md`).
+> - **Status:** online, offline, servidor inacessível ou sincronizando (com progresso); "Sincronizar agora";
+>   última sincronização bem-sucedida.
+> - **Pendências de decisão:** conflito no mesmo campo (as duas versões lado a lado; manter a do servidor,
+>   manter a deste aparelho ou editar manualmente) e mudança recusada pelo servidor (editar manualmente ou
+>   descartar, com o que sai junto). Conflitos em campos diferentes se juntam sozinhos e não aparecem aqui.
+> - **Fila de envio** e **fotos aguardando** (o que ainda não chegou ao servidor).
+> - **Armazenamento:** espaço usado e cota estimados pelo navegador e se o armazenamento é persistente;
+>   quando não é, recomenda instalar o app.
+> - Fora desta tela: o indicador de conexão (sidebar no desktop, barra superior no mobile) mostra o mesmo
+>   status, o contador de não enviados e um atalho para as decisões; registros pendentes ganham a marca
+>   "Não enviado" ou "Precisa de decisão"; sair da conta com pendências abre um aviso (sincronizar agora,
+>   cancelar ou sair descartando).
+> - **Sem conexão continuam exigindo rede:** alertas, resumo e relatório de produção, templates, exportação
+>   e fotos que já estão no servidor (avisos nas próprias telas).
 
 ---
 

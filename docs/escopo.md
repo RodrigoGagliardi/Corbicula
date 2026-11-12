@@ -426,16 +426,16 @@ Classificação:
 
 ### **MÓDULO 9: Funcionalidade Offline (PWA)**
 
+> **Implementado (05–12/11/2026).** Funcionamento técnico em `docs/estrutura-pastas.md` (nota de `services/offline/`), tela 35 em `docs/telas.md` e roteiro de demonstração em `docs/demonstracao-offline.md`.
+
 #### 9.1 Armazenamento Local
 **IndexedDB:**
-- Cópia local de colônias
-- Cópia de avaliações recentes
-- Parâmetros do usuário
-- Fila de sincronização
+- Cópia local de colônias, avaliações (todas, não só as recentes), colheitas e parâmetros, mais o catálogo de espécies
+- Fila de sincronização e fotos aguardando envio
+- Um banco por usuário no mesmo aparelho
 
 **Capacidade:**
-- Mínimo 100MB
-- Otimizado até 500MB
+- Meta original: mínimo 100 MB, otimizado até 500 MB. Não medida: a cota é do navegador, e a tela de Sincronização mostra o espaço usado e a cota estimada. Um meliponário pequeno ou médio cabe com folga.
 
 **Persistência:**
 - Mudanças pendentes só saem do aparelho depois de o servidor confirmar ou de o usuário decidir
@@ -447,6 +447,7 @@ Classificação:
 - Automática: ao detectar internet, ao abrir o app e ao voltar para ele
 - Manual: botão "Sincronizar agora"
 - Background Sync (com o app fechado) como melhoria progressiva, onde o navegador oferece (Chrome/Android); nos demais, o resto funciona igual
+- Exigem conexão (offline, mostram o último resultado ou um aviso): alertas, resumo e relatório de produção, templates, exportação e fotos que já estão no servidor
 
 **Conflitos (o usuário só decide em último caso):**
 - Detecção de edições simultâneas (`baseUpdatedAt`)
@@ -623,7 +624,7 @@ Status do score: verde / lima / âmbar / vermelho (semânticas, não mudam com o
 
 ## 🚀 Fases de Desenvolvimento
 
-> Situação em 03/11/2026. Legenda: ✅ feito · ◐ parcial · 📋 planejado. As fases indicam ordem e dependência, não cronograma.
+> Situação em 12/11/2026. Legenda: ✅ feito · ◐ parcial · 📋 planejado. As fases indicam ordem e dependência, não cronograma.
 
 ### **Fase 1: MVP**
 **Objetivo:** Versão funcional básica
@@ -634,9 +635,9 @@ Status do score: verde / lima / âmbar / vermelho (semânticas, não mudam com o
 - ✅ Registro de avaliações
 - ✅ Histórico e gráficos básicos
 - ✅ Autenticação
-- ◐ Offline básico (PWA): app instalável com o app shell em cache e API `/sync` pronta no backend; falta a fila no cliente (IndexedDB)
+- ✅ Offline (PWA): cópia local, escrita offline de colônias, avaliações, colheitas e fotos, sincronização automática (inclusive com o app fechado, onde o navegador oferece), conflitos e tela de Sincronização
 - ✅ Docker setup completo
-- ◐ Configurações: perfil (com troca de senha e exclusão da conta), meliponário, preferências e exportação prontos; falta importar backup e a tela de sincronização
+- ◐ Configurações: perfil (com troca de senha e exclusão da conta), meliponário, preferências e exportação prontos; falta importar backup
 
 **Tecnologias:**
 - Frontend: React + TypeScript + Vite + PWA
@@ -781,8 +782,8 @@ Escolhida por ser permissiva e incluir proteção de patentes — adequada a um 
 
 - [x] Usuário pode cadastrar 10+ colônias
 - [x] Usuário pode definir parâmetros personalizados
-- [ ] Usuário pode avaliar colônias offline
-- [ ] Dados sincronizam ao voltar online (o backend `/sync` está pronto; falta a fila no cliente)
+- [x] Usuário pode avaliar colônias offline
+- [x] Dados sincronizam ao voltar online (demonstração no navegador real pendente: `docs/demonstracao-offline.md`)
 - [x] Histórico de avaliações é exibido graficamente
 - [x] Sistema funciona em celular e desktop
 - [x] Score de saúde é calculado automaticamente
@@ -835,7 +836,7 @@ Escolhida por ser permissiva e incluir proteção de patentes — adequada a um 
 
 **Tecnologia:** Node.js + Python + React + PostgreSQL (UUID) + Docker
 
-**Status:** Em desenvolvimento. O backend do MVP está completo e testado; o frontend tem as telas centrais (colônias, avaliações, parâmetros, produção); faltam o modo offline no cliente, as configurações e as análises (Fase 2)  
+**Status:** Em desenvolvimento. O backend do MVP está completo e testado; o frontend tem as telas do MVP, incluindo configurações e o modo offline (PWA); faltam importar backup, fotos em zip e as análises (Fase 2)  
 **Licença:** Apache 2.0
 
 ---
