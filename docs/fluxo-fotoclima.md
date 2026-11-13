@@ -164,8 +164,11 @@ Foto de celular tem 3–8 MB. Comprimir para ~200–500 KB no navegador
 Bibliotecas: `browser-image-compression` ou canvas nativo.
 
 **2. Upload em background / offline-friendly**
-No modo offline (PWA), a foto vai para a fila de sincronização
-(`sync_queue`) como blob no IndexedDB. Sobe quando houver conexão.
+No modo offline (PWA), a foto comprimida fica no IndexedDB (store `fotos`,
+separado da fila de operações) e sobe por `POST /fotos` depois do `POST /sync`,
+quando o registro a que ela pertence já existe no servidor. Se o envio falhar,
+o registro continua sincronizado e a foto tenta de novo (implementado em
+`services/offline/fotos.ts`, 10/11/2026).
 O usuário não espera o upload terminar para continuar.
 Ordem ao reconectar: primeiro `POST /sync` (cria colônias/avaliações/colheitas
 com os UUIDs gerados no cliente); depois cada foto via `POST /fotos`
@@ -218,5 +221,5 @@ mexer no resto.
 | Fotos | Opcionais, nunca bloqueiam, 1 por inspeção como padrão |
 | Foto por parâmetro | Mantida no schema, escondida atrás de botão discreto |
 | Compressão | No cliente, antes do upload (~200–500 KB) |
-| Foto offline | Blob no IndexedDB → sync_queue → sobe com conexão |
+| Foto offline | IndexedDB (store `fotos`) → `POST /fotos` depois do `/sync` |
 | Atribuição | "Dados por Open-Meteo.com (CC BY 4.0)" na tela Sobre |

@@ -56,6 +56,21 @@ export function Sobre() {
         </Cartao>
 
         <Cartao className="space-y-2 text-foreground">
+          <h2 className="font-semibold text-foreground">Mapas</h2>
+          <p>
+            O mapa de colônias usa{" "}
+            <a href="https://leafletjs.com/" target="_blank" rel="noreferrer" className="text-foreground underline decoration-accent decoration-2 underline-offset-4 hover:decoration-foreground">
+              Leaflet
+            </a>
+            . Mapa base &copy;{" "}
+            <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" className="text-foreground underline decoration-accent decoration-2 underline-offset-4 hover:decoration-foreground">
+              colaboradores do OpenStreetMap
+            </a>{" "}
+            (dados sob ODbL); imagens de satélite &copy; Esri, Maxar, Earthstar Geographics e comunidade de usuários GIS.
+          </p>
+        </Cartao>
+
+        <Cartao className="space-y-2 text-foreground">
           <h2 className="font-semibold text-foreground">Código aberto</h2>
           <p>
             Licenciado sob a{" "}

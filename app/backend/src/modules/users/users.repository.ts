@@ -18,6 +18,15 @@ export const usersRepository = {
       include: { meliponario: true },
     }),
 
+  findByEmail: (email: string) => prisma.user.findUnique({ where: { email }, select: { id: true } }),
+
+  updateSenha: (id: string, senhaHash: string) =>
+    prisma.user.update({ where: { id }, data: { password: senhaHash }, select: { id: true } }),
+
+  // O cascade do schema apaga meliponário, colônias (e com elas avaliações,
+  // fotos e produções), parâmetros e o registro de sync.
+  excluir: (id: string) => prisma.user.delete({ where: { id }, select: { id: true } }),
+
   // Relação 1:1 — upsert garante que jamais existam dois meliponários para o mesmo usuário.
   // undefined → null porque Prisma usa null para campos anuláveis.
   upsertMeliponario: (userId: string, data: MeliponarioInput) =>

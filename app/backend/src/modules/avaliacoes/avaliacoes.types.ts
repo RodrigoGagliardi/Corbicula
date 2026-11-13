@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CODIGOS_MOTIVO_ACAO, CODIGOS_MOTIVO_INSPECAO } from "../../shared/vocabularios";
 
 export const CLASSIFICACOES = ["bom", "medio", "ruim"] as const;
 export const CONDICOES_CLIMATICAS = ["ensolarado", "nublado", "chuvoso"] as const;
@@ -23,6 +24,17 @@ export const criarAvaliacaoSchema = z.object({
   condicaoClimatica: z.enum(CONDICOES_CLIMATICAS).nullable().optional(),
   observacoesGerais: z.string().max(2000).nullable().optional(),
   acoesTomadas: z.array(z.string().min(1)).nullable().optional(),
+  // Contexto (opcionais). motivosAcoes: mapa ação → motivo; as chaves precisam
+  // estar em acoesTomadas (conferido no service, que conhece as ações atuais).
+  motivoInspecao: z
+    .enum(CODIGOS_MOTIVO_INSPECAO, { message: "Motivo da inspeção desconhecido" })
+    .nullable()
+    .optional(),
+  motivoInspecaoDetalhe: z.string().max(500).nullable().optional(),
+  motivosAcoes: z
+    .record(z.string().min(1), z.enum(CODIGOS_MOTIVO_ACAO, { message: "Motivo da ação deve ser: preventiva ou resposta_problema" }))
+    .nullable()
+    .optional(),
   parametros: z
     .array(avaliacaoParametroSchema)
     .min(1, "Avalie ao menos um parâmetro")
@@ -40,6 +52,17 @@ export const atualizarAvaliacaoSchema = z.object({
   condicaoClimatica: z.enum(CONDICOES_CLIMATICAS).nullable().optional(),
   observacoesGerais: z.string().max(2000).nullable().optional(),
   acoesTomadas: z.array(z.string().min(1)).nullable().optional(),
+  // Contexto (opcionais). motivosAcoes: mapa ação → motivo; as chaves precisam
+  // estar em acoesTomadas (conferido no service, que conhece as ações atuais).
+  motivoInspecao: z
+    .enum(CODIGOS_MOTIVO_INSPECAO, { message: "Motivo da inspeção desconhecido" })
+    .nullable()
+    .optional(),
+  motivoInspecaoDetalhe: z.string().max(500).nullable().optional(),
+  motivosAcoes: z
+    .record(z.string().min(1), z.enum(CODIGOS_MOTIVO_ACAO, { message: "Motivo da ação deve ser: preventiva ou resposta_problema" }))
+    .nullable()
+    .optional(),
   // Se enviado, substitui todos os parâmetros da avaliação e recalcula o score.
   parametros: z
     .array(avaliacaoParametroSchema)

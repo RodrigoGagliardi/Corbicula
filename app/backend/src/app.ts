@@ -9,6 +9,7 @@ import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import { ZodError } from "zod";
 import { swaggerOptions, swaggerUiOptions } from "./config/swagger";
+import { alertasRoutes } from "./modules/alertas/alertas.routes";
 import { authRoutes } from "./modules/auth/auth.routes";
 import { historicoAvaliacoesRoutes } from "./modules/avaliacoes/avaliacoes.routes";
 import { coloniasRoutes } from "./modules/colonias/colonias.routes";
@@ -21,6 +22,7 @@ import { producoesRoutes } from "./modules/producoes/producoes.routes";
 import { syncRoutes } from "./modules/sync/sync.routes";
 import { usersRoutes } from "./modules/users/users.routes";
 import { env } from "./shared/env";
+import { ehUuidInvalido } from "./shared/errors";
 
 // Monta a aplicação sem abrir porta — usado pelo server.ts e pelos testes (app.inject).
 export async function buildApp(opts: { logger?: boolean } = {}): Promise<FastifyInstance> {
@@ -50,6 +52,8 @@ export async function buildApp(opts: { logger?: boolean } = {}): Promise<Fastify
         });
       }
 
+      if (ehUuidInvalido(error)) return reply.status(404).send({ error: "Registro não encontrado" });
+
       const code = (error as NodeJS.ErrnoException).code;
       if (code === "CONFLICT") return reply.status(409).send({ error: error.message });
       if (code === "UNAUTHORIZED") return reply.status(401).send({ error: error.message });
@@ -77,6 +81,7 @@ export async function buildApp(opts: { logger?: boolean } = {}): Promise<Fastify
   await app.register(fotosRoutes, { prefix: "/fotos" });
   await app.register(exportacaoRoutes, { prefix: "/exportacao" });
   await app.register(syncRoutes, { prefix: "/sync" });
+  await app.register(alertasRoutes, { prefix: "/alertas" });
 
   return app;
 }

@@ -1,5 +1,6 @@
 import { ClipboardCheck } from "lucide-react";
 import { Link } from "react-router";
+import { SeloEnvio } from "./SeloEnvio";
 import type { Colonia } from "../../types/api";
 import { ROTULO_STATUS_COLONIA, tempoRelativo } from "../../utils/format";
 import { Selo } from "../ui/Cartao";
@@ -33,7 +34,10 @@ export function CartaoColonia({ colonia }: { colonia: Colonia }) {
             )}
           </p>
         </div>
-        <Selo className={COR_STATUS_COLONIA[colonia.status]}>{ROTULO_STATUS_COLONIA[colonia.status]}</Selo>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <Selo className={COR_STATUS_COLONIA[colonia.status]}>{ROTULO_STATUS_COLONIA[colonia.status]}</Selo>
+          <SeloEnvio id={colonia.id} />
+        </div>
       </div>
 
       {ultima ? (

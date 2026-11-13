@@ -2,16 +2,19 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowLeft, ArrowUp, CheckCircle2, CloudSun, Minus, Pencil, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
+import { AvisoPendencia } from "../../components/features/AvisoPendencia";
 import { GaleriaFotos } from "../../components/features/GaleriaFotos";
+import { SeloEnvio } from "../../components/features/SeloEnvio";
 import { BarraScore } from "../../components/features/SeloScore";
 import { Botao, LinkBotao } from "../../components/ui/Botao";
 import { CabecalhoPagina, Cartao, Selo } from "../../components/ui/Cartao";
 import { Carregando, ErroCarregamento, MensagemErro } from "../../components/ui/Estados";
 import { chaves, useAvaliacao, useAvaliacoes, useColonia } from "../../hooks/useDados";
-import { avaliacoesApi } from "../../services/api/endpoints";
+import { escritas } from "../../services/offline/escrita";
 import type { Classificacao } from "../../types/api";
 import { formatarData, formatarDataHora, ROTULO_CLIMA } from "../../utils/format";
 import { COR_STATUS, fimDaEdicao, podeEditar, ROTULO_CLASSIFICACAO, ROTULO_STATUS } from "../../utils/score";
+import { rotuloFonteClima, rotuloMotivoAcao, rotuloMotivoInspecao, temClima } from "../../utils/vocabularios";
 
 const COR_CLASSIFICACAO: Record<Classificacao, string> = {
   bom: "bg-green-100 text-green-800 dark:bg-green-950/60 dark:text-green-300",
@@ -23,14 +26,14 @@ export function DetalheAvaliacao() {
   const { coloniaId = "", id = "" } = useParams();
   const navegar = useNavigate();
   const queryClient = useQueryClient();
-  const estado = useLocation().state as { nova?: boolean; editada?: boolean; fotoFalhou?: boolean } | null;
+  const estado = useLocation().state as { nova?: boolean; editada?: boolean; fotoFalhou?: boolean; fotoPendente?: boolean } | null;
   const { data: avaliacao, isLoading, error, refetch } = useAvaliacao(coloniaId, id);
   const { data: colonia } = useColonia(coloniaId);
   const { data: historico } = useAvaliacoes(coloniaId);
 
   // O clima chega segundos depois de salvar (enriquecimento assíncrono no
   // backend). Numa avaliação recém-criada, busca de novo algumas vezes.
-  const semClima = avaliacao && avaliacao.temperatura === null && avaliacao.condicaoClimatica === null;
+  const semClima = avaliacao && !temClima(avaliacao);
   const [tentativasClima, setTentativasClima] = useState(0);
   useEffect(() => {
     if (!estado?.nova || !semClima || tentativasClima >= 3) return;
@@ -42,7 +45,7 @@ export function DetalheAvaliacao() {
   }, [estado?.nova, semClima, tentativasClima, refetch]);
 
   const excluir = useMutation({
-    mutationFn: () => avaliacoesApi.excluir(coloniaId, id),
+    mutationFn: () => escritas.excluirAvaliacao(coloniaId, id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: chaves.colonias });
       navegar(`/app/colonias/${coloniaId}`, { replace: true });
@@ -58,7 +61,8 @@ export function DetalheAvaliacao() {
     .sort((a, b) => b.dataAvaliacao.localeCompare(a.dataAvaliacao))[0];
   const diferenca = anterior ? avaliacao.scoreGeral - anterior.scoreGeral : null;
   const cor = COR_STATUS[avaliacao.statusGeral];
-  const temClima = avaliacao.temperatura !== null || avaliacao.condicaoClimatica !== null;
+  const comClima = temClima(avaliacao);
+  const motivoInspecao = rotuloMotivoInspecao(avaliacao.motivoInspecao, avaliacao.motivoInspecaoDetalhe);
 
   return (
     <>
@@ -68,7 +72,11 @@ export function DetalheAvaliacao() {
             <ArrowLeft className="size-4" aria-hidden /> {colonia?.codigo ?? "Colônia"}
           </Link>
         }
-        titulo="Avaliação"
+        titulo={
+          <span className="inline-flex flex-wrap items-center gap-2">
+            Avaliação <SeloEnvio id={avaliacao.id} />
+          </span>
+        }
         subtitulo={formatarDataHora(avaliacao.dataAvaliacao)}
         acoes={
           podeEditar(avaliacao.createdAt) && (
@@ -82,6 +90,7 @@ export function DetalheAvaliacao() {
           )
         }
       />
+      <AvisoPendencia entidadeId={avaliacao.id} />
 
       {estado?.editada && (
         <p className="mb-4 flex items-center gap-2 rounded-xl bg-green-50 px-4 py-3 text-sm text-green-800 dark:bg-green-950/50 dark:text-green-300" role="status">
@@ -93,6 +102,7 @@ export function DetalheAvaliacao() {
         <p className="mb-4 flex items-center gap-2 rounded-xl bg-green-50 px-4 py-3 text-sm text-green-800 dark:bg-green-950/50 dark:text-green-300" role="status">
           <CheckCircle2 className="size-4" aria-hidden /> Avaliação salva.
           {estado.fotoFalhou && " A foto não pôde ser enviada — tente adicioná-la abaixo."}
+          {estado.fotoPendente && " A foto ficou guardada no aparelho e será enviada quando a conexão voltar."}
         </p>
       )}
 
@@ -122,7 +132,7 @@ export function DetalheAvaliacao() {
           <h2 className="mb-3 flex items-center gap-2 font-semibold text-foreground">
             <CloudSun className="size-4" aria-hidden /> Clima no momento da inspeção
           </h2>
-          {temClima ? (
+          {comClima ? (
             <dl className="grid grid-cols-3 gap-3 text-center">
               <Dado rotulo="Temperatura" valor={avaliacao.temperatura !== null ? `${avaliacao.temperatura} °C` : "—"} />
               <Dado rotulo="Umidade" valor={avaliacao.umidade !== null ? `${avaliacao.umidade}%` : "—"} />
@@ -134,7 +144,13 @@ export function DetalheAvaliacao() {
               tiverem coordenadas, ele não pode ser obtido.
             </p>
           )}
-          <p className="mt-3 text-xs text-muted-foreground">Dados: Open-Meteo.com (CC BY 4.0)</p>
+          {comClima && avaliacao.climaFonte && (
+            <p className="mt-3 text-sm text-muted-foreground">
+              Procedência: <span className="font-medium text-foreground">{rotuloFonteClima(avaliacao.climaFonte)}</span>
+            </p>
+          )}
+          {/* Atribuição obrigatória (CC BY 4.0) sempre que houver clima: "digitado" só diz que algum campo foi editado. */}
+          {comClima && <p className="mt-3 text-xs text-muted-foreground">Dados: Open-Meteo.com (CC BY 4.0)</p>}
         </Cartao>
 
         <Cartao className="md:col-span-3">
@@ -152,8 +168,14 @@ export function DetalheAvaliacao() {
           </ul>
         </Cartao>
 
-        {(avaliacao.observacoesGerais || avaliacao.acoesTomadas.length > 0) && (
+        {(motivoInspecao || avaliacao.observacoesGerais || avaliacao.acoesTomadas.length > 0) && (
           <Cartao className="md:col-span-3 space-y-3">
+            {motivoInspecao && (
+              <div>
+                <h2 className="mb-1 font-semibold text-foreground">Motivo da inspeção</h2>
+                <p className="text-sm text-foreground">{motivoInspecao}</p>
+              </div>
+            )}
             {avaliacao.observacoesGerais && (
               <div>
                 <h2 className="mb-1 font-semibold text-foreground">Observações</h2>
@@ -163,12 +185,17 @@ export function DetalheAvaliacao() {
             {avaliacao.acoesTomadas.length > 0 && (
               <div>
                 <h2 className="mb-1 font-semibold text-foreground">Ações tomadas</h2>
-                <ul className="flex flex-wrap gap-1.5">
-                  {avaliacao.acoesTomadas.map((a) => (
-                    <li key={a}>
-                      <Selo className="bg-muted text-foreground">{a}</Selo>
-                    </li>
-                  ))}
+                <ul className="flex flex-wrap gap-x-3 gap-y-1.5">
+                  {avaliacao.acoesTomadas.map((a) => {
+                    // Motivo da ação, quando registrado (ausente em avaliações antigas).
+                    const motivo = avaliacao.motivosAcoes?.[a];
+                    return (
+                      <li key={a} className="flex flex-wrap items-center gap-x-1.5">
+                        <Selo className="bg-muted text-foreground">{a}</Selo>
+                        {motivo && <span className="text-xs text-muted-foreground">{rotuloMotivoAcao(motivo)}</span>}
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             )}

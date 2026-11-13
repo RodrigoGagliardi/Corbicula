@@ -9,7 +9,7 @@
 > de encerrar a tarefa. Se encontrar divergência entre este documento e o disco,
 > o disco é a verdade — corrija o documento para refletir o real.
 
-**Última sincronização (03/11/2026):** backend do MVP completo (inclui fotos, produções, exportação, sync offline e histórico geral de avaliações) com 132 testes automatizados (Vitest) e CI no GitHub Actions. Frontend em `app/frontend/` (React + Vite + PWA) com as telas centrais do MVP (colônias, avaliações, parâmetros, produção e páginas públicas); configurações, mapa, calendário e a camada offline de dados ainda não existem.
+**Última sincronização (12/11/2026):** backend do MVP completo (inclui fotos, produções, exportação, sync offline, histórico geral de avaliações e dados de desfecho) com 221 testes automatizados (Vitest) e CI no GitHub Actions. Frontend em `app/frontend/` (React + Vite + PWA) com as telas do MVP (colônias com mapa, avaliações, parâmetros, produção, calendário, alertas, configurações e páginas públicas) e o modo offline completo (`services/offline/`, Service Worker em `src/sw.ts`), com 361 testes em 37 arquivos; ainda sem CI do frontend.
 
 ---
 
@@ -20,7 +20,9 @@ orquestração, licença e contexto ficam na raiz.
 
 ```
 CORBICULA/
-├── .claude/                   # config do Claude Code (ignorado no git)
+├── .claude/                   # config do Claude Code + skills do BMAD (ignorado no git)
+├── _bmad/                     # BMAD Method v6: config, scripts e overrides em custom/ (ignorado no git)
+├── _bmad-output/              # artefatos do BMAD: PRD, specs, stories (ignorado no git)
 ├── .husky/                    # git hooks (pre-commit + commitlint no commit-msg)
 ├── .github/
 │   └── workflows/
@@ -47,6 +49,7 @@ CORBICULA/
 │   ├── fluxo-fotoclima.md
 │   ├── efetividade.md
 │   ├── exportacao.md          # dicionário de dados e metodologia da exportação
+│   ├── demonstracao-offline.md  # roteiro reproduzível do sinal de sucesso do PWA offline
 │   └── estrutura-pastas.md    # este arquivo
 └── app/
     ├── backend/               # Node.js + Fastify + Prisma  [EXISTE]
@@ -76,8 +79,8 @@ app/backend/
 │   │   │   ├── auth.service.ts
 │   │   │   └── auth.types.ts
 │   │   ├── users/
-│   │   │   ├── users.routes.ts
-│   │   │   ├── users.service.ts
+│   │   │   ├── users.routes.ts       # /users/me (perfil, senha, exclusão da conta) e /users/me/meliponario
+│   │   │   ├── users.service.ts      # exclusão da conta apaga também os arquivos de fotos
 │   │   │   ├── users.repository.ts
 │   │   │   └── users.types.ts
 │   │   ├── colonias/
@@ -91,11 +94,14 @@ app/backend/
 │   │   │   ├── parametros.routes.ts
 │   │   │   ├── parametros.service.ts
 │   │   │   ├── parametros.repository.ts  # inclui upsertCriterioEspecie
+│   │   │   ├── parametros.templates.ts   # templates (Iniciante…Científico) — fonte única, usada também pelo seed
+│   │   │   ├── parametros.conjuntos.ts   # aplicar template/importar (transação), exportar
 │   │   │   └── parametros.types.ts
 │   │   ├── avaliacoes/
 │   │   │   ├── avaliacoes.routes.ts   # /:coloniaId/avaliacoes (CRUD) + /avaliacoes (histórico geral)
-│   │   │   ├── avaliacoes.service.ts  # dispara enriquecerComClima após criar
+│   │   │   ├── avaliacoes.service.ts  # dispara enriquecerComClima após criar; motivos e procedência do clima
 │   │   │   ├── avaliacoes.repository.ts  # upsert de parâmetros (preserva fotos vinculadas)
+│   │   │   ├── avaliacoes.protocolo.ts   # protocolo da avaliação: conteúdo canônico, hash SHA-256, template de origem
 │   │   │   └── avaliacoes.types.ts
 │   │   ├── fotos/
 │   │   │   ├── fotos.routes.ts        # upload multipart (/fotos)
@@ -112,16 +118,22 @@ app/backend/
 │   │   │   ├── exportacao.service.ts  # linhas tidy + metadados/metodologia
 │   │   │   ├── exportacao.types.ts
 │   │   │   └── csv.ts                 # serialização RFC 4180
-│   │   └── sync/
-│   │       ├── sync.routes.ts         # POST /sync, GET /sync/alteracoes, GET /sync/status
-│   │       ├── sync.service.ts        # aplica operações offline via services existentes
-│   │       └── sync.types.ts
+│   │   ├── sync/
+│   │   │   ├── sync.routes.ts         # POST /sync, GET /sync/alteracoes, GET /sync/status
+│   │   │   ├── sync.service.ts        # aplica operações offline via services existentes
+│   │   │   └── sync.types.ts
+│   │   └── alertas/
+│   │       ├── alertas.routes.ts      # GET /alertas, POST/DELETE /alertas/resolvidos
+│   │       ├── alertas.service.ts     # cálculo dos alertas a partir das inspeções (regras documentadas)
+│   │       ├── alertas.repository.ts
+│   │       └── alertas.types.ts       # tipos, critérios (30 dias, queda de 20 pontos), chave da ocorrência
 │   ├── services/
 │   │   └── weather.service.ts  # Open-Meteo: Forecast + Archive + cache + enrichment
 │   ├── shared/
 │   │   ├── env.ts              # variáveis de ambiente (inclui UPLOADS_DIR)
 │   │   ├── errors.ts           # erros tipados (NOT_FOUND, CONFLICT, BAD_REQUEST)
 │   │   ├── json.ts             # parse tolerante de campos JSON-em-texto
+│   │   ├── vocabularios.ts     # vocabulários fechados (motivos de status/inspeção/ação, procedência do clima)
 │   │   └── middleware/
 │   │       └── authenticate.ts # verifica JWT e injeta userId no request
 │   ├── types/
@@ -132,9 +144,9 @@ app/backend/
 │   ├── setup/
 │   │   ├── test-env.mts        # URL do banco <nome>_test e pasta de uploads temporária
 │   │   └── global-setup.ts     # recria o banco de teste (migrate reset + seed) antes da suíte
-│   ├── unit/                   # score, CSV, clima (fetch mockado)
+│   ├── unit/                   # score, CSV, clima (fetch mockado), protocolo
 │   ├── integration/            # API via app.inject: auth, colonias, avaliacoes, fotos,
-│   │                           # producoes, exportacao, sync
+│   │                           # producoes, exportacao, sync, users
 │   └── helpers.ts              # cliente autenticado, fábricas de dados, multipart
 ├── uploads/                    # fotos (volume Docker backend_uploads; ignorado no git)
 ├── node_modules/
@@ -174,46 +186,76 @@ app/frontend/
 │   │   ├── ui/                # Botao, Campo, Cartao, Estados (carregando/erro/vazio)
 │   │   ├── layout/
 │   │   │   ├── AppLayout.tsx      # /app: sidebar verde recolhível (desktop) ↔ barra inferior + "Mais" (mobile)
+│   │   │   ├── DialogoSair.tsx    # useSair + aviso de pendências no logout: sincronizar agora, cancelar ou sair descartando (+ .test.tsx)
+│   │   │   ├── IndicadorConexao.tsx  # estado da conexão/sincronização, progresso, não enviados e atalho das decisões (+ .test.tsx)
 │   │   │   ├── LayoutPublico.tsx  # páginas públicas: cabeçalho + rodapé + <Outlet/>
 │   │   │   ├── CartaoAutenticacao.tsx  # cartão de login/cadastro/recuperar senha
 │   │   │   ├── Marca.tsx          # logo do favo + nome
 │   │   │   └── navegacao.ts       # fonte única dos itens de navegação dos dois layouts
 │   │   ├── charts/
 │   │   │   └── GraficoScore.tsx   # evolução do score de uma colônia
-│   │   └── features/          # CartaoColonia, GaleriaFotos, SeletorClassificacao, SeloScore
+│   │   └── features/          # CartaoColonia, GaleriaFotos, MapaLeaflet (Leaflet, carregado sob demanda), SeletorClassificacao, SeletorMotivo, SeloScore
 │   ├── pages/
 │   │   ├── Landing.tsx, Login.tsx, Cadastro.tsx, RecuperarSenha.tsx, Sobre.tsx, NaoEncontrado.tsx
 │   │   ├── Dashboard.tsx
+│   │   ├── Alertas.tsx         # Central de Alertas (tela 30)
+│   │   ├── Calendario.tsx      # Calendário de inspeções (tela 29)
 │   │   ├── EmConstrucao.tsx   # tela "em construção" das rotas ainda não implementadas
 │   │   ├── telasPlanejadas.ts # rotas /app pendentes + o que cada tela vai mostrar (docs/telas.md)
-│   │   ├── colonias/          # ListaColonias, DetalheColonia, FormColonia (criar/editar)
+│   │   ├── colonias/          # ListaColonias, DetalheColonia, FormColonia (criar/editar), MapaColonias
+│   │   ├── configuracoes/     # Configuracoes (central + VoltarConfiguracoes), Perfil, Meliponario, Preferencias, Dados (exportação)
 │   │   ├── avaliacoes/        # HistoricoAvaliacoes, NovaAvaliacao (fluxo rápido; formulário também usado na edição), EditarAvaliacao, DetalheAvaliacao
-│   │   ├── parametros/        # ListaParametros, FormParametro (criar/editar)
+│   │   ├── parametros/        # ListaParametros, FormParametro (criar/editar), TemplatesParametros
 │   │   └── producao/          # HistoricoProducao, FormColheita (registrar/editar), RelatorioProducao
 │   ├── hooks/
+│   │   ├── useCargaLocal.ts   # dispara o pull do banco local ao abrir o app logado e online (+ .test.ts)
 │   │   ├── useDados.ts        # queries do TanStack Query + chaves de cache centralizadas
 │   │   └── useOnline.ts       # estado de conexão do navegador
 │   ├── services/
-│   │   └── api/
-│   │       ├── client.ts      # fetch com JWT, ErroApi (status + mensagens do backend)
-│   │       └── endpoints.ts   # funções por recurso (colônias, avaliações, parâmetros, fotos...)
+│   │   ├── api/
+│   │   │   ├── client.ts      # fetch com JWT, ErroApi (status + mensagens do backend)
+│   │   │   ├── endpoints.ts   # funções por recurso (colônias, avaliações, parâmetros, fotos, sync...) (+ .test.ts)
+│   │   │   └── opcoesConsulta.ts  # opções padrão do QueryClient: networkMode "always", refetch ao reconectar, retry (+ .test.ts)
+│   │   └── offline/           # dados locais do PWA (IndexedDB via idb), um banco por usuário
+│   │       ├── tipos.ts       # linhas do GET /sync/alteracoes, registro meta e operações da fila (contrato do POST /sync)
+│   │       ├── mesclar.ts     # regra pura do pull: grava por id, remove o que saiu de idsAtuais, protege pendências (+ .test.ts)
+│   │       ├── banco.ts       # banco corbicula-offline-<usuarioId> (versão 3: stores fila e fotos), pull e enfileirar numa transação (+ .test.ts com fake-indexeddb)
+│   │       ├── eventoSync.ts  # ligações do evento sync do SW com o ciclo do app (sessão espelhada, 401 apaga a cópia) (+ .test.ts com o ciclo real)
+│   │       ├── fila.ts        # regra pura da fila: baseUpdatedAt, lote ordenado ≤ 500 com bloqueio, resultados do /sync (+ .test.ts)
+│   │       ├── linhaLocal.ts  # regra pura: aplica create/update/delete à cópia local (código provisório, prévia do score) (+ .test.ts)
+│   │       ├── escrita.ts     # escritas de colônia/avaliação/colheita: REST online, fila offline ou com pendência relacionada (+ .test.ts)
+│   │       ├── juncao.ts      # regra pura: junção por campos de um conflito (aparelho × servidor × base) (+ .test.ts)
+│   │       ├── decisoes.ts    # pendências paradas: manter servidor/aparelho, descartar (com dependentes), substituir pela edição manual (+ .test.ts)
+│   │       ├── fotos.ts       # anexarFoto: comprime e sobe na hora, ou guarda no aparelho para subir depois do /sync (+ .test.ts)
+│   │       ├── validacoes.ts  # regra pura: regras do servidor (genealogia, espécie, 7 dias, parâmetros ativos) checadas antes de enfileirar (+ .test.ts)
+│   │       ├── segundoPlano.ts   # Background Sync: pedirSincronizacaoEmSegundoPlano (registra a tag onde houver suporte) e o corpo do evento sync do SW (com janela aberta, rejeita para o navegador tentar depois) (+ .test.ts)
+│   │       ├── sessao.ts      # fim da sessão: pendências do aparelho e apagarDadosLocais (fecha e apaga o banco do usuário) (+ .test.ts)
+│   │       ├── sessaoSegundoPlano.ts  # cópia da sessão (usuário + token) no IndexedDB corbicula-sessao, para o Service Worker; observarSessao (main.tsx) a mantém (+ .test.ts)
+│   │       ├── sincronizacao.ts  # sincronizar (envio da fila, fotos guardadas e pull, nova tentativa com espera crescente, trava Web Locks entre abas e SW), puxarAlteracoes e pedirArmazenamentoPersistente (+ .test.ts, sincronizacaoCiclo.test.ts)
+│   │       ├── leituras.ts    # regra pura: monta cada resposta REST (colônias, avaliações, histórico, produções, parâmetros, espécies) a partir das linhas locais (+ .test.ts)
+│   │       └── leituraLocal.ts   # comFallbackLocal: com fila não vazia, sem rede ou com ErroApi(0), lê o banco local do usuário da sessão (+ .test.ts)
 │   ├── store/
 │   │   ├── auth.ts            # sessão (token + usuário) em Zustand persistido
-│   │   └── preferencias.ts    # tema (claro/escuro/sistema) e sidebar recolhida
+│   │   ├── sincronizacao.ts   # estado observável da sincronização (sincronizando, operações na fila)
+│   │   └── preferencias.ts    # tema (claro/escuro/sistema), sidebar recolhida e dias para "inspeção atrasada"
 │   ├── types/
 │   │   └── api.ts             # tipos das respostas da API
 │   ├── utils/
+│   │   ├── calendario.ts      # grade do mês, inspeções sugeridas, próxima inspeção (+ .test.ts)
 │   │   ├── colonias.ts        # colônias que pedem atenção (nunca avaliada, score baixo, inspeção atrasada)
 │   │   ├── format.ts          # datas e números em pt-BR
 │   │   ├── imagem.ts          # compressão de foto no cliente (canvas, ~500 KB)
-│   │   ├── parametrosSugeridos.ts  # sugestões de parâmetros para começar
+│   │   ├── mapa.ts            # filtros, cores e pior status dos grupos do mapa (+ mapa.test.ts)
+│   │   ├── conjuntoParametros.ts  # prévia de aplicar template/arquivo e leitura do arquivo (+ .test.ts)
 │   │   ├── periodo.ts         # atalhos de período dos filtros (produção, avaliações)
 │   │   ├── producao.ts        # rótulos/unidades dos produtos
-│   │   └── score.ts           # faixas do score (Excelente/Boa/Atenção/Crítica) e prazo de edição (7 dias)
+│   │   ├── score.ts           # faixas do score (Excelente/Boa/Atenção/Crítica) e prazo de edição (7 dias)
+│   │   └── vocabularios.ts    # motivos de status/inspeção/ação e procedência do clima (mesmos códigos do backend) + payloads (+ .test.ts)
 │   ├── index.css              # Tailwind + tokens do tema (claro/escuro): verde floresta + amarelo do logo
-│   ├── main.tsx               # entry point: QueryClient + RouterProvider
+│   ├── main.tsx               # entry point: QueryClient + RouterProvider; na troca de usuário limpa o cache e zera a sincronização; espelha a sessão para o SW
+│   ├── sw.ts                  # Service Worker (injectManifest): precache do app shell, fallback de navegação, fontes, evento sync (Background Sync)
 │   ├── router.tsx             # rotas públicas + /app/* privadas, guardas e redirecionamento dos endereços antigos
-│   └── test-setup.ts          # jest-dom para o Vitest (ainda sem testes escritos)
+│   └── test-setup.ts          # jest-dom para o Vitest (testes ao lado do código: utils/*.test.ts)
 ├── node_modules/              # volume Docker frontend_modules
 ├── Dockerfile                 # targets: development (Vite) → builder → production (nginx)
 ├── .dockerignore
@@ -221,14 +263,14 @@ app/frontend/
 ├── index.html
 ├── package.json               # scripts: dev, build, typecheck, test, icones
 ├── tsconfig.json
-└── vite.config.ts             # React, Tailwind, PWA (manifest + workbox), Vitest, polling p/ Docker no Windows
+└── vite.config.ts             # React, Tailwind, PWA (manifest + src/sw.ts via injectManifest), Vitest, polling p/ Docker no Windows
 ```
 
 Notas:
 - `VITE_API_URL` é a URL da API vista pelo **navegador** (padrão `http://localhost:3000`), não pela rede Docker.
 - Rotas públicas ficam na raiz (`/` é a landing page) dentro de `LayoutPublico`; as privadas ficam sob `/app/*` dentro de `AppLayout`. Endereços antigos sem `/app` redirecionam.
 - Telas planejadas e ainda não implementadas têm rota e mostram `EmConstrucao` com o conteúdo de `telasPlanejadas.ts`. A situação de cada tela está em `docs/telas.md`.
-- Ainda não existem: `services/offline/` (IndexedDB + fila usando `/sync`), as telas de configurações, mapa, templates de parâmetros, calendário, alertas e análises, e testes do frontend.
+- `services/offline/` tem a base local, o pull incremental e as leituras offline: online as telas leem da API; sem conexão, as queries de `hooks/useDados.ts` com cópia local (colônias, avaliações, histórico, produções, parâmetros, espécies) leem o banco local no mesmo formato da rota REST, e o perfil vem da sessão. Alertas, resumo/relatório de produção, templates e fotos só existem no servidor e mostram aviso de conexão. Criar, editar e excluir colônias, avaliações e colheitas passam por `services/offline/escrita.ts`: online vão pela API REST; offline (ou com falha de rede, ou com pendência relacionada) viram operações na fila do IndexedDB, aplicadas na hora à cópia local e enviadas pelo `POST /sync` ao reconectar, ao abrir o app, ao voltar para ele, logo após a escrita, pelo indicador de conexão e, com o app fechado, pelo Background Sync onde o navegador oferece (`segundoPlano.ts`, `sw.ts`). Antes de enfileirar, `validacoes.ts` aplica as regras do servidor com as mesmas mensagens. Fotos anexadas offline ficam guardadas (`fotos.ts`) e sobem depois do `/sync`. Conflitos em campos diferentes se juntam sozinhos (`juncao.ts`); no mesmo campo ou numa recusa do servidor, viram decisões na tela de Sincronização (`decisoes.ts`). Sair da conta apaga os dados locais do usuário (`sessao.ts`), com aviso quando há pendências; o 401 só encerra a sessão. Demonstração em `docs/demonstracao-offline.md`. Ainda não existem: as análises e o CI do frontend. Testes ao lado do código (37 arquivos): `utils/*.test.ts`, `components/{features,layout,ui}/*.test.tsx`, `pages/{avaliacoes,colonias,configuracoes,producao}/*.test.tsx`, `services/offline/*.test.ts`, `services/api/*.test.ts` e `hooks/useCargaLocal.test.ts`.
 - `watch.usePolling` no Vite é necessário para o hot reload funcionar com bind mount do Windows dentro do Docker.
 
 ---
@@ -319,3 +361,37 @@ Notas:
 - **[2026-10-14 — frontend: produção]** — Criados `pages/producao/` e `utils/producao.ts`; as rotas `/app/producao*` deixaram de ser "em construção".
 
 - **[2026-10-15 — histórico e edição de avaliações]** — Backend: `GET /avaliacoes` (histórico geral com filtros) em `avaliacoes.routes.ts`. Frontend: `pages/avaliacoes/{HistoricoAvaliacoes,EditarAvaliacao}.tsx`; os atalhos de período saíram de `utils/producao.ts` para `utils/periodo.ts`; `/app/avaliacoes` deixou de ser "em construção".
+
+- **[2026-11-03 — configurações]** — Backend: `PUT /users/me/senha` e `DELETE /users/me` em `users.routes.ts`; `tests/integration/users.test.ts`. Frontend: criada `pages/configuracoes/` (central, perfil, meliponário, preferências, exportar dados); as rotas `/app/configuracoes*` deixaram de ser "em construção", exceto `sync`. `analises/comportamental` e `analises/predicoes` ganharam entrada em `telasPlanejadas.ts` (antes caíam no 404).
+
+- **[2026-11-03 — mapa de colônias]** — Criados `pages/colonias/MapaColonias.tsx`, `components/features/MapaLeaflet.tsx` e `utils/mapa.ts` (+ `mapa.test.ts`, primeiro teste do frontend); dependências `leaflet` e `leaflet.markercluster`. `/app/colonias/mapa` deixou de ser "em construção".
+
+- **[2026-11-03 — templates de parâmetros]** — Backend: `parametros.templates.ts` e `parametros.conjuntos.ts` (rotas `GET /parametros/templates`, `POST /parametros/templates/:id/aplicar`, `GET /parametros/exportar`, `POST /parametros/importar`); o seed passou a importar o template Iniciante; `tests/integration/parametros.test.ts`; `npm run dev` com `--poll` (hot reload do backend no Windows). Frontend: `pages/parametros/TemplatesParametros.tsx` e `utils/conjuntoParametros.ts`; removido `utils/parametrosSugeridos.ts` (duplicava o seed). `/app/parametros/templates` deixou de ser "em construção".
+
+- **[2026-11-04 — calendário e alertas]** — Migration `calendario_alertas`: `colonias.frequenciaInspecaoDias` (opcional) e tabela `alertas_resolvidos` (12 tabelas). Backend: módulo `src/modules/alertas/` e `tests/integration/alertas.test.ts`. Frontend: `pages/Alertas.tsx`, `pages/Calendario.tsx`, `utils/calendario.ts` (+ teste); contador de alertas no `AppLayout`; campo de frequência no formulário da colônia. `/app/alertas` e `/app/calendario` deixaram de ser "em construção".
+
+- **[2026-11-05 — BMAD Method]** — Instalado o BMAD Method v6.12.4 (módulo BMM, Claude Code) na branch `chore/bmad-setup`: `_bmad/` (config e scripts), `_bmad-output/` (artefatos) e 29 skills em `.claude/skills/bmad-*`. Tudo local, fora do git. Regras do projeto para os agentes em `_bmad/custom/regras-corbicula.md`, carregadas por `_bmad/custom/<skill>.toml` (`persistent_facts`).
+
+- **[2026-11-05 — PWA offline: base local e pull]** — Frontend: criada `src/services/offline/` (`tipos.ts`, `mesclar.ts`, `banco.ts`, `sincronizacao.ts` + testes) e `src/hooks/useCargaLocal.ts` (+ teste), chamado pelo `AppLayout`; `syncApi.alteracoes` em `services/api/endpoints.ts` (+ `endpoints.test.ts`). Dependências: `idb` (runtime) e `fake-indexeddb` (dev, só testes). Backend: criar, editar ou excluir um critério por espécie passa a atualizar o `updatedAt` do parâmetro na mesma transação (`parametros.repository.ts`), para o pull incremental trazer os critérios; teste em `tests/integration/sync.test.ts`.
+
+- **[2026-11-06 — PWA offline: leituras offline nas telas]** — Frontend: `services/offline/leituras.ts` (derivação pura das respostas REST) e `leituraLocal.ts` (`comFallbackLocal`, ponto único da decisão online/local), com testes; `hooks/useDados.ts` envolve as 9 leituras com cópia local e o `useEu` (sessão), sem mudar as chaves; `main.tsx` com `networkMode: "always"` e sem retry de erro de conexão sem rede; `ErroCarregamento` com texto de conexão e novos `AvisoSemConexao`/`NotaSemConexao` em `components/ui/Estados.tsx`, usados em parâmetros, perfil, meliponário, exportação, alertas, resumo de produção e fotos.
+
+- **[2026-11-06 — dados de desfecho e contexto (backend)]** — Migration `20261106230000_dados_de_desfecho` (tabelas `colonias_status_historico` e `protocolos`; colunas novas em `colonias` e `avaliacoes`; 14 tabelas). Criados `src/shared/vocabularios.ts`, `src/modules/avaliacoes/avaliacoes.protocolo.ts` e `tests/unit/protocolo.test.ts`. Exportação ganhou `/exportacao/historico-status` e `/exportacao/protocolos`.
+
+- **[2026-11-09 — dados de desfecho e contexto (frontend)]** — Criados `src/utils/vocabularios.ts` (vocabulários e payloads, + teste) e `src/components/features/SeletorMotivo.tsx` (chips de escolha única opcional, + teste); testes de render `pages/avaliacoes/NovaAvaliacao.test.tsx` e `pages/colonias/FormColonia.test.tsx`. Campos novos em `types/api.ts`; formulário e detalhe da colônia, nova/editar avaliação e detalhe da avaliação mostram e coletam data/motivo do status, histórico de status, motivos da inspeção e das ações e procedência do clima.
+
+- **[2026-11-09 — PWA offline: fila de operações e envio pelo /sync]** — Frontend: `services/offline/fila.ts`, `linhaLocal.ts`, `escrita.ts` (+ testes) e `sincronizacaoCiclo.test.ts`; `store/sincronizacao.ts`. Banco local na versão 2 (store `fila`, upgrade sem perder dados); `aplicarPull` protege as entidades da fila lidas na mesma transação. `client.ts` com timeout (30 s; 120 s no upload de foto e no `/sync`); `syncApi.enviar`; `useCargaLocal` sincroniza (envio + pull) e `main.tsx` invalida as queries quando uma sincronização muda dados. As telas de escrita (formulários e exclusões de colônia, avaliação e colheita) usam `escritas`.
+
+- **[2026-11-10 — PWA offline: validações locais]** — Frontend: `services/offline/validacoes.ts` (+ teste) espelha as regras de `colonias.service.ts` e `avaliacoes.service.ts` com os mesmos textos; `escrita.ts` as aplica no caminho da fila (a escrita recusada não entra nela). A colônia filha criada offline sem espécie herda a da mãe na cópia local.
+
+- **[2026-11-10 — PWA offline: fotos offline]** — Frontend: `services/offline/fotos.ts` (+ teste); banco local na versão 3 (store `fotos`, bytes + tipo); `sincronizacao.ts` envia as fotos guardadas entre a fila e o pull (404 descarta, outro 4xx para, falha transitória retenta); `GaleriaFotos` mostra as fotos guardadas (+ teste) e Nova Avaliação/colheita avisam quando a foto fica para depois.
+
+- **[2026-11-10 — PWA offline: conflitos e decisões]** — Frontend: `services/offline/juncao.ts` e `decisoes.ts` (+ testes); `fila.ts` passa o conflito pela junção (campos distintos voltam a ser enviados no mesmo ciclo); `banco.ts` ganhou `aplicarDecisao` e a recarga completa (`meta.recarregar`). Tela 35 em `pages/configuracoes/Sincronizacao.tsx` (rota real, seção Pendências; saiu de `telasPlanejadas.ts`), `components/features/AvisoPendencia.tsx` nos detalhes e `utils/pendencias.ts` (rótulos e valores dos campos). "Editar manualmente" usa os formulários de colônia, avaliação e colheita com `?pendencia=`.
+
+- **[2026-11-11 — PWA offline: indicadores e tela de Sincronização]** — Frontend: `components/layout/IndicadorConexao.tsx` (saiu do `AppLayout`; estado, progresso, contador de não enviados e atalho das decisões, + teste), `hooks/useRegistrosNaFila.ts` e `components/features/SeloEnvio.tsx` (marca "Não enviado"/"Precisa de decisão" em colônias, avaliações e colheitas, + teste); `store/sincronizacao.ts` com progresso, decisões, servidor inacessível e última sincronização; tela 35 com status, "Sincronizar agora", fila de envio, fotos aguardando e armazenamento.
+
+- **[2026-11-11 — PWA offline: logout com pendências]** — Frontend: `services/offline/sessao.ts` (+ teste) conta as pendências do aparelho (operações, fotos e decisões) e apaga o banco local do usuário: encerra a sessão, espera o ciclo de sincronização em andamento (`aguardarSincronizacao`), cancela a nova tentativa, zera o store, `fecharBanco` em `banco.ts` e `deleteDB` com prazo de 5 s (outra aba presa no banco não trava o logout); `components/layout/DialogoSair.tsx` (+ teste) assume o `useSair` do `AppLayout`: sem pendências sai direto, com pendências avisa e oferece sincronizar agora (online e só se houver o que enviar), cancelar ou sair descartando (com confirmação); mudanças esperando decisão ganham um atalho para a tela de Sincronização. A exclusão da conta (`Perfil.tsx`) também apaga os dados locais. `main.tsx` limpa o cache das telas e zera `store/sincronizacao.ts` (`resetarSincronizacao`) quando o usuário da sessão muda. O 401 continua só encerrando a sessão: a fila e a cópia local ficam para o próximo login do mesmo usuário.
+
+- **[2026-11-12 — PWA offline: Background Sync progressivo]** — Frontend: o PWA passa de `generateSW` a `injectManifest` com `src/sw.ts` (mesmo precache, fallback de navegação, cache das fontes e atualização automática, mais o evento `sync`); `workbox-*` (`^7.4.1`, a mesma faixa do `workbox-build` do plugin) viraram devDependencies diretas (já vinham com o `vite-plugin-pwa`). `services/offline/sessaoSegundoPlano.ts` espelha a sessão no IndexedDB (o SW não lê o localStorage): `observarSessao`, chamado no `main.tsx`, grava a cada mudança e apaga no logout e no 401; um 401 dentro do SW também apaga a cópia (`eventoSync.ts`), e o logout a apaga antes do banco. `services/offline/segundoPlano.ts` registra a tag onde há `SyncManager` (depois de uma escrita, foto ou decisão offline, de um ciclo offline com pendências e de um ciclo com falha transitória) e, no SW, roda o mesmo `sincronizar` do app; com uma janela do app aberta ou em falha transitória, rejeita para o navegador tentar de novo. `sincronizacao.ts` passa a usar Web Locks (`comTrava`) para um ciclo por usuário entre abas e o SW; o logout espera o ciclo de outro contexto por até 5 s (`PRAZO_TRAVA_MS`). Testes em `segundoPlano.test.ts`, `sessaoSegundoPlano.test.ts`, `eventoSync.test.ts` (ciclo real), `sincronizacaoCiclo.test.ts`, `fotos.test.ts` e `decisoes.test.ts`.
+
+- **[2026-11-12 — PWA offline: documentação final]** — Criado `docs/demonstracao-offline.md` (roteiro reproduzível do sinal de sucesso; execução no navegador real pendente). Atualizados para o estado real: cabeçalho e nota de `services/offline/` deste documento, `docs/telas.md` (tela 35), `docs/escopo.md` (módulo 9, Fase 1, critérios e status), `README.md` e `CLAUDE.md`.

@@ -319,6 +319,72 @@ describe("sync — pull e status", () => {
     expect(depois.idsAtuais.colonias).not.toContain(c.id);
   });
 
+  it("criar, editar e excluir um critério por espécie faz o parâmetro voltar no pull incremental", async () => {
+    const { api } = await novoUsuario(app);
+    const [parametroId] = (await criarParametros(api, 1)) as [string];
+    const jatai = await idEspecie(api, "TETRANGU");
+    const mandacaia = await idEspecie(api, "MELIQUAD");
+    const criterios = (texto: string) => ({ criterioBom: `${texto} bom`, criterioMedio: `${texto} médio`, criterioRuim: `${texto} ruim` });
+
+    // Pull incremental a partir de um `desde` tirado logo antes da mudança.
+    const puxarDepoisDe = async (mudar: () => Promise<unknown>) => {
+      const { servidorEm } = (await api.get("/sync/alteracoes")).body;
+      await pausa();
+      await mudar();
+      return (await api.get(`/sync/alteracoes?desde=${encodeURIComponent(servidorEm)}`)).body;
+    };
+    type CriterioPull = { especieId: string; criterioBom: string; criterioMedio: string; criterioRuim: string };
+    const criteriosDoPull = (body: { parametros: { id: string; criteriosEspecie: CriterioPull[] }[] }) => {
+      expect(body.parametros.map((p) => p.id)).toEqual([parametroId]);
+      return Object.fromEntries(
+        body.parametros[0]!.criteriosEspecie.map(({ especieId, criterioBom, criterioMedio, criterioRuim }) => [
+          especieId,
+          { criterioBom, criterioMedio, criterioRuim },
+        ])
+      );
+    };
+
+    // Criar
+    const aposCriar = await puxarDepoisDe(async () => {
+      const criado = await api.put(`/parametros/${parametroId}/especies/${jatai}`, criterios("jataí"));
+      expect(criado.status).toBe(200);
+      // A resposta do PUT continua trazendo a espécie embutida.
+      expect(criado.body).toMatchObject({
+        parametroId,
+        especieId: jatai,
+        ...criterios("jataí"),
+        especie: { id: jatai, codigo: "TETRANGU", nomePopular: expect.any(String) },
+      });
+      expect(Object.keys(criado.body.especie).sort()).toEqual(["codigo", "id", "nomePopular"]);
+      expect((await api.put(`/parametros/${parametroId}/especies/${mandacaia}`, criterios("mandaçaia"))).status).toBe(200);
+    });
+    expect(criteriosDoPull(aposCriar)).toEqual({ [jatai]: criterios("jataí"), [mandacaia]: criterios("mandaçaia") });
+
+    // Editar
+    const aposEditar = await puxarDepoisDe(() => api.put(`/parametros/${parametroId}/especies/${jatai}`, criterios("jataí v2")));
+    expect(criteriosDoPull(aposEditar)).toEqual({ [jatai]: criterios("jataí v2"), [mandacaia]: criterios("mandaçaia") });
+
+    // Excluir
+    const aposExcluir = await puxarDepoisDe(async () => {
+      expect((await api.delete(`/parametros/${parametroId}/especies/${mandacaia}`)).status).toBe(204);
+    });
+    expect(criteriosDoPull(aposExcluir)).toEqual({ [jatai]: criterios("jataí v2") });
+
+    // Excluir um critério inexistente continua 404 e não toca no parâmetro.
+    const semMudanca = await puxarDepoisDe(async () => {
+      expect((await api.delete(`/parametros/${parametroId}/especies/${mandacaia}`)).status).toBe(404);
+    });
+    expect(semMudanca.parametros).toEqual([]);
+
+    // Espécie inexistente (UUID válido, P2003): 404 e a transação não toca no parâmetro.
+    const especieInexistente = await puxarDepoisDe(async () => {
+      const res = await api.put(`/parametros/${parametroId}/especies/00000000-0000-4000-8000-000000000000`, criterios("fantasma"));
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe("Espécie não encontrada");
+    });
+    expect(especieInexistente.parametros).toEqual([]);
+  });
+
   it("status mostra a última sincronização e as operações não aplicadas", async () => {
     const { api } = await novoUsuario(app);
     expect((await api.get("/sync/status")).body).toEqual({ ultimaSincronizacao: null, naoAplicadas: [] });
@@ -332,5 +398,89 @@ describe("sync — pull e status", () => {
     expect(body.naoAplicadas).toEqual([
       expect.objectContaining({ id: falha.id, resultado: "erro", tipo: "producao" }),
     ]);
+  });
+});
+
+describe("sync — dados de desfecho e contexto", () => {
+  it("os campos novos passam pelo /sync com o mesmo resultado da rota REST", async () => {
+    const { api } = await novoUsuario(app);
+    const [parametroId] = (await criarParametros(api, 1)) as [string];
+    const coloniaId = randomUUID();
+    const avaliacaoId = randomUUID();
+    const criar = op.criarAvaliacao(avaliacaoId, coloniaId, parametroId);
+    criar.dados = {
+      ...criar.dados,
+      motivoInspecao: "retorno_acao",
+      acoesTomadas: ["Alimentação artificial"],
+      motivosAcoes: { "Alimentação artificial": "preventiva" },
+    } as typeof criar.dados;
+
+    const res = await api.post("/sync", {
+      operacoes: [
+        op.criarColonia(coloniaId),
+        criar,
+        op.atualizar("colonia", coloniaId, {
+          status: "morta",
+          motivoStatus: "frio",
+          statusDesde: "2026-06-20T12:00:00.000Z",
+        }),
+        // Motivo incompatível: erro, nada aplicado.
+        op.atualizar("colonia", coloniaId, { motivoStatus: "venda_doacao" }),
+      ],
+    });
+    expect(status(res)).toEqual(["aplicado", "aplicado", "aplicado", "erro"]);
+    expect(res.body.resultados[3].erro).toContain("venda_doacao");
+
+    const av = (await api.get(`/colonias/${coloniaId}/avaliacoes/${avaliacaoId}`)).body;
+    expect(av).toMatchObject({
+      motivoInspecao: "retorno_acao",
+      motivosAcoes: { "Alimentação artificial": "preventiva" },
+      protocoloId: expect.any(String),
+    });
+    const colonia = (await api.get(`/colonias/${coloniaId}`)).body;
+    expect(colonia).toMatchObject({ status: "morta", motivoStatus: "frio", statusDesde: "2026-06-20T12:00:00.000Z" });
+    expect(colonia.historicoStatus).toHaveLength(1);
+
+    // O pull traz a cópia do estado atual na colônia e os campos da avaliação.
+    const pull = (await api.get("/sync/alteracoes")).body;
+    expect(pull.colonias.find((c: { id: string }) => c.id === coloniaId)).toMatchObject({ motivoStatus: "frio" });
+    expect(pull.avaliacoes.find((a: { id: string }) => a.id === avaliacaoId)).toMatchObject({
+      motivoInspecao: "retorno_acao",
+      motivosAcoes: { "Alimentação artificial": "preventiva" },
+    });
+  });
+
+  it("payloads antigos na fila continuam válidos", async () => {
+    const { api } = await novoUsuario(app);
+    const [parametroId] = (await criarParametros(api, 1)) as [string];
+    const coloniaId = randomUUID();
+    const avaliacaoId = randomUUID();
+    const res = await api.post("/sync", {
+      operacoes: [
+        op.criarColonia(coloniaId),
+        op.criarAvaliacao(avaliacaoId, coloniaId, parametroId),
+        op.atualizar("colonia", coloniaId, { status: "inativa" }),
+      ],
+    });
+    expect(status(res)).toEqual(["aplicado", "aplicado", "aplicado"]);
+    const av = (await api.get(`/colonias/${coloniaId}/avaliacoes/${avaliacaoId}`)).body;
+    expect(av).toMatchObject({ motivoInspecao: null, motivosAcoes: null, climaFonte: null });
+    expect((await api.get(`/colonias/${coloniaId}`)).body.historicoStatus).toHaveLength(1);
+  });
+});
+
+describe("sync — data da mudança de status feita offline", () => {
+  it("sem statusDesde, a data percebida é o instante da operação no cliente, não o da sincronização", async () => {
+    const { api } = await novoUsuario(app);
+    const coloniaId = randomUUID();
+    await api.post("/sync", { operacoes: [op.criarColonia(coloniaId)] });
+
+    const mudanca = { ...op.atualizar("colonia", coloniaId, { status: "inativa" }), criadoEm: "2026-06-01T10:00:00.000Z" };
+    const res = await api.post("/sync", { operacoes: [mudanca] });
+
+    expect(status(res)).toEqual(["aplicado"]);
+    const colonia = (await api.get(`/colonias/${coloniaId}`)).body;
+    expect(colonia.statusDesde).toBe("2026-06-01T10:00:00.000Z");
+    expect(colonia.historicoStatus[0]).toMatchObject({ statusNovo: "inativa", dataPercebida: "2026-06-01T10:00:00.000Z" });
   });
 });

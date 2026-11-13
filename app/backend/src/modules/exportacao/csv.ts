@@ -4,11 +4,13 @@
 //   - datas em ISO 8601 UTC; decimal com ponto; ausência de valor = campo vazio
 //   - UTF-8 sem BOM (read.csv/readr/pandas leem direto; no Excel use "Dados > De Texto/CSV")
 
-export type LinhaCsv = Record<string, string | number | boolean | Date | null | undefined>;
+// Record<string, string>: só no JSON (ex.: motivos_acoes); no CSV vira JSON em texto.
+export type LinhaCsv = Record<string, string | number | boolean | Date | Record<string, string> | null | undefined>;
 
 function formatarCampo(valor: LinhaCsv[string]): string {
   if (valor === null || valor === undefined) return "";
-  const texto = valor instanceof Date ? valor.toISOString() : String(valor);
+  const texto =
+    valor instanceof Date ? valor.toISOString() : typeof valor === "object" ? JSON.stringify(valor) : String(valor);
   return /[",\r\n]/.test(texto) ? `"${texto.replace(/"/g, '""')}"` : texto;
 }
 

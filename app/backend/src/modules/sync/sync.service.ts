@@ -104,7 +104,11 @@ async function aplicar(op: OperacaoSync, userId: string): Promise<Omit<Resultado
     };
   }
   if (op.tipo === "colonia") {
-    await coloniasService.atualizar(op.entidadeId, userId, atualizarColoniaSchema.parse(op.dados));
+    // Mudança de status feita offline sem statusDesde: a data padrão é o
+    // instante da operação no cliente, não o da sincronização.
+    await coloniasService.atualizar(op.entidadeId, userId, atualizarColoniaSchema.parse(op.dados), {
+      statusDesdePadrao: new Date(op.criadoEm),
+    });
   }
   if (op.tipo === "producao") {
     await producoesService.atualizar(op.entidadeId, userId, atualizarProducaoSchema.parse(op.dados));
@@ -207,6 +211,10 @@ export const syncService = {
   // Pull incremental: registros alterados desde `desde` + lista completa de ids
   // atuais (o cliente remove localmente o que não estiver mais na lista).
   // `servidorEm` é capturado ANTES das consultas — use-o como próximo `desde`.
+  // O filtro olha só o updatedAt do registro principal: toda escrita numa tabela
+  // filha devolvida aqui (ex.: ParametroEspecie em parametros.criteriosEspecie)
+  // precisa atualizar o updatedAt do pai na mesma transação, senão o pull
+  // incremental não a traz (ver parametros.repository.ts).
   async alteracoes(userId: string, desde?: Date) {
     const servidorEm = new Date();
     const alterado = desde ? { updatedAt: { gt: desde } } : {};

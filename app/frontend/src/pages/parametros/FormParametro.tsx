@@ -6,7 +6,7 @@ import { SeletorClassificacao } from "../../components/features/SeletorClassific
 import { Botao } from "../../components/ui/Botao";
 import { AreaTexto, Campo, Entrada } from "../../components/ui/Campo";
 import { CabecalhoPagina, Cartao } from "../../components/ui/Cartao";
-import { Carregando, ErroCarregamento, MensagemErro } from "../../components/ui/Estados";
+import { AvisoSemConexao, Carregando, ErroCarregamento, MensagemErro } from "../../components/ui/Estados";
 import { chaves, useParametros } from "../../hooks/useDados";
 import { parametrosApi } from "../../services/api/endpoints";
 import type { Parametro } from "../../types/api";
@@ -78,6 +78,7 @@ function Formulario({ parametro, proximaOrdem }: { parametro?: Parametro | undef
         titulo={parametro ? "Editar parâmetro" : "Novo parâmetro"}
         subtitulo="Critérios claros e observáveis tornam as avaliações comparáveis ao longo do tempo."
       />
+      <AvisoSemConexao>Sem conexão: salvar o parâmetro exige conexão.</AvisoSemConexao>
 
       <div className="grid gap-4 md:grid-cols-2">
         <form onSubmit={enviar} className="space-y-4" noValidate>

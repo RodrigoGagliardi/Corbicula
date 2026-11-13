@@ -1,5 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { ClipboardCheck, ClipboardList, Download, Pencil } from "lucide-react";
+import { SeloEnvio } from "../../components/features/SeloEnvio";
 import { Link, useSearchParams } from "react-router";
 import { GraficoScore } from "../../components/charts/GraficoScore";
 import { SeloScore } from "../../components/features/SeloScore";
@@ -311,6 +312,7 @@ function ItemAvaliacao({ avaliacao: a }: { avaliacao: AvaliacaoHistorico }) {
             {formatarDataHora(a.dataAvaliacao)} · {extras.join(" · ")}
           </p>
           {a.observacoesGerais && <p className="truncate text-xs text-muted-foreground">{a.observacoesGerais}</p>}
+          <SeloEnvio id={a.id} />
         </div>
         <SeloScore score={a.scoreGeral} status={a.statusGeral} />
       </Link>

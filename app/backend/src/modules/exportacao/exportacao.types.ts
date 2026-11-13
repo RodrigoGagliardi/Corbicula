@@ -28,8 +28,17 @@ export const exportarProducoesSchema = z.object({
   ate: z.coerce.date().optional(),
 });
 
+// desde/ate filtram pela data percebida da mudança de status.
+export const exportarHistoricoStatusSchema = z.object({
+  formato,
+  coloniaId: z.uuid().optional(),
+  desde: z.coerce.date().optional(),
+  ate: z.coerce.date().optional(),
+});
+
 export type Formato = (typeof FORMATOS)[number];
 // Filtros sem o campo `formato` (consumido na rota).
 export type ExportarColoniasInput = Omit<z.infer<typeof exportarColoniasSchema>, "formato">;
 export type ExportarAvaliacoesInput = Omit<z.infer<typeof exportarAvaliacoesSchema>, "formato">;
 export type ExportarProducoesInput = Omit<z.infer<typeof exportarProducoesSchema>, "formato">;
+export type ExportarHistoricoStatusInput = Omit<z.infer<typeof exportarHistoricoStatusSchema>, "formato">;

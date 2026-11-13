@@ -1,0 +1,408 @@
+import "fake-indexeddb/auto";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useAuth } from "../../store/auth";
+import { useSincronizacao } from "../../store/sincronizacao";
+import type { Usuario } from "../../types/api";
+import { ErroApi } from "../api/client";
+import type { ColoniaServidor, ParametroServidor, OperacaoFila, OperacaoSync, RespostaAlteracoes, RespostaSync, StatusSync } from "./tipos";
+
+// Ciclo completo (fila → POST /sync → pull) com IndexedDB em memória e a API mockada.
+const apis = vi.hoisted(() => ({
+  syncApi: { enviar: vi.fn(), alteracoes: vi.fn() },
+  especiesApi: { listar: vi.fn(async () => []) },
+  coloniasApi: { criar: vi.fn(), atualizar: vi.fn(), excluir: vi.fn() },
+  avaliacoesApi: { criar: vi.fn(), atualizar: vi.fn(), excluir: vi.fn() },
+  producoesApi: { criar: vi.fn(), atualizar: vi.fn(), excluir: vi.fn() },
+}));
+vi.mock("../api/endpoints", () => apis);
+const segundoPlano = vi.hoisted(() => ({ pedirSincronizacaoEmSegundoPlano: vi.fn(async () => undefined) }));
+vi.mock("./segundoPlano", () => segundoPlano);
+
+const banco = await import("./banco");
+const { escritas } = await import("./escrita");
+const { aguardarSincronizacao, cancelarNovaTentativa, comTrava, ESPERAS_MS, esperaDaTentativa, falhaTransitoria, PRAZO_TRAVA_MS, sincronizacaoOk, sincronizar } = await import("./sincronizacao");
+const pedirSegundoPlano = segundoPlano.pedirSincronizacaoEmSegundoPlano;
+
+const conexao = { online: true };
+const descritorOriginal = Object.getOwnPropertyDescriptor(Navigator.prototype, "onLine");
+Object.defineProperty(navigator, "onLine", { configurable: true, get: () => conexao.online });
+afterAll(() => {
+  delete (navigator as { onLine?: boolean }).onLine;
+  if (descritorOriginal) Object.defineProperty(Navigator.prototype, "onLine", descritorOriginal);
+});
+
+// Parâmetros ativos da cópia local (as avaliações dos testes usam p1 e p2).
+const PARAMETROS = ["p1", "p2"].map((id) => ({ id, nome: id, ativo: true, criteriosEspecie: [] })) as unknown as ParametroServidor[];
+const usuario = (id: string) => ({ id, email: `${id}@x.app`, name: id, createdAt: "", meliponario: null }) as Usuario;
+const colonia = (id: string, codigo: string, observacoes: string | null = null) =>
+  ({ id, codigo, observacoes, status: "ativa", especieId: null, coloniaMaeId: null, coloniaDoadoraCampeirasId: null, updatedAt: "2026-11-01T00:00:00.000Z" }) as ColoniaServidor;
+
+const pull = (parcial: Partial<RespostaAlteracoes> = {}): RespostaAlteracoes => ({
+  servidorEm: "2026-11-09T12:00:00.000Z",
+  desde: null,
+  colonias: [],
+  avaliacoes: [],
+  producoes: [],
+  parametros: PARAMETROS,
+  idsAtuais: { colonias: ["c1"], avaliacoes: [], producoes: [], parametros: ["p1", "p2"] },
+  ...parcial,
+});
+
+// O servidor responde a cada operação com o status escolhido (padrão: aplicado).
+function servidor(status: (op: OperacaoSync) => StatusSync = () => "aplicado", extra: Partial<RespostaSync["resultados"][number]> = {}) {
+  apis.syncApi.enviar.mockImplementation(async (operacoes: OperacaoSync[]) => ({
+    servidorEm: "2026-11-09T12:00:00.000Z",
+    processadas: operacoes.length,
+    aplicadas: 0,
+    duplicadas: 0,
+    conflitos: 0,
+    erros: 0,
+    resultados: operacoes.map((o) => ({ id: o.id, entidadeId: o.entidadeId, status: status(o), ...extra })),
+  }));
+}
+
+async function entrarCarregado(usuarioId: string) {
+  useAuth.setState({ token: "t", usuario: usuario(usuarioId) });
+  const db = await banco.abrirBanco(usuarioId);
+  await banco.aplicarPull(db, pull({ colonias: [colonia("c1", "TETRANGU-001")] }), new Set(), []);
+  return db;
+}
+
+const AVALIACAO = { dataAvaliacao: "2026-11-09T12:00:00.000Z", parametros: [{ parametroId: "p1", classificacao: "bom" as const }] };
+const COLONIA = { dataEntrada: "2026-11-09T12:00:00.000Z", origem: "captura", tipoCaixa: "inpa" } as never;
+
+// Três escritas offline: colônia, avaliação (na c1) e colheita.
+async function tresEscritasOffline() {
+  conexao.online = false;
+  const c = await escritas.criarColonia(COLONIA);
+  const a = await escritas.criarAvaliacao("c1", AVALIACAO);
+  const p = await escritas.criarProducao({ coloniaId: "c1", dataColheita: "2026-11-09T12:00:00.000Z", tipoProduto: "mel", quantidade: 10, unidade: "ml" });
+  conexao.online = true;
+  return [c.id, a.id, p.id];
+}
+
+const agendadas = () => vi.mocked(setTimeout).mock.calls.filter(([, ms]) => ESPERAS_MS.includes(ms as number));
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  conexao.online = true;
+  apis.syncApi.alteracoes.mockResolvedValue(pull());
+  servidor();
+  vi.spyOn(globalThis, "setTimeout");
+});
+
+afterEach(() => {
+  cancelarNovaTentativa();
+  vi.mocked(setTimeout).mockRestore();
+});
+
+describe("sincronizar", () => {
+  it("reconexão: envia as 3 operações num lote, na ordem, esvazia a fila e faz o pull com os mesmos ids", async () => {
+    const db = await entrarCarregado("reconexao");
+    const ids = await tresEscritasOffline();
+    const concluidasAntes = useSincronizacao.getState().concluidas;
+
+    const r = await sincronizar("reconexao");
+
+    expect(sincronizacaoOk(r)).toBe(true);
+    expect(r).toMatchObject({ enviadas: 3, paradas: 0, naFila: 0 });
+    expect(apis.syncApi.enviar).toHaveBeenCalledTimes(1);
+    const enviadas = apis.syncApi.enviar.mock.calls[0]![0] as OperacaoSync[];
+    expect(enviadas.map((o) => [o.tipo, o.entidadeId])).toEqual([["colonia", ids[0]], ["avaliacao", ids[1]], ["producao", ids[2]]]);
+    expect(enviadas[1]).toMatchObject({ coloniaId: "c1", dados: AVALIACAO });
+    expect(apis.syncApi.alteracoes).toHaveBeenCalledTimes(1);
+    expect(await banco.contarFila(db)).toBe(0);
+    expect(useSincronizacao.getState()).toMatchObject({
+      sincronizando: false,
+      naFila: 0,
+      decisoes: 0,
+      progresso: null,
+      servidorInacessivel: false,
+      concluidas: concluidasAntes + 1,
+    });
+    expect(useSincronizacao.getState().ultimaSincronizacao).toEqual(expect.any(String));
+  });
+
+  it("envio interrompido: o reenvio usa os mesmos ids e `duplicado` tira da fila", async () => {
+    const db = await entrarCarregado("interrompido");
+    await tresEscritasOffline();
+    apis.syncApi.enviar.mockRejectedValueOnce(new ErroApi(0, "Sem conexão com o servidor."));
+
+    const primeira = await sincronizar("interrompido");
+    expect(primeira.falhaEnvio).toMatchObject({ motivo: "sem-conexao" });
+    expect(await banco.contarFila(db)).toBe(3);
+
+    servidor(() => "duplicado");
+    const segunda = await sincronizar("interrompido");
+    const ids = (n: number) => (apis.syncApi.enviar.mock.calls[n]![0] as OperacaoSync[]).map((o) => o.id);
+    expect(ids(1)).toEqual(ids(0));
+    expect(segunda).toMatchObject({ enviadas: 3, naFila: 0 });
+  });
+
+  it("servidor fora (503): fila intacta, sem pull, nova tentativa agendada com espera crescente", async () => {
+    const db = await entrarCarregado("fora-do-ar");
+    await tresEscritasOffline();
+    apis.syncApi.enviar.mockRejectedValue(new ErroApi(503, "Erro 503"));
+    pedirSegundoPlano.mockClear();
+
+    const r = await sincronizar("fora-do-ar");
+    expect(r.falhaEnvio).toMatchObject({ motivo: "servidor" });
+    // No Service Worker, isto rejeita o evento sync e o navegador tenta de novo.
+    expect(falhaTransitoria(r)).toBe(true);
+    expect(r.pull).toBeNull();
+    expect(apis.syncApi.alteracoes).not.toHaveBeenCalled();
+    expect(await banco.contarFila(db)).toBe(3);
+    expect(agendadas().map(([, ms]) => ms)).toEqual([ESPERAS_MS[0]]);
+    expect(useSincronizacao.getState().servidorInacessivel).toBe(true);
+
+    // Se o app fechar antes da nova tentativa, o Background Sync (onde houver) a faz.
+    expect(pedirSegundoPlano).toHaveBeenCalled();
+
+    await sincronizar("fora-do-ar");
+    expect(agendadas().map(([, ms]) => ms)).toEqual([ESPERAS_MS[0], ESPERAS_MS[1]]);
+  });
+
+  it("token expirado (401): fila intacta e nenhuma nova tentativa (o novo login sincroniza)", async () => {
+    const db = await entrarCarregado("expirado");
+    await tresEscritasOffline();
+    apis.syncApi.enviar.mockRejectedValue(new ErroApi(401, "Token inválido"));
+    // As escritas offline já pediram o envio em segundo plano; o ciclo com 401 não pede de novo.
+    pedirSegundoPlano.mockClear();
+
+    const r = await sincronizar("expirado");
+    expect(r.falhaEnvio).toMatchObject({ motivo: "sessao" });
+    // No Service Worker, o evento sync encerra sem nova tentativa.
+    expect(falhaTransitoria(r)).toBe(false);
+    expect(await banco.contarFila(db)).toBe(3);
+    expect(agendadas()).toEqual([]);
+    expect(pedirSegundoPlano).not.toHaveBeenCalled();
+  });
+
+  it("recusa no create da colônia: fica parada e a avaliação dela não é enviada depois", async () => {
+    const db = await entrarCarregado("recusa");
+    conexao.online = false;
+    const nova = await escritas.criarColonia(COLONIA);
+    conexao.online = true;
+    servidor(() => "erro", { erro: "A espécie deve ser a mesma da colônia mãe" });
+    expect(await sincronizar("recusa")).toMatchObject({ enviadas: 0, paradas: 1, naFila: 1 });
+
+    conexao.online = false;
+    await escritas.criarAvaliacao(nova.id, AVALIACAO);
+    conexao.online = true;
+    servidor();
+    apis.syncApi.enviar.mockClear();
+
+    const r = await sincronizar("recusa");
+    expect(apis.syncApi.enviar).not.toHaveBeenCalled();
+    expect(r.naFila).toBe(2);
+    const [parada] = await banco.lerFila(db);
+    expect(parada).toMatchObject({ estado: "erro", ultimoErro: "A espécie deve ser a mesma da colônia mãe" });
+    expect(useSincronizacao.getState()).toMatchObject({ naFila: 2, decisoes: 1 });
+  });
+
+  it("conflito: fica parado com a versão do servidor e o pull não sobrescreve a cópia local", async () => {
+    const db = await entrarCarregado("conflito");
+    conexao.online = false;
+    await escritas.atualizarColonia({ id: "c1", updatedAt: "2026-11-01T00:00:00.000Z" }, { observacoes: "local" });
+    conexao.online = true;
+    const doServidor = colonia("c1", "TETRANGU-001", "do servidor");
+    servidor(() => "conflito", { servidor: doServidor });
+    apis.syncApi.alteracoes.mockResolvedValue(pull({ colonias: [doServidor] }));
+
+    const r = await sincronizar("conflito");
+    expect(r).toMatchObject({ paradas: 1, naFila: 1 });
+    const [op] = await banco.lerFila(db);
+    expect(op).toMatchObject({ estado: "conflito", servidor: doServidor, baseUpdatedAt: "2026-11-01T00:00:00.000Z" } satisfies Partial<OperacaoFila>);
+    expect((await db.get("colonias", "c1"))?.observacoes).toBe("local");
+  });
+
+  it("offline: não chama a API nem agenda tentativa", async () => {
+    await entrarCarregado("sem-rede");
+    await tresEscritasOffline();
+    // Cada escrita offline pediu o envio em segundo plano.
+    expect(pedirSegundoPlano).toHaveBeenCalledTimes(3);
+    pedirSegundoPlano.mockClear();
+    conexao.online = false;
+    const r = await sincronizar("sem-rede");
+    expect(r).toMatchObject({ naFila: 3, falhaEnvio: { motivo: "sem-conexao" } });
+    expect(apis.syncApi.enviar).not.toHaveBeenCalled();
+    expect(agendadas()).toEqual([]);
+    // O ciclo offline com fila também pede (cobre o app reaberto offline).
+    expect(pedirSegundoPlano).toHaveBeenCalledTimes(1);
+  });
+
+  it("outro usuário na sessão: não envia a fila de quem saiu", async () => {
+    await entrarCarregado("dono");
+    await tresEscritasOffline();
+    useAuth.setState({ token: "t2", usuario: usuario("outro") });
+    const r = await sincronizar("dono");
+    expect(r.falhaEnvio).toMatchObject({ motivo: "sessao" });
+    expect(apis.syncApi.enviar).not.toHaveBeenCalled();
+  });
+});
+
+describe("ciclos, lotes e nova tentativa", () => {
+  const opFila = (i: number) => ({
+    id: "op-" + String(i).padStart(4, "0"),
+    tipo: "colonia" as const,
+    operacao: "update" as const,
+    entidadeId: "ent-" + i,
+    dados: {},
+    criadoEm: "2026-11-09T10:00:00.000Z",
+    estado: "pendente" as const,
+    tentativas: 0,
+    relacionadas: [],
+  });
+
+  it("mais de 500 operações: todas enviadas num ciclo, em dois lotes, com o progresso subindo", async () => {
+    const db = await entrarCarregado("muitas");
+    for (let i = 0; i < 501; i++) await banco.enfileirar(db, opFila(i), []);
+    const vistos: string[] = [];
+    const parar = useSincronizacao.subscribe((s) => {
+      if (s.progresso) vistos.push(`${s.progresso.feitas}/${s.progresso.total}`);
+    });
+    const r = await sincronizar("muitas");
+    parar();
+    expect([...new Set(vistos)]).toEqual(["0/501", "500/501", "501/501"]);
+    expect(apis.syncApi.enviar.mock.calls.map(([ops]) => (ops as OperacaoSync[]).length)).toEqual([500, 1]);
+    expect(r).toMatchObject({ enviadas: 501, naFila: 0 });
+  });
+
+  it("resposta sem resultados para o lote: para em vez de reenviar", async () => {
+    const db = await entrarCarregado("sem-resultados");
+    await banco.enfileirar(db, opFila(1), []);
+    apis.syncApi.enviar.mockResolvedValue({ servidorEm: "x", processadas: 0, aplicadas: 0, duplicadas: 0, conflitos: 0, erros: 0, resultados: [] });
+    await sincronizar("sem-resultados");
+    expect(apis.syncApi.enviar).toHaveBeenCalledTimes(1);
+    expect(await banco.contarFila(db)).toBe(1);
+  });
+
+  it("colônia criada offline e sua avaliação: dois lotes, a avaliação depois da resposta ao create", async () => {
+    await entrarCarregado("dependente");
+    conexao.online = false;
+    const c = await escritas.criarColonia(COLONIA);
+    await escritas.criarAvaliacao(c.id, AVALIACAO);
+    conexao.online = true;
+    await sincronizar("dependente");
+    expect(apis.syncApi.enviar.mock.calls.map(([ops]) => (ops as OperacaoSync[]).map((o) => o.tipo))).toEqual([["colonia"], ["avaliacao"]]);
+  });
+
+  it("a nova tentativa agendada sincroniza de novo quando dispara", async () => {
+    const db = await entrarCarregado("agendada");
+    await banco.enfileirar(db, opFila(1), []);
+    apis.syncApi.enviar.mockRejectedValueOnce(new ErroApi(503, "Erro 503"));
+    await sincronizar("agendada");
+    const [disparo] = agendadas()[0]!;
+    (disparo as () => void)();
+    await vi.waitFor(async () => expect(await banco.contarFila(db)).toBe(0));
+    expect(apis.syncApi.enviar).toHaveBeenCalledTimes(2);
+  });
+
+  it("chamada durante um ciclo em andamento: roda outro ciclo depois dele", async () => {
+    await entrarCarregado("repeticao");
+    const primeiro = sincronizar("repeticao");
+    const segundo = sincronizar("repeticao");
+    const terceiro = sincronizar("repeticao");
+    expect(terceiro).toBe(segundo);
+    await Promise.all([primeiro, segundo]);
+    expect(apis.syncApi.alteracoes).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("comTrava (Web Locks)", () => {
+  const locksOriginal = Object.getOwnPropertyDescriptor(navigator, "locks");
+  afterEach(() => {
+    if (locksOriginal) Object.defineProperty(navigator, "locks", locksOriginal);
+    else delete (navigator as { locks?: unknown }).locks;
+  });
+
+  // Gerente de travas mínimo: uma fila por nome, como o do navegador.
+  function instalarTravas() {
+    const filas = new Map<string, Promise<unknown>>();
+    const nomes: string[] = [];
+    const request = vi.fn((nome: string, f: () => Promise<unknown>) => {
+      nomes.push(nome);
+      const anterior = filas.get(nome) ?? Promise.resolve();
+      const atual = anterior.then(f, f);
+      filas.set(nome, atual.catch(() => undefined));
+      return atual;
+    });
+    Object.defineProperty(navigator, "locks", { configurable: true, value: { request } });
+    return { request, nomes };
+  }
+
+  it("sem Web Locks: roda o ciclo direto", async () => {
+    delete (navigator as { locks?: unknown }).locks;
+    expect(await comTrava("u", async () => 7)).toBe(7);
+  });
+
+  it("outro contexto (SW ou aba) com o ciclo em andamento: o seguinte espera e não reenvia", async () => {
+    const { nomes } = instalarTravas();
+    const db = await entrarCarregado("trava");
+    await tresEscritasOffline();
+    vi.clearAllMocks();
+    servidor();
+    let soltar!: () => void;
+    const ordem: string[] = [];
+    // O ciclo "do outro contexto" segura a trava até ser solto.
+    const outro = comTrava("trava", () => new Promise<void>((r) => (soltar = () => { ordem.push("outro"); r(); })));
+    const meu = sincronizar("trava").then((r) => { ordem.push("meu"); return r; });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(apis.syncApi.enviar).not.toHaveBeenCalled();
+    soltar();
+    await Promise.all([outro, meu]);
+    expect(ordem).toEqual(["outro", "meu"]);
+    expect(nomes).toEqual(["corbicula-sincronizacao-trava", "corbicula-sincronizacao-trava"]);
+    expect(await banco.contarFila(db)).toBe(0);
+  });
+
+  it("aguardarSincronizacao (logout): espera o ciclo de outro contexto soltar a trava", async () => {
+    instalarTravas();
+    let soltar!: () => void;
+    const outro = comTrava("logout", () => new Promise<void>((r) => (soltar = r)));
+    let terminou = false;
+    const espera = aguardarSincronizacao("logout").then(() => (terminou = true));
+    await new Promise((r) => setTimeout(r, 10));
+    expect(terminou).toBe(false);
+    soltar();
+    await Promise.all([outro, espera]);
+    expect(terminou).toBe(true);
+  });
+
+  it("aguardarSincronizacao: um ciclo longo de outro contexto não segura o logout além do prazo", async () => {
+    instalarTravas();
+    void comTrava("preso", () => new Promise<void>(() => undefined));
+    vi.useFakeTimers();
+    try {
+      let terminou = false;
+      const espera = aguardarSincronizacao("preso").then(() => (terminou = true));
+      await vi.advanceTimersByTimeAsync(PRAZO_TRAVA_MS - 1);
+      expect(terminou).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      await espera;
+      expect(terminou).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("falha da própria trava: o ciclo roda sem ela", async () => {
+    Object.defineProperty(navigator, "locks", { configurable: true, value: { request: vi.fn(async () => { throw new Error("SecurityError"); }) } });
+    expect(await comTrava("u", async () => "rodou")).toBe("rodou");
+  });
+});
+
+describe("sincronizacaoOk", () => {
+  it("falha só nas fotos não conta como sincronização completa", async () => {
+    const { sincronizacaoOk } = await import("./sincronizacao");
+    const base = { enviadas: 0, paradas: 0, falhaEnvio: null, fotosEnviadas: 0, fotosAlteradas: 0, naFila: 0, pull: { ok: true as const, servidorEm: "x", cargaCompleta: false, alterados: 0 } };
+    expect(sincronizacaoOk({ ...base, falhaFotos: null })).toBe(true);
+    expect(sincronizacaoOk({ ...base, falhaFotos: { ok: false, motivo: "servidor", mensagem: "Erro 503" } })).toBe(false);
+  });
+});
+
+describe("esperaDaTentativa", () => {
+  it("cresce de 15 s até 5 min e para aí", () => {
+    expect([1, 2, 3, 4, 5, 9].map(esperaDaTentativa)).toEqual([15_000, 30_000, 60_000, 120_000, 300_000, 300_000]);
+  });
+});
