@@ -4,7 +4,7 @@ Roteiro para reproduzir, do zero, o sinal de sucesso do modo offline: **no campo
 
 O funcionamento está descrito em [`estrutura-pastas.md`](estrutura-pastas.md) (nota de `services/offline/`) e a tela de acompanhamento em [`telas.md`](telas.md) (tela 35).
 
-> **Situação (12/11/2026):** o roteiro ainda não foi executado de ponta a ponta. A lógica está coberta por testes automatizados (361 testes do frontend, incluindo o ciclo de sincronização com a API simulada), mas a comprovação no navegador real fica pendente. Ao executar, registre a data e o resultado no fim deste documento.
+> **Situação (12/11/2026):** executado no Chrome do desktop, com os passos 1 a 5 e 7 aprovados (registro no fim deste documento). Falta o passo 6 (Background Sync com o app fechado), a testar no celular Android; a lógica dele está coberta por testes automatizados com o ciclo real de sincronização. Ao executar de novo, acrescente uma linha ao registro.
 
 ## Antes de começar
 
@@ -122,4 +122,4 @@ Service Worker e Background Sync exigem contexto seguro (HTTPS ou `localhost`). 
 
 | Data | Navegador / aparelho | Resultado | Observações |
 |------|---------------------|-----------|-------------|
-| — | — | pendente | — |
+| 12/11/2026 | Chrome, desktop Windows (build de produção, `localhost:4173`) | Passos 1–5 e 7 aprovados; passo 6 não executado | Chegaram pelo `/sync`, todas como `aplicado` e sem duplicata: uma colônia criada offline (recebeu o código definitivo `TETRANGU-002`), uma avaliação nela com foto (score 80 do servidor; clima 20,7 °C, 83%, ensolarado, `api_previsao`), uma edição de colônia e uma colheita de 200 ml de mel (`SCAPDEPI-001`). O passo 6 fica para um teste no Android. |
