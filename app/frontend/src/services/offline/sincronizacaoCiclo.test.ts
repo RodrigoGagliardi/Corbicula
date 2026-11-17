@@ -197,7 +197,8 @@ describe("sincronizar", () => {
     expect(r.naFila).toBe(2);
     const [parada] = await banco.lerFila(db);
     expect(parada).toMatchObject({ estado: "erro", ultimoErro: "A espécie deve ser a mesma da colônia mãe" });
-    expect(useSincronizacao.getState()).toMatchObject({ naFila: 2, decisoes: 1 });
+    // A avaliação está presa atrás da colônia parada: não conta como "não enviado".
+    expect(useSincronizacao.getState()).toMatchObject({ naFila: 2, decisoes: 1, operacoesPresas: 1 });
   });
 
   it("conflito: fica parado com a versão do servidor e o pull não sobrescreve a cópia local", async () => {

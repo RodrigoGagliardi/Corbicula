@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   aplicarResultados,
   baseParaUpdate,
+  entidadesBloqueadas,
   MAX_LOTE,
   montarOperacao,
   paraEnvio,
   proximoLote,
   relacionadasDe,
+  situacaoDaFoto,
   temPendenciaRelacionada,
 } from "./fila";
 import type { ColoniaServidor, OperacaoFila } from "./tipos";
@@ -27,6 +29,36 @@ function op(parcial: Partial<OperacaoFila> & Pick<OperacaoFila, "entidadeId">): 
     ...parcial,
   };
 }
+
+describe("situação das fotos guardadas", () => {
+  const foto = (entidadeId: string, estado: "pendente" | "erro" = "pendente") => ({ entidadeId, estado });
+
+  it("entidadesBloqueadas: a parada e, em cadeia, quem depende dela", () => {
+    const fila = [
+      op({ entidadeId: "c1", operacao: "create", estado: "erro" }),
+      op({ tipo: "avaliacao", operacao: "create", entidadeId: "a1", relacionadas: ["c1"] }),
+      op({ entidadeId: "c2", operacao: "create" }),
+    ];
+    expect([...entidadesBloqueadas(fila)].sort()).toEqual(["a1", "c1"]);
+  });
+
+  it("recusada (erro) vence tudo; presa quando o create do registro está bloqueado; senão aguardando", () => {
+    const fila = [
+      op({ entidadeId: "c1", operacao: "create", estado: "conflito" }),
+      op({ tipo: "avaliacao", operacao: "create", entidadeId: "a1", relacionadas: ["c1"] }),
+      op({ entidadeId: "c2", operacao: "create" }),
+      op({ entidadeId: "c3", estado: "erro" }),
+    ];
+    expect(situacaoDaFoto(foto("c9", "erro"), fila)).toBe("recusada");
+    expect(situacaoDaFoto(foto("c1"), fila)).toBe("presa");
+    // Avaliação criada offline numa colônia cujo create parou: presa em cadeia.
+    expect(situacaoDaFoto(foto("a1"), fila)).toBe("presa");
+    // Create pendente e livre: sobe depois dele.
+    expect(situacaoDaFoto(foto("c2"), fila)).toBe("aguardando");
+    // Registro já no servidor (só um update parado na fila): o envio da foto não espera updates.
+    expect(situacaoDaFoto(foto("c3"), fila)).toBe("aguardando");
+  });
+});
 
 describe("relacionadasDe", () => {
   it("colônia: mãe e doadora; avaliação e colheita: a colônia", () => {

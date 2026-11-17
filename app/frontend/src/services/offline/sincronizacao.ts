@@ -18,7 +18,7 @@ import {
   removerFoto,
   type BancoOffline,
 } from "./banco";
-import { aplicarResultados, paraEnvio, proximoLote } from "./fila";
+import { aplicarResultados, entidadesBloqueadas, paraEnvio, proximoLote, situacaoDaFoto } from "./fila";
 import { semRede } from "./leituraLocal";
 import { pedirSincronizacaoEmSegundoPlano } from "./segundoPlano";
 
@@ -225,13 +225,18 @@ export function comTrava<T>(usuarioId: string, ciclo: () => Promise<T>): Promise
     }) as Promise<T>;
 }
 
-// Contadores do banco local: fila, fotos aguardando, decisões e a última sincronização.
+// Contadores do banco local: fila, fotos (as que sobem e as que esperam o
+// usuário), decisões e a última sincronização.
 async function contagens(db: BancoOffline) {
-  const [fila, fotosPendentes, meta] = await Promise.all([lerFila(db), contarFotosPendentes(db), lerMeta(db)]);
+  const [fila, fotos, meta] = await Promise.all([lerFila(db), lerFotos(db), lerMeta(db)]);
+  const bloqueadas = entidadesBloqueadas(fila);
+  const situacoes = fotos.map((f) => situacaoDaFoto(f, fila, bloqueadas));
   return {
     naFila: fila.length,
-    fotosPendentes,
+    fotosPendentes: situacoes.filter((s) => s === "aguardando").length,
+    fotosParadas: situacoes.filter((s) => s !== "aguardando").length,
     decisoes: fila.filter((o) => o.estado !== "pendente").length,
+    operacoesPresas: fila.filter((o) => o.estado === "pendente" && bloqueadas.has(o.entidadeId)).length,
     ultimaSincronizacao: meta.ultimoPull,
   };
 }
@@ -324,7 +329,8 @@ async function enviarFotos(
     } catch (erro) {
       if (!(erro instanceof ErroApi)) {
         const ultimoErro = erro instanceof Error ? erro.message : String(erro);
-        await guardarFoto(db, { ...foto, estado: "erro", tentativas: foto.tentativas + 1, ultimoErro });
+        // Descartada pelo usuário durante o envio: não volta.
+        if (await db.get("fotos", foto.id)) await guardarFoto(db, { ...foto, estado: "erro", tentativas: foto.tentativas + 1, ultimoErro });
         alteradas += 1;
         avancar(1);
         continue;
@@ -336,7 +342,10 @@ async function enviarFotos(
         continue;
       }
       if (erro.status >= 400 && erro.status < 500 && ![401, 408, 429].includes(erro.status)) {
-        await guardarFoto(db, { ...foto, estado: "erro", tentativas: foto.tentativas + 1, ultimoErro: erro.message });
+        // Descartada pelo usuário durante o envio: não volta.
+        if (await db.get("fotos", foto.id)) {
+          await guardarFoto(db, { ...foto, estado: "erro", tentativas: foto.tentativas + 1, ultimoErro: erro.message });
+        }
         alteradas += 1;
         avancar(1);
         continue;

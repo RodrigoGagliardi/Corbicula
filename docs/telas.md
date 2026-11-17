@@ -1250,7 +1250,10 @@ MAND-005
 > - **Pendências de decisão:** conflito no mesmo campo (as duas versões lado a lado; manter a do servidor,
 >   manter a deste aparelho ou editar manualmente) e mudança recusada pelo servidor (editar manualmente ou
 >   descartar, com o que sai junto). Conflitos em campos diferentes se juntam sozinhos e não aparecem aqui.
-> - **Fila de envio** e **fotos aguardando** (o que ainda não chegou ao servidor).
+> - **Fila de envio** (mudanças que ainda não chegaram ao servidor).
+> - **Fotos guardadas neste aparelho** (13/11/2026): miniatura, registro e situação — aguardando envio, esperando uma decisão
+>   (o registro depende de uma mudança parada) ou recusada pelo servidor (com o motivo). A recusada tem "Tentar de novo";
+>   todas podem ser baixadas ou descartadas (com confirmação). Recusadas e presas contam no atalho de decisões do indicador.
 > - **Armazenamento:** espaço usado e cota estimados pelo navegador e se o armazenamento é persistente;
 >   quando não é, recomenda instalar o app.
 > - Fora desta tela: o indicador de conexão (sidebar no desktop, barra superior no mobile) mostra o mesmo

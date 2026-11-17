@@ -7,10 +7,14 @@ interface EstadoSincronizacao {
   sincronizando: boolean;
   // Operações na fila do usuário da sessão (pendentes e paradas).
   naFila: number;
-  // Fotos guardadas offline esperando envio.
+  // Fotos guardadas offline que a próxima sincronização envia.
   fotosPendentes: number;
+  // Fotos guardadas que esperam o usuário: recusadas pelo servidor ou presas atrás de uma decisão.
+  fotosParadas: number;
   // Operações paradas esperando decisão do usuário (conflito ou recusa).
   decisoes: number;
+  // Operações pendentes presas atrás de uma parada: nenhum envio as alcança até a decisão.
+  operacoesPresas: number;
   // Itens enviados / total do ciclo em andamento (operações e fotos); null fora de um ciclo.
   progresso: { feitas: number; total: number } | null;
   // A última tentativa falhou por rede ou servidor com o navegador online.
@@ -26,7 +30,9 @@ const INICIAL: EstadoSincronizacao = {
   sincronizando: false,
   naFila: 0,
   fotosPendentes: 0,
+  fotosParadas: 0,
   decisoes: 0,
+  operacoesPresas: 0,
   progresso: null,
   servidorInacessivel: false,
   ultimaSincronizacao: null,
@@ -37,7 +43,9 @@ export const useSincronizacao = create<EstadoSincronizacao>()(() => ({
   sincronizando: false,
   naFila: 0,
   fotosPendentes: 0,
+  fotosParadas: 0,
   decisoes: 0,
+  operacoesPresas: 0,
   progresso: null,
   servidorInacessivel: false,
   ultimaSincronizacao: null,

@@ -6,6 +6,7 @@ import { descartarPendencia, listarPendencias, manterAparelho, manterServidor, t
 import type { OperacaoFila } from "../../services/offline/tipos";
 import { formatarValorCampo, rotuloCampo } from "../../utils/pendencias";
 import { listarFila } from "../../services/offline/decisoes";
+import { baixarFoto, descartarFoto, listarFotosNoAparelho, tentarFotoDeNovo, type FotoNoAparelho } from "../../services/offline/fotos";
 import { sincronizar } from "../../services/offline/sincronizacao";
 import { useAuth } from "../../store/auth";
 import { useSincronizacao } from "../../store/sincronizacao";
@@ -21,6 +22,12 @@ vi.mock("../../services/offline/decisoes", () => ({
 }));
 vi.mock("../../services/offline/banco", () => ({ indexedDbDisponivel: () => false, abrirBanco: vi.fn(), lerMeta: vi.fn() }));
 vi.mock("../../services/offline/sincronizacao", () => ({ sincronizar: vi.fn(async () => ({})) }));
+vi.mock("../../services/offline/fotos", () => ({
+  listarFotosNoAparelho: vi.fn(async () => []),
+  tentarFotoDeNovo: vi.fn(async () => undefined),
+  descartarFoto: vi.fn(async () => undefined),
+  baixarFoto: vi.fn(),
+}));
 vi.mock("./Configuracoes", () => ({ VoltarConfiguracoes: () => null }));
 
 const op = (parcial: Partial<OperacaoFila>): OperacaoFila => ({
@@ -132,17 +139,83 @@ describe("Sincronização: status, fila e armazenamento", () => {
     expect(sincronizar).toHaveBeenCalledWith("u1");
   });
 
-  it("fila: lista o que aguarda envio (as paradas ficam em Pendências) e as fotos guardadas", async () => {
+  it("fila: lista o que aguarda envio (as paradas ficam em Pendências)", async () => {
     vi.mocked(listarPendencias).mockResolvedValue([]);
     vi.mocked(listarFila).mockResolvedValue([
       pendencia({ op: op({ estado: "pendente", operacao: "create", criadoEm: new Date().toISOString() }) }),
       pendencia({ op: op({ id: "op2", estado: "erro" }), rotulo: "Colônia parada" }),
     ]);
-    useSincronizacao.setState({ fotosPendentes: 2, naFila: 2 });
+    useSincronizacao.setState({ naFila: 2 });
     renderizar();
     expect(await screen.findByText("Criar")).toBeInTheDocument();
     expect(screen.queryByText("Colônia parada")).not.toBeInTheDocument();
-    expect(screen.getByText("2 fotos guardadas neste aparelho")).toBeInTheDocument();
+  });
+});
+
+const fotoNoAparelho = (parcial: Partial<FotoNoAparelho> = {}): FotoNoAparelho => ({
+  id: "f1",
+  vinculo: { avaliacaoId: "a1" },
+  entidadeId: "a1",
+  bytes: new Uint8Array([1]).buffer,
+  tipo: "image/jpeg",
+  criadoEm: new Date().toISOString(),
+  estado: "pendente",
+  tentativas: 0,
+  situacao: "aguardando",
+  rotulo: "Avaliação de 12/11/2026 · TETRANGU-001",
+  rotaDetalhe: "/app/colonias/c1/avaliacoes/a1",
+  ...parcial,
+});
+
+describe("Sincronização: fotos guardadas", () => {
+  beforeEach(() => {
+    vi.mocked(listarPendencias).mockResolvedValue([]);
+    URL.createObjectURL = vi.fn(() => "blob:foto");
+    URL.revokeObjectURL = vi.fn();
+  });
+
+  const itemDa = async (texto: RegExp) => (await screen.findByText(texto)).closest("li")!;
+
+  it("sem fotos guardadas: a seção não aparece", async () => {
+    renderizar();
+    await screen.findByText("Nenhuma mudança esperando decisão.");
+    expect(screen.queryByText("Fotos guardadas neste aparelho")).not.toBeInTheDocument();
+  });
+
+  it("recusada: mostra o motivo; tentar de novo, baixar e descartar (com confirmação)", async () => {
+    vi.mocked(listarFotosNoAparelho).mockResolvedValue([
+      fotoNoAparelho({ estado: "erro", situacao: "recusada", ultimoErro: "Formato não suportado." }),
+    ]);
+    renderizar();
+    const item = await itemDa(/Recusada pelo servidor/);
+    expect(item).toHaveTextContent("Recusada pelo servidor: Formato não suportado.");
+    expect(within(item).getByRole("link", { name: "Avaliação de 12/11/2026 · TETRANGU-001" })).toHaveAttribute("href", "/app/colonias/c1/avaliacoes/a1");
+
+    fireEvent.click(within(item).getByRole("button", { name: "Tentar de novo" }));
+    await waitFor(() => expect(tentarFotoDeNovo).toHaveBeenCalledWith("f1"));
+
+    fireEvent.click(within(item).getByRole("button", { name: "Baixar" }));
+    expect(baixarFoto).toHaveBeenCalledWith(expect.objectContaining({ id: "f1" }), "Avaliação de 12/11/2026 · TETRANGU-001");
+
+    confirmar.mockReturnValueOnce(false);
+    fireEvent.click(within(item).getByRole("button", { name: "Descartar" }));
+    expect(descartarFoto).not.toHaveBeenCalled();
+    fireEvent.click(within(item).getByRole("button", { name: "Descartar" }));
+    await waitFor(() => expect(descartarFoto).toHaveBeenCalledWith("f1"));
+  });
+
+  it("presa e aguardando: explicam a situação; sem 'Tentar de novo'", async () => {
+    vi.mocked(listarFotosNoAparelho).mockResolvedValue([
+      fotoNoAparelho({ id: "f2", situacao: "presa", rotulo: "Colônia COL-001", rotaDetalhe: null }),
+      fotoNoAparelho({ id: "f3" }),
+    ]);
+    renderizar();
+    const presa = await itemDa(/Esperando uma decisão/);
+    expect(presa).toHaveTextContent("Colônia COL-001");
+    expect(within(presa).queryByRole("button", { name: "Tentar de novo" })).not.toBeInTheDocument();
+    expect(within(presa).getByRole("button", { name: "Descartar" })).toBeInTheDocument();
+    const aguardando = await itemDa(/Aguardando envio: sobe/);
+    expect(within(aguardando).queryByRole("button", { name: "Tentar de novo" })).not.toBeInTheDocument();
   });
 });
 

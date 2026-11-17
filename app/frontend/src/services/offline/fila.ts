@@ -2,6 +2,7 @@ import { camposDoAparelho, juntar } from "./juncao";
 import { linhaDoServidor } from "./linhaLocal";
 import type {
   AcaoOperacao,
+  FotoPendente,
   LinhaLocal,
   OperacaoFila,
   OperacaoSync,
@@ -102,6 +103,33 @@ export function proximoLote(fila: readonly OperacaoFila[], max = MAX_LOTE): Oper
     if (op.operacao === "create") criadasNoLote.add(op.entidadeId);
   }
   return lote;
+}
+
+// Entidades que nenhum envio alcança até o usuário decidir: as das operações
+// paradas e, em cadeia, as que dependem delas (mesma regra de `proximoLote`).
+export function entidadesBloqueadas(fila: readonly OperacaoFila[]): Set<string> {
+  const bloqueadas = new Set<string>();
+  for (const op of porOrdem(fila)) {
+    if (op.estado !== "pendente" || [op.entidadeId, ...op.relacionadas].some((id) => bloqueadas.has(id))) bloqueadas.add(op.entidadeId);
+  }
+  return bloqueadas;
+}
+
+// Situação de uma foto guardada no aparelho:
+//  - recusada: o servidor recusou o arquivo (estado "erro"); espera o usuário;
+//  - presa: o registro dela ainda vai ser criado por uma operação bloqueada atrás
+//    de uma decisão; nenhum envio a alcança até o usuário decidir;
+//  - aguardando: sobe na próxima sincronização.
+export type SituacaoFoto = "aguardando" | "presa" | "recusada";
+
+export function situacaoDaFoto(
+  foto: Pick<FotoPendente, "estado" | "entidadeId">,
+  fila: readonly OperacaoFila[],
+  bloqueadas: ReadonlySet<string> = entidadesBloqueadas(fila)
+): SituacaoFoto {
+  if (foto.estado === "erro") return "recusada";
+  const criadaNaFila = fila.some((op) => op.entidadeId === foto.entidadeId && op.operacao === "create");
+  return criadaNaFila && bloqueadas.has(foto.entidadeId) ? "presa" : "aguardando";
 }
 
 // Formato do POST /sync (sem os campos de controle local).

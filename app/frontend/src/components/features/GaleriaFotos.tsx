@@ -1,17 +1,25 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Camera, CloudUpload, ImageOff } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router";
 import { useFotos } from "../../hooks/useDados";
 import { urlArquivo } from "../../services/api/client";
-import { anexarFoto, fotosGuardadas, idDoVinculo } from "../../services/offline/fotos";
+import { anexarFoto, fotosGuardadas, idDoVinculo, type FotoComSituacao } from "../../services/offline/fotos";
 import { ehErroDeConexao } from "../../services/offline/leituraLocal";
-import type { FotoPendente, VinculoFoto } from "../../services/offline/tipos";
+import type { VinculoFoto } from "../../services/offline/tipos";
 import { formatarData } from "../../utils/format";
 import { classesBotao } from "../ui/Botao";
 import { MensagemErro, NotaSemConexao } from "../ui/Estados";
 
-// Foto guardada no aparelho, mostrada a partir dos bytes locais.
-function FotoGuardada({ foto }: { foto: FotoPendente }) {
+const SELO: Record<FotoComSituacao["situacao"], string> = {
+  aguardando: "Aguardando envio",
+  presa: "Esperando decisão",
+  recusada: "Não enviada",
+};
+
+// Foto guardada no aparelho, mostrada a partir dos bytes locais. A recusada e a
+// presa atrás de uma decisão levam à tela de Sincronização, onde se resolvem.
+function FotoGuardada({ foto }: { foto: FotoComSituacao }) {
   const [url, setUrl] = useState<string>();
   // Os bytes de uma foto guardada não mudam: a prévia só é refeita quando muda a
   // foto (por id), não a cada releitura da galeria.
@@ -21,13 +29,29 @@ function FotoGuardada({ foto }: { foto: FotoPendente }) {
     setUrl(u);
     return () => URL.revokeObjectURL(u);
   }, [id]); // bytes e tipo são fixos para um id
-  const rotulo = foto.estado === "erro" ? `Não enviada: ${foto.ultimoErro ?? "recusada pelo servidor"}` : "Aguardando envio";
-  return (
-    <li className="relative overflow-hidden rounded-xl bg-muted" title={rotulo}>
+  const rotulo =
+    foto.situacao === "recusada"
+      ? `Não enviada: ${foto.ultimoErro ?? "recusada pelo servidor"}`
+      : foto.situacao === "presa"
+        ? "Esperando uma decisão sobre o registro"
+        : "Aguardando envio";
+  const conteudo = (
+    <>
       {url && <img src={url} alt={`Foto guardada no aparelho (${rotulo.toLowerCase()})`} className="aspect-square w-full object-cover opacity-80" />}
       <span className="absolute inset-x-0 bottom-0 flex items-center gap-1 bg-background/85 px-1.5 py-0.5 text-[11px] font-medium text-foreground">
-        <CloudUpload className="size-3 shrink-0" aria-hidden /> {foto.estado === "erro" ? "Não enviada" : "Aguardando envio"}
+        <CloudUpload className="size-3 shrink-0" aria-hidden /> {SELO[foto.situacao]}
       </span>
+    </>
+  );
+  return (
+    <li className="relative overflow-hidden rounded-xl bg-muted" title={rotulo}>
+      {foto.situacao === "aguardando" ? (
+        conteudo
+      ) : (
+        <Link to="/app/configuracoes/sync" aria-label={`${rotulo} — resolver em Sincronização`} className="block">
+          {conteudo}
+        </Link>
+      )}
     </li>
   );
 }

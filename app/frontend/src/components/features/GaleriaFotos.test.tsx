@@ -1,16 +1,16 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useFotos } from "../../hooks/useDados";
-import { anexarFoto, fotosGuardadas } from "../../services/offline/fotos";
-import type { FotoPendente } from "../../services/offline/tipos";
+import { anexarFoto, fotosGuardadas, type FotoComSituacao } from "../../services/offline/fotos";
 import { GaleriaFotos } from "./GaleriaFotos";
 
 // Galeria: fotos do servidor + as guardadas no aparelho esperando envio.
 vi.mock("../../hooks/useDados", () => ({ useFotos: vi.fn() }));
 vi.mock("../../services/offline/fotos", () => ({ anexarFoto: vi.fn(), fotosGuardadas: vi.fn(), idDoVinculo: () => "c1" }));
 
-const guardada = (parcial: Partial<FotoPendente> = {}): FotoPendente => ({
+const guardada = (parcial: Partial<FotoComSituacao> = {}): FotoComSituacao => ({
   id: "f1",
   vinculo: { coloniaId: "c1" },
   entidadeId: "c1",
@@ -19,13 +19,16 @@ const guardada = (parcial: Partial<FotoPendente> = {}): FotoPendente => ({
   criadoEm: "2026-11-10T12:00:00.000Z",
   estado: "pendente",
   tentativas: 0,
+  situacao: "aguardando",
   ...parcial,
 });
 
 function renderizar() {
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })}>
-      <GaleriaFotos vinculo={{ coloniaId: "c1" }} />
+      <MemoryRouter>
+        <GaleriaFotos vinculo={{ coloniaId: "c1" }} />
+      </MemoryRouter>
     </QueryClientProvider>
   );
 }
@@ -41,11 +44,19 @@ afterEach(() => {
 });
 
 describe("GaleriaFotos", () => {
-  it("mostra as fotos guardadas como aguardando envio, ou paradas", async () => {
-    vi.mocked(fotosGuardadas).mockResolvedValue([guardada(), guardada({ id: "f2", estado: "erro", ultimoErro: "Formato não suportado." })]);
+  it("mostra as fotos guardadas como aguardando envio, ou paradas com o caminho para a Sincronização", async () => {
+    vi.mocked(fotosGuardadas).mockResolvedValue([
+      guardada(),
+      guardada({ id: "f2", estado: "erro", ultimoErro: "Formato não suportado.", situacao: "recusada" }),
+      guardada({ id: "f3", situacao: "presa" }),
+    ]);
     renderizar();
     expect(await screen.findByText("Aguardando envio")).toBeInTheDocument();
     expect(screen.getByText("Não enviada")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Não enviada: Formato não suportado. — resolver em Sincronização/ })).toHaveAttribute("href", "/app/configuracoes/sync");
+    expect(screen.getByRole("link", { name: /Esperando uma decisão/ })).toHaveAttribute("href", "/app/configuracoes/sync");
+    // A que vai subir sozinha não é link.
+    expect(screen.getAllByRole("link")).toHaveLength(2);
     expect(screen.queryByText("Nenhuma foto.")).not.toBeInTheDocument();
   });
 

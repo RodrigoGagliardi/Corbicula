@@ -2,6 +2,7 @@ import { deleteDB } from "idb";
 import { useAuth } from "../../store/auth";
 import { resetarSincronizacao } from "../../store/sincronizacao";
 import { abrirBanco, fecharBanco, indexedDbDisponivel, lerFila, lerFotos, nomeBanco } from "./banco";
+import { entidadesBloqueadas, situacaoDaFoto } from "./fila";
 import { espelharSessao, lerSessaoEspelhada } from "./sessaoSegundoPlano";
 import { aguardarSincronizacao, cancelarNovaTentativa } from "./sincronizacao";
 
@@ -13,11 +14,14 @@ export interface PendenciasDoAparelho {
   // Operações na fila (inclusive as paradas) e fotos guardadas (inclusive as recusadas).
   operacoes: number;
   fotos: number;
-  // Das operações, as paradas esperando decisão (sincronizar não as envia).
+  // Das operações, as que esperam uma decisão: as paradas e as presas atrás delas
+  // (sincronizar não envia nenhuma das duas).
   decisoes: number;
+  // Das fotos, as recusadas e as presas atrás de uma decisão (sincronizar não as envia).
+  fotosParadas: number;
 }
 
-const NADA: PendenciasDoAparelho = { operacoes: 0, fotos: 0, decisoes: 0 };
+const NADA: PendenciasDoAparelho = { operacoes: 0, fotos: 0, decisoes: 0, fotosParadas: 0 };
 
 // O que ainda não chegou ao servidor neste aparelho. Sem banco: nada.
 export async function pendenciasDoAparelho(usuarioId: string): Promise<PendenciasDoAparelho> {
@@ -25,7 +29,13 @@ export async function pendenciasDoAparelho(usuarioId: string): Promise<Pendencia
   try {
     const db = await abrirBanco(usuarioId);
     const [fila, fotos] = await Promise.all([lerFila(db), lerFotos(db)]);
-    return { operacoes: fila.length, fotos: fotos.length, decisoes: fila.filter((o) => o.estado !== "pendente").length };
+    const bloqueadas = entidadesBloqueadas(fila);
+    return {
+      operacoes: fila.length,
+      fotos: fotos.length,
+      decisoes: fila.filter((o) => bloqueadas.has(o.entidadeId)).length,
+      fotosParadas: fotos.filter((f) => situacaoDaFoto(f, fila, bloqueadas) !== "aguardando").length,
+    };
   } catch {
     return NADA;
   }

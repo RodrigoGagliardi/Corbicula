@@ -250,8 +250,11 @@ export async function estadoDosRegistros(): Promise<Map<string, "pendente" | "pa
     if (parada(op)) estados.set(op.entidadeId, "parada");
     else if (!estados.has(op.entidadeId)) estados.set(op.entidadeId, "pendente");
   }
-  // Foto aguardando envio também deixa o registro "não enviado".
-  for (const f of fotos) if (f.estado === "pendente" && !estados.has(f.entidadeId)) estados.set(f.entidadeId, "pendente");
+  // Foto recusada deixa o registro "precisa de decisão"; aguardando envio, "não enviado".
+  for (const f of fotos) {
+    if (f.estado === "erro") estados.set(f.entidadeId, "parada");
+    else if (!estados.has(f.entidadeId)) estados.set(f.entidadeId, "pendente");
+  }
   return estados;
 }
 

@@ -52,7 +52,7 @@ afterEach(() => {
 
 describe("Sair da conta", () => {
   it("sem pendências: apaga os dados locais e vai ao login, sem perguntar", async () => {
-    vi.mocked(pendenciasDoAparelho).mockResolvedValue({ operacoes: 0, fotos: 0, decisoes: 0 });
+    vi.mocked(pendenciasDoAparelho).mockResolvedValue({ operacoes: 0, fotos: 0, decisoes: 0, fotosParadas: 0 });
     renderizar();
     fireEvent.click(screen.getByRole("button", { name: "sair" }));
     expect(await screen.findByText("login")).toBeInTheDocument();
@@ -61,7 +61,7 @@ describe("Sair da conta", () => {
   });
 
   it("com pendências: aviso com a contagem e as três opções; cancelar não sai", async () => {
-    vi.mocked(pendenciasDoAparelho).mockResolvedValue({ operacoes: 3, fotos: 1, decisoes: 0 });
+    vi.mocked(pendenciasDoAparelho).mockResolvedValue({ operacoes: 3, fotos: 1, decisoes: 0, fotosParadas: 0 });
     renderizar();
     fireEvent.click(screen.getByRole("button", { name: "sair" }));
     const dialogo = await screen.findByRole("dialog");
@@ -75,9 +75,9 @@ describe("Sair da conta", () => {
 
   it("sincronizar agora: se a fila esvaziar, sai sem descartar; se sobrar, mostra a nova contagem", async () => {
     vi.mocked(pendenciasDoAparelho)
-      .mockResolvedValueOnce({ operacoes: 2, fotos: 0, decisoes: 0 })
-      .mockResolvedValueOnce({ operacoes: 1, fotos: 0, decisoes: 0 })
-      .mockResolvedValueOnce({ operacoes: 0, fotos: 0, decisoes: 0 });
+      .mockResolvedValueOnce({ operacoes: 2, fotos: 0, decisoes: 0, fotosParadas: 0 })
+      .mockResolvedValueOnce({ operacoes: 1, fotos: 0, decisoes: 0, fotosParadas: 0 })
+      .mockResolvedValueOnce({ operacoes: 0, fotos: 0, decisoes: 0, fotosParadas: 0 });
     renderizar();
     fireEvent.click(screen.getByRole("button", { name: "sair" }));
     fireEvent.click(await screen.findByRole("button", { name: "Sincronizar agora" }));
@@ -90,7 +90,7 @@ describe("Sair da conta", () => {
 
   it("offline: sem 'Sincronizar agora'; sair e descartar pede confirmação", async () => {
     conexao.online = false;
-    vi.mocked(pendenciasDoAparelho).mockResolvedValue({ operacoes: 1, fotos: 0, decisoes: 0 });
+    vi.mocked(pendenciasDoAparelho).mockResolvedValue({ operacoes: 1, fotos: 0, decisoes: 0, fotosParadas: 0 });
     renderizar();
     fireEvent.click(screen.getByRole("button", { name: "sair" }));
     await screen.findByRole("dialog");
@@ -106,7 +106,7 @@ describe("Sair da conta", () => {
   });
 
   it("a sessão termina antes de apagar (uma sincronização em andamento não recria o banco)", async () => {
-    vi.mocked(pendenciasDoAparelho).mockResolvedValue({ operacoes: 0, fotos: 0, decisoes: 0 });
+    vi.mocked(pendenciasDoAparelho).mockResolvedValue({ operacoes: 0, fotos: 0, decisoes: 0, fotosParadas: 0 });
     let usuarioAoApagar: unknown = "não chamado";
     vi.mocked(apagarDadosLocais).mockImplementationOnce(async () => {
       usuarioAoApagar = useAuth.getState().usuario;
@@ -118,7 +118,7 @@ describe("Sair da conta", () => {
   });
 
   it("401 com o aviso aberto: o aviso não reaparece para a próxima conta", async () => {
-    vi.mocked(pendenciasDoAparelho).mockResolvedValue({ operacoes: 1, fotos: 0, decisoes: 0 });
+    vi.mocked(pendenciasDoAparelho).mockResolvedValue({ operacoes: 1, fotos: 0, decisoes: 0, fotosParadas: 0 });
     renderizar();
     fireEvent.click(screen.getByRole("button", { name: "sair" }));
     await screen.findByRole("dialog");
@@ -130,7 +130,7 @@ describe("Sair da conta", () => {
   });
 
   it("mudanças esperando decisão: avisa e leva à Sincronização; só decisões, sem 'Sincronizar agora'", async () => {
-    vi.mocked(pendenciasDoAparelho).mockResolvedValue({ operacoes: 2, fotos: 0, decisoes: 2 });
+    vi.mocked(pendenciasDoAparelho).mockResolvedValue({ operacoes: 2, fotos: 0, decisoes: 2, fotosParadas: 0 });
     renderizar();
     fireEvent.click(screen.getByRole("button", { name: "sair" }));
     const dialogo = await screen.findByRole("dialog");
@@ -139,8 +139,26 @@ describe("Sair da conta", () => {
     expect(screen.queryByRole("button", { name: "Sincronizar agora" })).not.toBeInTheDocument();
   });
 
+  it("só fotos recusadas ou presas: avisa que esperam decisão e não oferece 'Sincronizar agora'", async () => {
+    vi.mocked(pendenciasDoAparelho).mockResolvedValue({ operacoes: 1, fotos: 2, decisoes: 1, fotosParadas: 2 });
+    renderizar();
+    fireEvent.click(screen.getByRole("button", { name: "sair" }));
+    const dialogo = await screen.findByRole("dialog");
+    expect(dialogo).toHaveTextContent("1 mudança e 2 fotos esperam uma decisão sua e não sobem ao sincronizar");
+    expect(screen.queryByRole("button", { name: "Sincronizar agora" })).not.toBeInTheDocument();
+  });
+
+  it("uma foto parada e outra aguardando: 'Sincronizar agora' continua (a aguardando sobe)", async () => {
+    vi.mocked(pendenciasDoAparelho).mockResolvedValue({ operacoes: 0, fotos: 2, decisoes: 0, fotosParadas: 1 });
+    renderizar();
+    fireEvent.click(screen.getByRole("button", { name: "sair" }));
+    const dialogo = await screen.findByRole("dialog");
+    expect(dialogo).toHaveTextContent("1 foto espera uma decisão sua e não sobe ao sincronizar");
+    expect(screen.getByRole("button", { name: "Sincronizar agora" })).toBeInTheDocument();
+  });
+
   it("descrição das pendências", () => {
-    expect(descreverPendencias({ operacoes: 1, fotos: 0, decisoes: 0 })).toBe("1 mudança");
-    expect(descreverPendencias({ operacoes: 0, fotos: 2, decisoes: 0 })).toBe("2 fotos");
+    expect(descreverPendencias({ operacoes: 1, fotos: 0, decisoes: 0, fotosParadas: 0 })).toBe("1 mudança");
+    expect(descreverPendencias({ operacoes: 0, fotos: 2, decisoes: 0, fotosParadas: 0 })).toBe("2 fotos");
   });
 });

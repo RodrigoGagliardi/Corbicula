@@ -11,9 +11,10 @@ export function useRegistrosNaFila(): Map<string, "pendente" | "parada"> {
   const naFila = useSincronizacao((s) => s.naFila);
   const decisoes = useSincronizacao((s) => s.decisoes);
   const fotosPendentes = useSincronizacao((s) => s.fotosPendentes);
+  const fotosParadas = useSincronizacao((s) => s.fotosParadas);
   const concluidas = useSincronizacao((s) => s.concluidas);
   const { data } = useQuery({
-    queryKey: ["sincronizacao", "registros", usuarioId, naFila, decisoes, fotosPendentes, concluidas],
+    queryKey: ["sincronizacao", "registros", usuarioId, naFila, decisoes, fotosPendentes, fotosParadas, concluidas],
     queryFn: estadoDosRegistros,
     enabled: Boolean(usuarioId),
   });

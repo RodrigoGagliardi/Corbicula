@@ -71,8 +71,10 @@ export function DialogoSair() {
 
   if (!pendencias || !usuarioId) return null;
   const descricao = descreverPendencias(pendencias);
-  // As paradas esperam uma decisão: sincronizar não as envia.
-  const enviaveis = pendencias.operacoes - pendencias.decisoes + pendencias.fotos;
+  // As paradas (operações e fotos) esperam uma decisão: sincronizar não as envia.
+  const enviaveis = pendencias.operacoes - pendencias.decisoes + pendencias.fotos - pendencias.fotosParadas;
+  const esperandoDecisao = descreverPendencias({ operacoes: pendencias.decisoes, fotos: pendencias.fotosParadas, decisoes: 0, fotosParadas: 0 });
+  const umaSo = pendencias.decisoes + pendencias.fotosParadas === 1;
 
   const sincronizarESair = async () => {
     setOcupado("sincronizando");
@@ -114,10 +116,9 @@ export function DialogoSair() {
           os dados guardados aqui são apagados.
           {!online && " Sem conexão agora: para não perder nada, cancele e saia quando a conexão voltar."}
         </p>
-        {pendencias.decisoes > 0 && (
+        {esperandoDecisao && (
           <p className="text-sm">
-            {pendencias.decisoes === 1 ? "1 mudança espera" : `${pendencias.decisoes} mudanças esperam`} uma decisão sua e não{" "}
-            {pendencias.decisoes === 1 ? "sobe" : "sobem"} ao sincronizar:{" "}
+            {esperandoDecisao} {umaSo ? "espera" : "esperam"} uma decisão sua e não {umaSo ? "sobe" : "sobem"} ao sincronizar:{" "}
             <Link to="/app/configuracoes/sync" onClick={fechar} className="font-medium underline decoration-accent decoration-2 underline-offset-2">
               resolver em Sincronização
             </Link>

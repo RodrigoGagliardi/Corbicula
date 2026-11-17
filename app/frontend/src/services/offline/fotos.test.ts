@@ -25,7 +25,8 @@ vi.mock("../../utils/imagem", () => ({ comprimirImagem: vi.fn(async () => new Bl
 
 const banco = await import("./banco");
 const { escritas } = await import("./escrita");
-const { anexarFoto, fotosGuardadas } = await import("./fotos");
+const { anexarFoto, descartarFoto, fotosGuardadas, listarFotosNoAparelho, nomeDoArquivo, tentarFotoDeNovo } = await import("./fotos");
+const { estadoDosRegistros } = await import("./decisoes");
 const { cancelarNovaTentativa, ESPERAS_MS, sincronizar } = await import("./sincronizacao");
 
 const conexao = { online: true };
@@ -280,5 +281,108 @@ describe("envio das fotos na sincronização", () => {
     await sincronizar("foto-400");
     expect(apis.fotosApi.enviar).toHaveBeenCalledTimes(1);
     expect(agendadas()).toEqual([]);
+  });
+});
+
+describe("fotos paradas", () => {
+  // Foto guardada offline na colônia c1 e recusada pelo servidor (400) na sincronização.
+  async function fotoRecusada(usuarioId: string) {
+    const db = await entrarCarregado(usuarioId);
+    conexao.online = false;
+    await anexarFoto(arquivo(), { coloniaId: "c1" });
+    conexao.online = true;
+    apis.fotosApi.enviar.mockRejectedValueOnce(new ErroApi(400, "Formato não suportado."));
+    await sincronizar(usuarioId);
+    const [foto] = await banco.lerFotos(db);
+    return { db, foto: foto! };
+  }
+
+  it("recusada: fora do contador de não enviados, conta como decisão, marca o registro e aparece na lista com o motivo", async () => {
+    await fotoRecusada("recusada");
+    expect(useSincronizacao.getState()).toMatchObject({ fotosPendentes: 0, fotosParadas: 1 });
+    expect((await estadoDosRegistros()).get("c1")).toBe("parada");
+    expect(await listarFotosNoAparelho()).toEqual([
+      expect.objectContaining({ situacao: "recusada", ultimoErro: "Formato não suportado.", rotulo: "Colônia TETRANGU-001", rotaDetalhe: "/app/colonias/c1" }),
+    ]);
+    // Nenhuma sincronização a reenvia sozinha.
+    await sincronizar("recusada");
+    expect(apis.fotosApi.enviar).toHaveBeenCalledTimes(1);
+  });
+
+  it("tentar de novo online, aceita: a foto sobe e sai do aparelho", async () => {
+    const { db, foto } = await fotoRecusada("de-novo-ok");
+    await tentarFotoDeNovo(foto.id);
+    expect(apis.fotosApi.enviar).toHaveBeenCalledTimes(2);
+    expect(await banco.lerFotos(db)).toEqual([]);
+    expect(useSincronizacao.getState()).toMatchObject({ fotosPendentes: 0, fotosParadas: 0 });
+  });
+
+  it("tentar de novo online, recusada de novo: volta a parar com o motivo novo", async () => {
+    const { db, foto } = await fotoRecusada("de-novo-recusada");
+    apis.fotosApi.enviar.mockRejectedValueOnce(new ErroApi(413, "Arquivo grande demais."));
+    await tentarFotoDeNovo(foto.id);
+    expect(await banco.lerFotos(db)).toEqual([expect.objectContaining({ estado: "erro", ultimoErro: "Arquivo grande demais.", tentativas: 2 })]);
+    expect(useSincronizacao.getState().fotosParadas).toBe(1);
+  });
+
+  it("tentar de novo offline: volta a aguardar envio, sem chamar a API", async () => {
+    const { db, foto } = await fotoRecusada("de-novo-offline");
+    conexao.online = false;
+    await tentarFotoDeNovo(foto.id);
+    expect(apis.fotosApi.enviar).toHaveBeenCalledTimes(1);
+    expect(await banco.lerFotos(db)).toEqual([expect.objectContaining({ estado: "pendente" })]);
+    expect(useSincronizacao.getState()).toMatchObject({ fotosPendentes: 1, fotosParadas: 0 });
+  });
+
+  it("descartar: a foto sai do aparelho, dos contadores e da marca do registro; de novo, 'já resolvida'", async () => {
+    const { db, foto } = await fotoRecusada("descartar");
+    await descartarFoto(foto.id);
+    expect(await banco.lerFotos(db)).toEqual([]);
+    expect(useSincronizacao.getState()).toMatchObject({ fotosPendentes: 0, fotosParadas: 0 });
+    expect((await estadoDosRegistros()).has("c1")).toBe(false);
+    await expect(descartarFoto(foto.id)).rejects.toThrow("Esta foto já foi resolvida.");
+  });
+
+  it("presa atrás de um create parado: conta como decisão e aparece como presa", async () => {
+    await entrarCarregado("presa");
+    conexao.online = false;
+    const a = await escritas.criarAvaliacao("c1", AVALIACAO);
+    await anexarFoto(arquivo(), { avaliacaoId: a.id });
+    conexao.online = true;
+    apis.syncApi.enviar.mockImplementation(async (ops: OperacaoSync[]) => ({
+      servidorEm: "x", processadas: 1, aplicadas: 0, duplicadas: 0, conflitos: 0, erros: 1,
+      resultados: ops.map((o) => ({ id: o.id, entidadeId: o.entidadeId, status: "erro", erro: "Colônia não encontrada" })),
+    }));
+    await sincronizar("presa");
+    expect(useSincronizacao.getState()).toMatchObject({ fotosPendentes: 0, fotosParadas: 1 });
+    expect(await listarFotosNoAparelho()).toEqual([expect.objectContaining({ situacao: "presa", rotulo: expect.stringMatching(/^Avaliação de .* · TETRANGU-001$/) })]);
+    expect(await fotosGuardadas({ avaliacaoId: a.id })).toEqual([expect.objectContaining({ situacao: "presa" })]);
+  });
+
+  it("descartada durante o envio e recusada pelo servidor: não volta para o aparelho", async () => {
+    const db = await entrarCarregado("descarte-no-envio");
+    conexao.online = false;
+    await anexarFoto(arquivo(), { coloniaId: "c1" });
+    conexao.online = true;
+    const [foto] = await banco.lerFotos(db);
+    apis.fotosApi.enviar.mockImplementationOnce(async () => {
+      await descartarFoto(foto!.id); // o usuário descarta enquanto o upload está em curso
+      throw new ErroApi(400, "Formato não suportado.");
+    });
+    await sincronizar("descarte-no-envio");
+    expect(await banco.lerFotos(db)).toEqual([]);
+  });
+
+  it("nome do arquivo: a data é a local, não a UTC (foto da noite)", () => {
+    const noite = new Date(2026, 10, 12, 23, 30).toISOString();
+    expect(nomeDoArquivo({ tipo: "image/jpeg", criadoEm: noite }, "Colônia")).toBe("corbicula-colonia-2026-11-12.jpg");
+    expect(nomeDoArquivo({ tipo: "image/jpeg", criadoEm: "" }, "Colônia")).toBe("corbicula-colonia.jpg");
+  });
+
+  it("nome do arquivo baixado: registro sem acentos + data + extensão do tipo", () => {
+    expect(nomeDoArquivo({ tipo: "image/jpeg", criadoEm: "2026-11-12T10:00:00.000Z" }, "Avaliação de 12/11/2026 · TETRANGU-001")).toBe(
+      "corbicula-avaliacao-de-12-11-2026-tetrangu-001-2026-11-12.jpg"
+    );
+    expect(nomeDoArquivo({ tipo: "image/webp", criadoEm: "2026-11-12T10:00:00.000Z" }, "Colônia")).toBe("corbicula-colonia-2026-11-12.webp");
   });
 });

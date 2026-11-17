@@ -69,4 +69,18 @@ describe("IndicadorConexao", () => {
     expect(screen.getByRole("button", { name: /Online · 1 não enviado\./ })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "2 pendências de decisão" })).toHaveAttribute("href", "/app/configuracoes/sync");
   });
+
+  it("operações presas atrás de uma parada: fora do contador de envio", () => {
+    useSincronizacao.setState({ decisoes: 1, operacoesPresas: 2, naFila: 4 });
+    renderizar();
+    expect(screen.getByRole("button", { name: /Online · 1 não enviado./ })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "1 pendência de decisão" })).toBeInTheDocument();
+  });
+
+  it("fotos recusadas ou presas: entram no atalho de decisões, não no contador de envio", () => {
+    useSincronizacao.setState({ decisoes: 1, naFila: 1, fotosPendentes: 1, fotosParadas: 2 });
+    renderizar();
+    expect(screen.getByRole("button", { name: /Online · 1 não enviado./ })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "3 pendências de decisão" })).toBeInTheDocument();
+  });
 });

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, CloudUpload, HardDrive, RefreshCw, TriangleAlert } from "lucide-react";
+import { CheckCircle2, CloudUpload, Download, HardDrive, Image as ImagemIcone, RefreshCw, Trash2, TriangleAlert } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { Botao, LinkBotao } from "../../components/ui/Botao";
 import { CabecalhoPagina, Cartao, Selo } from "../../components/ui/Cartao";
@@ -14,6 +15,7 @@ import {
   manterServidor,
   type Pendencia,
 } from "../../services/offline/decisoes";
+import { baixarFoto, descartarFoto, listarFotosNoAparelho, tentarFotoDeNovo, type FotoNoAparelho } from "../../services/offline/fotos";
 import { sincronizar } from "../../services/offline/sincronizacao";
 import { useAuth } from "../../store/auth";
 import { useSincronizacao } from "../../store/sincronizacao";
@@ -219,7 +221,6 @@ function SecaoStatus() {
 function SecaoFila() {
   const usuarioId = useAuth((s) => s.usuario?.id);
   const naFila = useSincronizacao((s) => s.naFila);
-  const fotosPendentes = useSincronizacao((s) => s.fotosPendentes);
   const concluidas = useSincronizacao((s) => s.concluidas);
   const { data: fila = [], isLoading, error } = useQuery({
     queryKey: ["sincronizacao", "fila", usuarioId, naFila, concluidas],
@@ -237,39 +238,147 @@ function SecaoFila() {
         <Carregando />
       ) : error ? (
         <MensagemErro erro={error} />
-      ) : aguardando.length === 0 && fotosPendentes === 0 ? (
+      ) : aguardando.length === 0 ? (
         <p className="flex items-center gap-2 text-sm text-muted-foreground">
-          <CheckCircle2 className="size-4" aria-hidden /> Nada aguardando envio.
+          <CheckCircle2 className="size-4" aria-hidden /> Nenhuma mudança aguardando envio.
         </p>
       ) : (
-        <Cartao className="space-y-2">
-          {aguardando.length > 0 && (
-            <ul className="divide-y divide-border text-sm">
-              {aguardando.map(({ op, rotulo, rotaDetalhe }) => (
-                <li key={op.id} className="flex flex-wrap items-baseline justify-between gap-2 py-2">
-                  <span className="text-foreground">
-                    <span className="font-medium">{ROTULO_ACAO[op.operacao]}</span> ·{" "}
-                    {rotaDetalhe ? (
-                      <Link to={rotaDetalhe} className="hover:underline">
-                        {rotulo}
-                      </Link>
-                    ) : (
-                      rotulo
-                    )}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    feita {tempoRelativo(op.criadoEm)}
-                    {op.tentativas > 0 && ` · ${op.tentativas} tentativa${op.tentativas > 1 ? "s" : ""}`}
-                  </span>
-                </li>
-              ))}
-            </ul>
+        <Cartao>
+          <ul className="divide-y divide-border text-sm">
+            {aguardando.map(({ op, rotulo, rotaDetalhe }) => (
+              <li key={op.id} className="flex flex-wrap items-baseline justify-between gap-2 py-2">
+                <span className="text-foreground">
+                  <span className="font-medium">{ROTULO_ACAO[op.operacao]}</span> ·{" "}
+                  {rotaDetalhe ? (
+                    <Link to={rotaDetalhe} className="hover:underline">
+                      {rotulo}
+                    </Link>
+                  ) : (
+                    rotulo
+                  )}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  feita {tempoRelativo(op.criadoEm)}
+                  {op.tentativas > 0 && ` · ${op.tentativas} tentativa${op.tentativas > 1 ? "s" : ""}`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Cartao>
+      )}
+    </section>
+  );
+}
+
+// Miniatura de uma foto guardada, a partir dos bytes locais (fixos para um id).
+function Miniatura({ foto }: { foto: FotoNoAparelho }) {
+  const [url, setUrl] = useState<string>();
+  const { id, bytes, tipo } = foto;
+  useEffect(() => {
+    const u = URL.createObjectURL(new Blob([bytes], { type: tipo }));
+    setUrl(u);
+    return () => URL.revokeObjectURL(u);
+  }, [id]); // bytes e tipo são fixos para um id
+  return url ? (
+    <img src={url} alt={`Foto de ${foto.rotulo}`} className="size-16 shrink-0 rounded-lg object-cover" />
+  ) : (
+    <span className="size-16 shrink-0 rounded-lg bg-muted" aria-hidden />
+  );
+}
+
+const SITUACAO_FOTO: Record<FotoNoAparelho["situacao"], string> = {
+  aguardando: "Aguardando envio: sobe na próxima sincronização.",
+  presa: "Esperando uma decisão: o registro desta foto depende de uma mudança listada em Pendências.",
+  recusada: "Recusada pelo servidor",
+};
+
+function ItemFoto({ foto }: { foto: FotoNoAparelho }) {
+  const queryClient = useQueryClient();
+  const acao = useMutation({
+    mutationFn: ({ executar }: { nome: string; executar: () => Promise<void> }) => executar(),
+    // Relê tudo também numa falha (ex.: foto já resolvida em outra aba).
+    onSettled: () => queryClient.invalidateQueries(),
+  });
+  const girando = (nome: string) => acao.isPending && acao.variables?.nome === nome;
+  const descartar = () => {
+    if (window.confirm("Descartar esta foto? Ela não chegou ao servidor e será apagada deste aparelho.")) {
+      acao.mutate({ nome: "descartar", executar: () => descartarFoto(foto.id) });
+    }
+  };
+
+  return (
+    <li className="flex gap-3 py-3">
+      <Miniatura foto={foto} />
+      <div className="min-w-0 flex-1 space-y-2">
+        <div className="text-sm">
+          <p className="font-medium text-foreground">
+            {foto.rotaDetalhe ? (
+              <Link to={foto.rotaDetalhe} className="hover:underline">
+                {foto.rotulo}
+              </Link>
+            ) : (
+              foto.rotulo
+            )}
+          </p>
+          <p className={foto.situacao === "recusada" ? "text-destructive" : "text-muted-foreground"}>
+            {SITUACAO_FOTO[foto.situacao]}
+            {foto.situacao === "recusada" && `: ${foto.ultimoErro ?? "motivo não informado"}`}
+          </p>
+          <p className="text-xs text-muted-foreground">guardada {tempoRelativo(foto.criadoEm)}</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {foto.situacao === "recusada" && (
+            <Botao
+              tamanho="sm"
+              variante="primario"
+              carregando={girando("tentar")}
+              disabled={acao.isPending}
+              onClick={() => acao.mutate({ nome: "tentar", executar: () => tentarFotoDeNovo(foto.id) })}
+            >
+              <RefreshCw className="size-4" aria-hidden /> Tentar de novo
+            </Botao>
           )}
-          {fotosPendentes > 0 && (
-            <p className="text-sm text-foreground">
-              {fotosPendentes} foto{fotosPendentes > 1 ? "s" : ""} guardada{fotosPendentes > 1 ? "s" : ""} neste aparelho
-            </p>
-          )}
+          <Botao tamanho="sm" variante="secundario" disabled={acao.isPending} onClick={() => baixarFoto(foto, foto.rotulo)}>
+            <Download className="size-4" aria-hidden /> Baixar
+          </Botao>
+          <Botao tamanho="sm" variante="perigo" carregando={girando("descartar")} disabled={acao.isPending} onClick={descartar}>
+            <Trash2 className="size-4" aria-hidden /> Descartar
+          </Botao>
+        </div>
+        <MensagemErro erro={acao.error} />
+      </div>
+    </li>
+  );
+}
+
+// Fotos guardadas neste aparelho: as que esperam o usuário (recusadas ou presas
+// atrás de uma decisão) primeiro. Some quando não há nenhuma.
+function SecaoFotos() {
+  const usuarioId = useAuth((s) => s.usuario?.id);
+  const fotosPendentes = useSincronizacao((s) => s.fotosPendentes);
+  const fotosParadas = useSincronizacao((s) => s.fotosParadas);
+  const concluidas = useSincronizacao((s) => s.concluidas);
+  const { data: fotos = [], error } = useQuery({
+    queryKey: ["sincronizacao", "fotos", usuarioId, fotosPendentes, fotosParadas, concluidas],
+    queryFn: listarFotosNoAparelho,
+    enabled: Boolean(usuarioId),
+  });
+  if (!error && fotos.length === 0) return null;
+
+  return (
+    <section aria-labelledby="titulo-fotos" className="space-y-3">
+      <h2 id="titulo-fotos" className="flex items-center gap-2 font-semibold text-foreground">
+        <ImagemIcone className="size-4" aria-hidden /> Fotos guardadas neste aparelho
+      </h2>
+      {error ? (
+        <MensagemErro erro={error} />
+      ) : (
+        <Cartao>
+          <ul className="divide-y divide-border">
+            {fotos.map((f) => (
+              <ItemFoto key={f.id} foto={f} />
+            ))}
+          </ul>
         </Cartao>
       )}
     </section>
@@ -356,6 +465,7 @@ export function Sincronizacao() {
         )}
       </section>
       <SecaoFila />
+      <SecaoFotos />
       <SecaoArmazenamento />
       </div>
     </>

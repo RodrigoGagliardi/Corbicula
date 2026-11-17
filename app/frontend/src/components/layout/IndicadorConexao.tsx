@@ -21,10 +21,16 @@ export function IndicadorConexao({ compacto = false, className = "" }: { compact
   const servidorInacessivel = useSincronizacao((s) => s.servidorInacessivel);
   const naFila = useSincronizacao((s) => s.naFila);
   const fotosPendentes = useSincronizacao((s) => s.fotosPendentes);
-  const decisoes = useSincronizacao((s) => s.decisoes);
+  const decisoesOperacoes = useSincronizacao((s) => s.decisoes);
+  const fotosParadas = useSincronizacao((s) => s.fotosParadas);
+  const operacoesPresas = useSincronizacao((s) => s.operacoesPresas);
+  // Decisões: operações paradas e fotos recusadas ou presas atrás de uma decisão.
+  const decisoes = decisoesOperacoes + fotosParadas;
 
-  // As paradas aparecem no atalho das decisões, não no contador de envio.
-  const naoEnviados = Math.max(0, naFila - decisoes) + fotosPendentes;
+  // O contador de envio mostra só o que a próxima sincronização envia: as
+  // paradas vão para o atalho das decisões, e as presas atrás delas esperam a
+  // decisão (fotosPendentes já conta só as fotos que sobem).
+  const naoEnviados = Math.max(0, naFila - decisoesOperacoes - operacoesPresas) + fotosPendentes;
   const estado = !online
     ? "Offline"
     : sincronizando
@@ -83,7 +89,7 @@ export function IndicadorConexao({ compacto = false, className = "" }: { compact
         <Link
           to="/app/configuracoes/sync"
           className="inline-flex items-center gap-1 rounded-md text-xs font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-          title="Mudanças que esperam uma decisão sua"
+          title="Mudanças ou fotos que esperam uma decisão sua"
           aria-label={plural(decisoes, "pendência de decisão", "pendências de decisão")}
         >
           <TriangleAlert className="size-4 shrink-0" aria-hidden />
