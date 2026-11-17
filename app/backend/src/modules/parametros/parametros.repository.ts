@@ -13,6 +13,10 @@ const INCLUDE_COMPLETO = {
   _count: { select: { avaliacoesParametros: true } },
 } as const;
 
+// Atualiza só o updatedAt do parâmetro (usado quando muda um critério por espécie).
+const tocarParametro = (parametroId: string) =>
+  prisma.parametro.update({ where: { id: parametroId }, data: { updatedAt: new Date() }, select: { id: true } });
+
 export const parametrosRepository = {
   listar: (userId: string, ativo?: boolean) =>
     prisma.parametro.findMany({
@@ -64,18 +68,31 @@ export const parametrosRepository = {
     prisma.avaliacaoParametro.count({ where: { parametroId } }),
 
   // PUT semântico: cria o critério de espécie se não existir, atualiza se já existir.
-  upsertCriterioEspecie: (parametroId: string, especieId: string, data: CriterioEspecieInput) =>
-    prisma.parametroEspecie.upsert({
-      where: { parametroId_especieId: { parametroId, especieId } },
-      create: { parametroId, especieId, ...data },
-      update: { ...data },
-      include: {
-        especie: { select: { id: true, codigo: true, nomePopular: true } },
-      },
-    }),
+  // Na mesma transação, carimba o updatedAt do parâmetro: o pull incremental
+  // (GET /sync/alteracoes?desde=) filtra por parametro.updatedAt e precisa
+  // trazer o parâmetro com os critérios atuais.
+  upsertCriterioEspecie: async (parametroId: string, especieId: string, data: CriterioEspecieInput) => {
+    const [criterio] = await prisma.$transaction([
+      prisma.parametroEspecie.upsert({
+        where: { parametroId_especieId: { parametroId, especieId } },
+        create: { parametroId, especieId, ...data },
+        update: { ...data },
+        include: {
+          especie: { select: { id: true, codigo: true, nomePopular: true } },
+        },
+      }),
+      tocarParametro(parametroId),
+    ]);
+    return criterio;
+  },
 
-  excluirCriterioEspecie: (parametroId: string, especieId: string) =>
-    prisma.parametroEspecie.delete({
-      where: { parametroId_especieId: { parametroId, especieId } },
-    }),
+  // Mesma regra do upsert: a exclusão também precisa chegar ao pull incremental.
+  excluirCriterioEspecie: async (parametroId: string, especieId: string) => {
+    await prisma.$transaction([
+      prisma.parametroEspecie.delete({
+        where: { parametroId_especieId: { parametroId, especieId } },
+      }),
+      tocarParametro(parametroId),
+    ]);
+  },
 };

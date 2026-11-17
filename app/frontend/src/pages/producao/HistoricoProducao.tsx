@@ -4,9 +4,11 @@ import { Link, useSearchParams } from "react-router";
 import { LinkBotao } from "../../components/ui/Botao";
 import { Selecao } from "../../components/ui/Campo";
 import { CabecalhoPagina, Cartao, Selo } from "../../components/ui/Cartao";
-import { Carregando, ErroCarregamento, EstadoVazio, MensagemErro } from "../../components/ui/Estados";
+import { Carregando, ErroCarregamento, EstadoVazio, MensagemErro, NotaSemConexao } from "../../components/ui/Estados";
 import { chaves, useColonias, useProducoes, useResumoProducao } from "../../hooks/useDados";
-import { producoesApi } from "../../services/api/endpoints";
+import { SeloEnvio } from "../../components/features/SeloEnvio";
+import { escritas } from "../../services/offline/escrita";
+import { ehErroDeConexao } from "../../services/offline/leituraLocal";
 import type { FiltrosProducao, GrupoProducao, Producao, TipoProduto } from "../../types/api";
 import { formatarData } from "../../utils/format";
 import { inicioDoPeriodo, ROTULO_PERIODO, type Periodo } from "../../utils/periodo";
@@ -108,7 +110,7 @@ export function CartaoTotal({ grupo }: { grupo: GrupoProducao }) {
 export function HistoricoProducao() {
   const { filtros, params } = useFiltrosProducao();
   const { data: producoes, isLoading, error, refetch } = useProducoes(filtros);
-  const { data: resumo } = useResumoProducao(filtros);
+  const { data: resumo, error: erroResumo } = useResumoProducao(filtros);
   const filtrando = params.size > 0;
 
   const acoes = (
@@ -140,6 +142,9 @@ export function HistoricoProducao() {
         />
       ) : (
         <div className="space-y-4">
+          {!resumo && ehErroDeConexao(erroResumo) && (
+            <NotaSemConexao>Os totais por produto são calculados no servidor e precisam de conexão.</NotaSemConexao>
+          )}
           {resumo && resumo.grupos.length > 0 && (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {resumo.grupos.map((g) => (
@@ -164,7 +169,7 @@ export function HistoricoProducao() {
 function ItemColheita({ producao: p }: { producao: Producao }) {
   const queryClient = useQueryClient();
   const excluir = useMutation({
-    mutationFn: () => producoesApi.excluir(p.id),
+    mutationFn: () => escritas.excluirProducao(p),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: chaves.producoes });
       queryClient.invalidateQueries({ queryKey: chaves.colonias });
@@ -178,6 +183,7 @@ function ItemColheita({ producao: p }: { producao: Producao }) {
         <div className="flex flex-wrap items-center gap-2">
           <Selo className={COR_PRODUTO[p.tipoProduto]}>{ROTULO_PRODUTO[p.tipoProduto]}</Selo>
           <span className="font-semibold text-foreground">{formatarQuantidade(p.quantidade, p.unidade)}</span>
+          <SeloEnvio id={p.id} />
           <span className="text-sm text-muted-foreground">{formatarData(p.dataColheita)}</span>
         </div>
         <p className="text-sm text-muted-foreground">

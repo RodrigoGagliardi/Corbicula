@@ -6,12 +6,14 @@ import { CabecalhoPagina, Cartao } from "../components/ui/Cartao";
 import { Carregando, ErroCarregamento, EstadoVazio } from "../components/ui/Estados";
 import { useColonias } from "../hooks/useDados";
 import { useAuth } from "../store/auth";
+import { usePreferencias } from "../store/preferencias";
 import type { StatusAvaliacao } from "../types/api";
 import { precisaAtencao } from "../utils/colonias";
 import { COR_STATUS, ROTULO_STATUS, STATUS_AVALIACAO as ORDEM_STATUS } from "../utils/score";
 
 export function Dashboard() {
   const usuario = useAuth((s) => s.usuario);
+  const diasInspecaoAtrasada = usePreferencias((s) => s.diasInspecaoAtrasada);
   const { data: colonias, isLoading, error, refetch } = useColonias();
 
   const cabecalho = (
@@ -55,7 +57,10 @@ export function Dashboard() {
   const mediaScore = avaliadas.length
     ? Math.round(avaliadas.reduce((acc, c) => acc + c.ultimaAvaliacao!.scoreGeral, 0) / avaliadas.length)
     : null;
-  const atencao = ativas.map((c) => ({ colonia: c, alerta: precisaAtencao(c) })).filter((x) => x.alerta);
+  const agora = new Date();
+  const atencao = ativas
+    .map((c) => ({ colonia: c, alerta: precisaAtencao(c, agora, diasInspecaoAtrasada) }))
+    .filter((x) => x.alerta);
 
   const porEspecie = new Map<string, number>();
   for (const c of ativas) {
@@ -138,6 +143,12 @@ export function Dashboard() {
               ))}
             </ul>
           )}
+          <Link
+            to="/app/alertas"
+            className="mt-3 inline-block text-sm font-medium text-foreground underline decoration-accent decoration-2 underline-offset-4 hover:decoration-foreground"
+          >
+            Ver todos os alertas
+          </Link>
         </Cartao>
 
         <Cartao className="md:col-span-2">

@@ -84,7 +84,7 @@ export default defineConfig({
 > em `prisma.config.ts` (via `datasource.url`). O bloco `datasource` no schema
 > só declara o `provider`.
 
-**Conteúdo atual de `app/backend/prisma/schema.prisma` (11 tabelas):**
+**Conteúdo atual de `app/backend/prisma/schema.prisma` (14 tabelas):**
 
 ```prisma
 generator client {
@@ -108,6 +108,8 @@ model User {
   colonias    Colonia[]
   parametros  Parametro[]
   syncQueue   SyncQueue[]
+  alertasResolvidos AlertaResolvido[]
+  protocolos  Protocolo[]
 
   @@map("users")
 }
@@ -121,7 +123,7 @@ model Meliponario {
   latitude  Float?
   longitude Float?
   bioma     String?
-  areaTotal Float?
+  areaTotal Float?    // m²
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -143,6 +145,13 @@ model Colonia {
   longitude      Float?
   observacoes    String?  @db.Text
   status         String   @default("ativa") // ativa, inativa, morta
+  // Estado atual do status (cópia da última entrada de ColoniaStatusHistorico,
+  // vai no pull do /sync). Nulos em registros anteriores a 06/11/2026.
+  statusDesde         DateTime? // data em que o usuário percebeu a mudança (padrão: o dia da mudança)
+  motivoStatus        String?   // código de shared/vocabularios.ts (MOTIVOS_STATUS)
+  motivoStatusDetalhe String?   @db.Text
+  // Intervalo sugerido entre inspeções (dias). null = usa a preferência geral do usuário.
+  frequenciaInspecaoDias Int?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -155,6 +164,7 @@ model Colonia {
   avaliacoes Avaliacao[]
   fotos      Foto[]
   producoes  Producao[]
+  historicoStatus ColoniaStatusHistorico[]
 
   coloniaMaeId   String?   @db.Uuid
   coloniaMae     Colonia?  @relation("Genealogia", fields: [coloniaMaeId], references: [id], onDelete: SetNull)
@@ -170,6 +180,27 @@ model Colonia {
   @@index([status])
   @@index([especieId])
   @@map("colonias")
+}
+
+// Uma entrada por mudança efetiva de status, gravada pelo colonias.service na
+// mesma transação do update. Corrigir motivo/data sem mudar o status corrige a
+// última entrada (não cria outra); sem entrada, a correção cria a primeira, com
+// statusAnterior nulo. Criar a colônia não gera entrada.
+model ColoniaStatusHistorico {
+  id             String   @id @default(uuid()) @db.Uuid
+  statusAnterior String?  // ativa, inativa, morta; null = primeira entrada criada por uma correção
+  statusNovo     String
+  dataPercebida  DateTime // "data em que percebi"
+  motivo         String?  // código de shared/vocabularios.ts (MOTIVOS_STATUS)
+  motivoDetalhe  String?  @db.Text
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt // difere de createdAt quando a entrada foi corrigida
+
+  coloniaId String  @db.Uuid
+  colonia   Colonia @relation(fields: [coloniaId], references: [id], onDelete: Cascade)
+
+  @@index([coloniaId])
+  @@map("colonias_status_historico")
 }
 
 model Parametro {
@@ -226,6 +257,11 @@ model Avaliacao {
   condicaoClimatica String?  // ensolarado, nublado, chuvoso
   observacoesGerais String?  @db.Text
   acoesTomadas      String?  @db.Text // JSON array
+  // Contexto (06/11/2026; nulos em registros anteriores)
+  motivoInspecao        String?  // rotina, problema_observado, retorno_acao, outro
+  motivoInspecaoDetalhe String?  @db.Text
+  motivosAcoes          Json?    // { "<ação de acoesTomadas>": "preventiva" | "resposta_problema" }
+  climaFonte            String?  // api_previsao, api_historico, digitado (null = sem clima / não registrado)
   scoreGeral        Int      // 0-100
   statusGeral       String   // excelente, boa, atencao, critica
   createdAt         DateTime @default(now())
@@ -237,9 +273,34 @@ model Avaliacao {
   parametros AvaliacaoParametro[]
   fotos      Foto[]
 
+  // Protocolo vigente (parâmetros + critérios aplicados). Nulo em avaliações antigas.
+  protocoloId String?    @db.Uuid
+  protocolo   Protocolo? @relation(fields: [protocoloId], references: [id], onDelete: SetNull)
+
   @@index([coloniaId])
   @@index([dataAvaliacao])
+  @@index([protocoloId])
   @@map("avaliacoes")
+}
+
+// Conteúdo canônico (imutável) dos parâmetros avaliados e dos critérios
+// aplicados, já com o override por espécie. Mesmo conteúdo → mesmo hash →
+// mesmo protocolo (único por usuário). O hash (SHA-256) não inclui ids.
+model Protocolo {
+  id             String   @id @default(uuid()) @db.Uuid
+  hash           String
+  conteudo       Json     // { versao: 1, itens: [{ nome, criterioBom, criterioMedio, criterioRuim, especieCodigo }] }
+  templateCodigo String?  // iniciante, intermediario, avancado, cientifico (quando coincide)
+  templateVersao Int?
+  createdAt      DateTime @default(now())
+
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  avaliacoes Avaliacao[]
+
+  @@unique([userId, hash])
+  @@map("protocolos")
 }
 
 model AvaliacaoParametro {
@@ -360,6 +421,22 @@ model SyncQueue {
 
   @@index([userId, sincronizado])
   @@map("sync_queue")
+}
+
+// Os alertas são calculados a partir das avaliações (GET /alertas); aqui fica só
+// o que o usuário marcou como resolvido. A chave identifica a ocorrência (ex.:
+// "score_baixo:<avaliacaoId>"), então um problema que reaparece numa nova
+// inspeção gera um alerta novo.
+model AlertaResolvido {
+  id          String   @id @default(uuid()) @db.Uuid
+  chave       String
+  resolvidoEm DateTime @default(now())
+
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, chave])
+  @@map("alertas_resolvidos")
 }
 ```
 

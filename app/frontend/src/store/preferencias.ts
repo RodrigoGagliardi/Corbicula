@@ -1,13 +1,17 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { DIAS_INSPECAO_ATRASADA } from "../utils/colonias";
 
 export type Tema = "claro" | "escuro" | "sistema";
 
 interface EstadoPreferencias {
   tema: Tema;
   sidebarRecolhida: boolean;
+  // A partir de quantos dias sem inspeção uma colônia ativa aparece no dashboard.
+  diasInspecaoAtrasada: number;
   definirTema: (tema: Tema) => void;
   alternarSidebar: () => void;
+  definirDiasInspecaoAtrasada: (dias: number) => void;
 }
 
 // Preferências de interface deste navegador (não vão para o servidor).
@@ -16,8 +20,10 @@ export const usePreferencias = create<EstadoPreferencias>()(
     (set) => ({
       tema: "sistema",
       sidebarRecolhida: false,
+      diasInspecaoAtrasada: DIAS_INSPECAO_ATRASADA,
       definirTema: (tema) => set({ tema }),
       alternarSidebar: () => set((s) => ({ sidebarRecolhida: !s.sidebarRecolhida })),
+      definirDiasInspecaoAtrasada: (dias) => set({ diasInspecaoAtrasada: dias }),
     }),
     { name: "corbicula-preferencias" }
   )

@@ -1,11 +1,15 @@
 import type { FastifyPluginAsync } from "fastify/types/plugin";
 import { authenticate } from "../../shared/middleware/authenticate";
+import { aplicarConjunto, aplicarTemplate, exportarParametros } from "./parametros.conjuntos";
 import { parametrosService } from "./parametros.service";
+import { TEMPLATES } from "./parametros.templates";
 import {
   criarParametroSchema,
   atualizarParametroSchema,
+  aplicarTemplateSchema,
   criterioEspecieSchema,
   filtrosParametroSchema,
+  importarParametrosSchema,
 } from "./parametros.types";
 
 export const parametrosRoutes: FastifyPluginAsync = async (app) => {
@@ -73,6 +77,57 @@ export const parametrosRoutes: FastifyPluginAsync = async (app) => {
     const { id } = request.params as { id: string };
     await parametrosService.excluir(id, request.userId);
     return reply.status(204).send();
+  });
+
+  // ── Templates, exportação e importação ──────────────────────────────────────
+
+  app.get("/templates", {
+    schema: {
+      tags: ["parametros"],
+      summary: "Lista os templates de parâmetros (Iniciante, Intermediário, Avançado, Científico)",
+      description: "Conjuntos cumulativos e versionados (5, 8, 12 e 15 parâmetros). Critérios de referência gerais.",
+    },
+  }, async () => TEMPLATES);
+
+  app.post("/templates/:id/aplicar", {
+    schema: {
+      tags: ["parametros"],
+      summary: "Aplica um template aos parâmetros do usuário",
+      description:
+        'Body: { "modo": "mesclar" | "substituir" }. Transação única. Parâmetros que já existem (mesmo nome) ' +
+        "são mantidos com os critérios do usuário e reativados se estavam desativados. " +
+        '"substituir" desativa (não exclui) os parâmetros fora do template. Retorna o resumo do que mudou.',
+    },
+  }, async (request) => {
+    const { id } = request.params as { id: string };
+    const { modo } = aplicarTemplateSchema.parse(request.body);
+    return aplicarTemplate(request.userId, id, modo);
+  });
+
+  app.get("/exportar", {
+    schema: {
+      tags: ["parametros"],
+      summary: "Exporta os parâmetros do usuário (JSON versionado, reimportável)",
+    },
+  }, async (request, reply) => {
+    const arquivo = await exportarParametros(request.userId);
+    const data = arquivo.exportadoEm.slice(0, 10);
+    return reply
+      .header("Content-Disposition", `attachment; filename="corbicula-parametros-${data}.json"`)
+      .send(arquivo);
+  });
+
+  app.post("/importar", {
+    schema: {
+      tags: ["parametros"],
+      summary: "Importa parâmetros de um arquivo gerado por GET /parametros/exportar",
+      description:
+        'Body: { "modo": "mesclar" | "substituir", "dados": <arquivo> }. Mesmas regras de aplicar template. ' +
+        "Critérios por espécie são criados só para parâmetros novos; códigos de espécie desconhecidos são ignorados e listados.",
+    },
+  }, async (request) => {
+    const { modo, dados } = importarParametrosSchema.parse(request.body);
+    return aplicarConjunto(request.userId, dados.parametros, modo);
   });
 
   // ── Critérios por espécie ───────────────────────────────────────────────────

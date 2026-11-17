@@ -3,13 +3,18 @@ import { ArrowLeft, ClipboardCheck, Droplets, GitBranchPlus, Pencil, Plus, Trash
 import type { ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { GraficoScore } from "../../components/charts/GraficoScore";
+import { AvisoPendencia } from "../../components/features/AvisoPendencia";
 import { GaleriaFotos } from "../../components/features/GaleriaFotos";
+import { SeloEnvio } from "../../components/features/SeloEnvio";
 import { BarraScore, SeloScore } from "../../components/features/SeloScore";
 import { Botao, LinkBotao } from "../../components/ui/Botao";
 import { CabecalhoPagina, Cartao, Selo } from "../../components/ui/Cartao";
-import { Carregando, ErroCarregamento, MensagemErro } from "../../components/ui/Estados";
+import { Carregando, ErroCarregamento, MensagemErro, NotaSemConexao } from "../../components/ui/Estados";
 import { chaves, useAvaliacoes, useColonia, useResumoProducao } from "../../hooks/useDados";
-import { coloniasApi } from "../../services/api/endpoints";
+import { escritas } from "../../services/offline/escrita";
+import { ehErroDeConexao } from "../../services/offline/leituraLocal";
+import { usePreferencias } from "../../store/preferencias";
+import { proximaInspecao } from "../../utils/calendario";
 import {
   formatarData,
   formatarDataHora,
@@ -20,6 +25,8 @@ import {
   tempoRelativo,
 } from "../../utils/format";
 import { COR_PRODUTO, formatarQuantidade, ROTULO_PRODUTO } from "../../utils/producao";
+import { rotuloMotivoStatus } from "../../utils/vocabularios";
+import type { EntradaHistoricoStatus } from "../../types/api";
 
 export function DetalheColonia() {
   const { id = "" } = useParams();
@@ -27,9 +34,10 @@ export function DetalheColonia() {
   const queryClient = useQueryClient();
   const { data: colonia, isLoading, error, refetch } = useColonia(id);
   const { data: avaliacoes } = useAvaliacoes(id);
+  const frequenciaGeral = usePreferencias((s) => s.diasInspecaoAtrasada);
 
   const excluir = useMutation({
-    mutationFn: () => coloniasApi.excluir(id),
+    mutationFn: () => escritas.excluirColonia(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: chaves.colonias });
       navegar("/app/colonias", { replace: true });
@@ -39,10 +47,18 @@ export function DetalheColonia() {
   if (isLoading) return <Carregando />;
   if (error || !colonia) return <ErroCarregamento erro={error} tentarDeNovo={() => refetch()} />;
 
+  const proxima = proximaInspecao(colonia, frequenciaGeral);
   const dim = colonia.dimensoesCaixa;
   const dimensoes = dim && [dim.altura, dim.largura, dim.profundidade].some(Boolean)
     ? [dim.altura, dim.largura, dim.profundidade].map((v) => v ?? "?").join(" × ") + " cm"
     : null;
+  // "desde <data> · <motivo>" do status atual (vazio em registros antigos).
+  const desdeMotivo = [
+    colonia.statusDesde ? `desde ${formatarData(colonia.statusDesde)}` : null,
+    rotuloMotivoStatus(colonia.motivoStatus, colonia.motivoStatusDetalhe),
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <>
@@ -52,7 +68,12 @@ export function DetalheColonia() {
             <ArrowLeft className="size-4" aria-hidden /> Colônias
           </Link>
         }
-        titulo={<span className="font-mono">{colonia.codigo}</span>}
+        titulo={
+          <span className="inline-flex flex-wrap items-center gap-2">
+            <span className="font-mono">{colonia.codigo}</span>
+            <SeloEnvio id={colonia.id} />
+          </span>
+        }
         subtitulo={
           colonia.especie ? (
             <>
@@ -75,6 +96,7 @@ export function DetalheColonia() {
           </>
         }
       />
+      <AvisoPendencia entidadeId={colonia.id} />
 
       <div className="grid gap-4 md:grid-cols-3">
         <Cartao className="md:col-span-2">
@@ -101,9 +123,20 @@ export function DetalheColonia() {
           <dl className="space-y-2 text-sm">
             <Info rotulo="Status">
               <Selo className="bg-muted text-foreground">{ROTULO_STATUS_COLONIA[colonia.status]}</Selo>
+              {desdeMotivo && <span className="mt-0.5 block text-xs text-muted-foreground">{desdeMotivo}</span>}
             </Info>
             <Info rotulo="Entrada">{formatarData(colonia.dataEntrada)}</Info>
             <Info rotulo="Origem">{ROTULO_ORIGEM[colonia.origem]}</Info>
+            {proxima && (
+              <Info rotulo="Inspeção">
+                a cada {proxima.frequencia} dias{proxima.frequenciaDaColonia ? "" : " (preferência geral)"} ·{" "}
+                {proxima.atrasadaDesde ? (
+                  <span className="font-medium text-critica">atrasada há {proxima.diasAtraso} dia(s)</span>
+                ) : (
+                  <>próxima em {formatarData(proxima.dia + "T12:00:00")}</>
+                )}
+              </Info>
+            )}
             <Info rotulo="Caixa">
               {ROTULO_CAIXA[colonia.tipoCaixa]}
               {dimensoes && <span className="text-muted-foreground"> · {dimensoes}</span>}
@@ -112,10 +145,21 @@ export function DetalheColonia() {
             {colonia.latitude !== null && colonia.longitude !== null && (
               <Info rotulo="Coordenadas">
                 {colonia.latitude.toFixed(5)}, {colonia.longitude.toFixed(5)}
+                {" · "}
+                <Link
+                  to={`/app/colonias/mapa?status=todas&colonia=${colonia.id}`}
+                  className="font-medium text-foreground underline decoration-accent decoration-2 underline-offset-4 hover:decoration-foreground"
+                >
+                  Ver no mapa
+                </Link>
               </Info>
             )}
           </dl>
           {colonia.observacoes && <p className="mt-3 border-t border-border pt-3 text-sm whitespace-pre-line text-muted-foreground">{colonia.observacoes}</p>}
+          {/* Só vem da API: a cópia offline não guarda o histórico. */}
+          {colonia.historicoStatus && colonia.historicoStatus.length > 0 && (
+            <HistoricoStatus entradas={colonia.historicoStatus} />
+          )}
         </Cartao>
 
         <Cartao>
@@ -188,6 +232,7 @@ export function DetalheColonia() {
                         {a.condicaoClimatica && ` · ${ROTULO_CLIMA[a.condicaoClimatica]}`}
                         {a.temperatura !== null && ` · ${a.temperatura} °C`}
                       </p>
+                      <SeloEnvio id={a.id} className="mt-1" />
                     </div>
                     <SeloScore score={a.scoreGeral} status={a.statusGeral} />
                   </Link>
@@ -237,10 +282,46 @@ function Info({ rotulo, children }: { rotulo: string; children: ReactNode }) {
   );
 }
 
+// Mudanças de status, da mais recente para a mais antiga (pela data percebida). A data é a que o
+// usuário informou ("percebi em"); uma entrada corrigida depois é sinalizada.
+function HistoricoStatus({ entradas }: { entradas: EntradaHistoricoStatus[] }) {
+  return (
+    <div className="mt-3 border-t border-border pt-3">
+      <h3 className="mb-2 text-sm font-medium text-foreground">Histórico de status</h3>
+      <ol className="space-y-2 text-sm">
+        {[...entradas]
+          // Pela data percebida (pode ser retroativa ou corrigida); empate: a registrada por último.
+          .sort((a, b) => b.dataPercebida.localeCompare(a.dataPercebida) || b.createdAt.localeCompare(a.createdAt))
+          .map((h) => {
+          const motivo = rotuloMotivoStatus(h.motivo, h.motivoDetalhe);
+          return (
+            <li key={h.id}>
+              <p className="text-foreground">
+                {h.statusAnterior ? `${ROTULO_STATUS_COLONIA[h.statusAnterior]} → ` : ""}
+                {ROTULO_STATUS_COLONIA[h.statusNovo]}
+                <span className="text-muted-foreground"> · {formatarData(h.dataPercebida)}</span>
+              </p>
+              {(motivo || h.updatedAt !== h.createdAt) && (
+                <p className="text-xs text-muted-foreground">
+                  {motivo}
+                  {motivo && h.updatedAt !== h.createdAt && " · "}
+                  {h.updatedAt !== h.createdAt && `corrigido em ${formatarData(h.updatedAt)}`}
+                </p>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  );
+}
+
 // Totais de produção da colônia (um por produto + unidade; ml e g não se somam).
 function CartaoProducao({ coloniaId, ativa }: { coloniaId: string; ativa: boolean }) {
-  const { data: resumo } = useResumoProducao({ coloniaId });
+  const { data: resumo, error } = useResumoProducao({ coloniaId });
   const grupos = resumo?.grupos ?? [];
+  // Os totais são calculados no servidor: sem conexão, avisa em vez de dizer "nenhuma colheita".
+  const semConexao = !resumo && ehErroDeConexao(error);
   return (
     <Cartao>
       <div className="mb-3 flex items-center justify-between">
@@ -254,7 +335,9 @@ function CartaoProducao({ coloniaId, ativa }: { coloniaId: string; ativa: boolea
           </Link>
         )}
       </div>
-      {grupos.length === 0 ? (
+      {semConexao ? (
+        <NotaSemConexao>Os totais de produção precisam de conexão.</NotaSemConexao>
+      ) : grupos.length === 0 ? (
         <p className="flex items-center gap-2 text-sm text-muted-foreground">
           <Droplets className="size-4" aria-hidden /> Nenhuma colheita registrada.
         </p>
@@ -271,7 +354,7 @@ function CartaoProducao({ coloniaId, ativa }: { coloniaId: string; ativa: boolea
           ))}
         </ul>
       )}
-      {grupos.length > 0 && (
+      {(grupos.length > 0 || semConexao) && (
         <Link to={`/app/producao?colonia=${coloniaId}`} className="mt-3 inline-block text-sm text-muted-foreground hover:text-foreground hover:underline">
           Ver colheitas
         </Link>

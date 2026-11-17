@@ -19,6 +19,7 @@ export const swaggerOptions: FastifyDynamicSwaggerOptions = {
       { name: "fotos", description: "Fotos (sempre opcionais)" },
       { name: "exportacao", description: "Exportação de dados (CSV/JSON) e backup" },
       { name: "sync", description: "Sincronização offline" },
+      { name: "alertas", description: "Central de alertas (calculados a partir das inspeções)" },
     ],
   },
 };

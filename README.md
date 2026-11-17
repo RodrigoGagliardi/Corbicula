@@ -4,38 +4,42 @@
 
 O Projeto Corbicula tem como principal objetivo a coleta e análise de dados de colônias de abelhas do Rio Grande do Sul, podendo ser utilizado tanto para fins científicos da academia quanto para gerenciamento de meliponários de pequeno e médio porte.
 
-Voltado a abelhas sem ferrão (Meliponini), o sistema permite avaliações personalizáveis de saúde das colônias, controle genético de linhagens (relação mãe/filha em divisões), registro de produção e exportação de dados limpos para análise em R, Python ou planilhas. Enriquece cada inspeção com dados climáticos automáticos a partir das coordenadas da colônia e foi projetado para funcionar offline (PWA com sincronização).
+Voltado a abelhas sem ferrão (Meliponini), o sistema permite avaliações personalizáveis de saúde das colônias, rastreamento da linhagem materna das colônias (relação mãe/filha em divisões), registro de produção e exportação de dados limpos para análise em R, Python ou planilhas. Enriquece cada inspeção com dados climáticos automáticos a partir das coordenadas da colônia e foi projetado para funcionar offline (PWA com sincronização).
 
 ## Estado do projeto
 
 | Parte | Estado |
 |-------|--------|
 | **Backend** (Node.js + Fastify + Prisma) | ✅ MVP completo, com testes automatizados e CI |
-| **Frontend** (React + Vite + PWA) | 🚧 Primeiras telas do MVP prontas; modo offline ainda não implementado |
+| **Frontend** (React + Vite + PWA) | ✅ Telas do MVP prontas (colônias com mapa, avaliações, parâmetros, produção, calendário, alertas, configurações) e modo offline, com testes automatizados |
 | **Analytics** (Python + FastAPI) | 📋 Planejado (Fase 2): análises, correlações, genealogia |
 
 O que o backend já faz:
 
-- **Colônias** — cadastro com código automático no padrão Kew (`TETRANGU-001`), genealogia mãe/filha e catálogo fixo das 19 espécies de meliponíneos do RS
-- **Avaliações** — parâmetros de saúde personalizáveis (Bom/Médio/Ruim), score automático de 0 a 100 e edição permitida por 7 dias
+- **Conta** — cadastro, login (JWT), perfil, meliponário, troca de senha e exclusão da conta com todos os dados e fotos (LGPD)
+- **Colônias** — cadastro com código automático no padrão Kew (`TETRANGU-001`) e catálogo fixo das 19 espécies de meliponíneos do RS
+- **Genealogia** — divisões registram a colônia-mãe e, opcionalmente, a colônia doadora de campeiras. O servidor garante a consistência: a espécie não muda depois de definida, mãe, filha e doadora são da mesma espécie, a filha não entra no meliponário antes da mãe e a árvore não tem ciclos
+- **Avaliações** — parâmetros de saúde personalizáveis (Bom/Médio/Ruim), score automático de 0 a 100, edição permitida por 7 dias e histórico geral com filtros por colônia, status, período e parâmetro + classificação
 - **Clima automático** — temperatura, umidade e condição do tempo buscados na [Open-Meteo](https://open-meteo.com/), sem digitação manual
 - **Fotos** — sempre opcionais; por colônia, inspeção, parâmetro ou colheita
 - **Produção** — registro de colheitas (mel, pólen, própolis, cera) com resumo e ranking por colônia e espécie
 - **Exportação** — CSV e JSON com dicionário de dados e metodologia documentados, além de backup completo
-- **Sincronização offline** — API de sync idempotente, com detecção de conflitos, pronta para o PWA
+- **Sincronização offline** — API de sync idempotente, com detecção de conflitos, usada pelo PWA
 
 O que o frontend já tem:
 
-- **Acesso** — login e cadastro
-- **Dashboard** — visão geral das colônias e do score
-- **Colônias** — lista, detalhes, cadastro e edição
-- **Avaliação rápida** — fluxo mobile-first de Bom/Médio/Ruim, com foto-resumo opcional
-- **Histórico de avaliações** — linha do tempo por mês com filtros (período, status, colônia, parâmetro), evolução do score, exportação CSV/JSON e edição nos primeiros 7 dias
+- **Páginas públicas** — landing page, login, cadastro e "Sobre" (com a atribuição da Open-Meteo)
+- **Dashboard** — visão geral das colônias e do score, com as colônias que pedem atenção
+- **Colônias** — lista, detalhes (com totais de produção), cadastro e edição, incluindo mãe e doadora de campeiras em divisões
+- **Avaliação rápida** — fluxo mobile-first de Bom/Médio/Ruim, com foto-resumo opcional comprimida no próprio aparelho
+- **Histórico de avaliações** — linha do tempo por mês com filtros (período, status, colônia, parâmetro), evolução do score, exportação CSV/JSON, detalhe de cada inspeção e edição nos primeiros 7 dias
 - **Produção** — histórico de colheitas, registro com foto opcional e relatório com ranking e exportação
 - **Parâmetros** — lista, criação e edição dos critérios de avaliação
-- **Layout responsivo** — sidebar no desktop e barra de navegação inferior no mobile, com a mesma base de código; instalável como PWA
+- **Configurações** — perfil (dados, senha e exclusão da conta), meliponário (com coordenadas pela localização do aparelho), preferências (tema e frequência de inspeção usada nos avisos do dashboard) e exportação de todos os dados em CSV/JSON, além do backup completo
+- **Layout responsivo** — sidebar no desktop e barra de navegação inferior no mobile, com a mesma base de código; tema claro, escuro ou do sistema; instalável como PWA
+- **Modo offline** — sem conexão, o app abre com a cópia local e permite criar, editar e excluir colônias, avaliações e colheitas, inclusive com foto. Antes de salvar, ele já avisa o que o servidor recusaria. Ao reconectar, tudo sobe sozinho, sem duplicar nada; no Chrome/Android, também com o app fechado (Background Sync). Edições do mesmo registro em outro aparelho se juntam quando tocam campos diferentes; no mesmo campo, você escolhe a versão na tela de Sincronização, que também mostra a fila, as fotos aguardando e o armazenamento. Alertas, relatórios de produção, templates e exportação exigem conexão. Roteiro para reproduzir: [`docs/demonstracao-offline.md`](docs/demonstracao-offline.md)
 
-A fila de sincronização offline no cliente (IndexedDB + `/sync`), as configurações (perfil, meliponário, exportação completa) e as análises ainda estão por vir.
+As telas que ainda não existem já têm rota e mostram uma página "em construção" que descreve o que está previsto. Ainda faltam: importação de backup, fotos em zip e as análises da Fase 2. A recuperação de senha por e-mail também não existe ainda. A situação de cada tela está em [`docs/telas.md`](docs/telas.md).
 
 ## Começando
 
@@ -53,7 +57,7 @@ Git
 Opcionalmente, para rodar comandos fora dos containers:
 
 ```
-Node.js 20+
+Node.js 20.19+ (exigido pelo Vite 8)
 make (atalhos do makefile)
 ```
 
@@ -116,13 +120,14 @@ make down      # derruba os containers
 make logs      # acompanha os logs
 make seed      # roda o seed
 make test      # roda os testes do backend
+make migrate name=nome_da_migration   # cria uma migration a partir do schema
 make studio    # abre o Prisma Studio
 make reset     # apaga os volumes e recria tudo (CUIDADO: apaga o banco)
 ```
 
 ## Executando os testes
 
-O backend tem uma suíte de testes em [Vitest](https://vitest.dev/): testes unitários (cálculo de score, geração de CSV, integração com o clima) e testes de integração que exercitam a API completa (autenticação, colônias, avaliações, fotos, produção, exportação e sincronização).
+O backend tem uma suíte de 221 testes em [Vitest](https://vitest.dev/): testes unitários (cálculo de score, geração de CSV, integração com o clima) e testes de integração que exercitam a API completa (autenticação, conta e meliponário, colônias e genealogia, avaliações e histórico, alertas, parâmetros e templates, fotos, produção, exportação e sincronização).
 
 ```
 docker compose exec backend npm test
@@ -138,12 +143,15 @@ docker compose exec backend npm run typecheck
 
 Os dois rodam automaticamente no GitHub Actions a cada push e pull request que altere o backend.
 
-No frontend, o typecheck e o build de produção rodam assim:
+No frontend, o typecheck, os testes e o build de produção rodam assim:
 
 ```
 docker compose exec frontend npm run typecheck
+docker compose exec frontend npx vitest run
 docker compose exec frontend npm run build
 ```
+
+São 361 testes em Vitest (`jsdom` + Testing Library, IndexedDB em memória com `fake-indexeddb`), ao lado do código: regras puras, telas e o ciclo completo de sincronização offline com a API simulada. O frontend ainda não tem CI.
 
 ## Dados e metodologia
 
@@ -159,7 +167,7 @@ O Corbicula nasceu com propósito acadêmico, e por isso a exportação de dados
 | Documento | Conteúdo |
 |-----------|----------|
 | [`docs/escopo.md`](docs/escopo.md) | Escopo completo: personas, módulos e roadmap |
-| [`docs/telas.md`](docs/telas.md) | As 35 telas planejadas, com rotas |
+| [`docs/telas.md`](docs/telas.md) | As 35 telas planejadas, com rotas e situação de implementação |
 | [`docs/estrutura-pastas.md`](docs/estrutura-pastas.md) | Estrutura de pastas do projeto |
 | [`docs/prisma-setup.md`](docs/prisma-setup.md) | Schema do banco, seed e comandos do Prisma |
 | [`docs/especies.md`](docs/especies.md) | As 19 espécies do catálogo |

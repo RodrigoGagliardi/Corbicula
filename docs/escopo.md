@@ -32,9 +32,11 @@ O Projeto Corbicula é uma aplicação web gratuita e open-source (licença Apac
 1. **Gestão completa de meliponários** (cadastro e monitoramento de colônias)
 2. **Avaliações personalizáveis** (cada usuário define seus próprios critérios)
 3. **Funcionamento offline** (PWA com sincronização automática)
-4. **Análises científicas avançadas** (estatísticas, correlações, predições)
-5. **Controle genealógico** (rastreamento de linhagens e divisões)
-6. **Análise comportamental** (padrões de atividade, produtividade)
+4. **Análises científicas** (estatísticas, correlações e, mais tarde, predições), sempre com o tamanho da amostra e a metodologia visíveis
+5. **Controle genealógico** (linhagem materna das colônias: mãe → filhas em divisões; não é genética, porque o pai é desconhecido)
+6. **Padrões de manejo e sazonalidade** (quando as inspeções acontecem, variação do score nas estações, produtividade)
+
+> **Limites do dado (06/11/2026).** Algumas promessas originais dependem de campos que o app ainda não coleta: atividade das abelhas por horário (o horário registrado é o da inspeção), velocidade de postura e idade da rainha (não há contagem de discos de cria nem eventos de rainha), diversidade genética (exige genotipagem). Elas ficam como "possível se você registrar X". O porquê de cada limite está no segundo eixo de [`efetividade.md`](efetividade.md).
 
 ---
 
@@ -89,6 +91,7 @@ O Projeto Corbicula é uma aplicação web gratuita e open-source (licença Apac
 **Campos opcionais:**
 - Origem (captura, compra, divisão)
 - Colônia-mãe (se veio de divisão)
+- Colônia doadora de campeiras (se veio de divisão)
 - Tipo de caixa (INPA, PNN, Schenck, tronco, outro)
 - Dimensões da caixa
 - Localização no meliponário
@@ -107,6 +110,7 @@ O Projeto Corbicula é uma aplicação web gratuita e open-source (licença Apac
 - Código único por usuário
 - Datas coerentes
 - Campos obrigatórios preenchidos
+- Genealogia (validada no servidor): a espécie não muda depois de definida; mãe e doadora só em colônias de origem divisão; mãe, filha e doadora da mesma espécie; a filha não entra no meliponário antes da mãe e da doadora; a árvore não tem ciclos
 
 #### 1.2 Visualização de Colônias
 **Layouts:**
@@ -285,9 +289,16 @@ Classificação:
 
 ### **MÓDULO 5: Análises Avançadas (Python)**
 
+**Regras de análise (06/11/2026).** Valem para toda análise deste módulo; vêm de uma simulação de meliponário com verdade conhecida (ver [`efetividade.md`](efetividade.md)):
+- Toda relação com clima ou data é ajustada pela estação. Sem isso, o inverno aparece como "efeito do clima" mesmo quando o clima não faz nada.
+- Cada parâmetro é ordinal (Bom > Médio > Ruim, sem distância igual entre eles), e várias inspeções da mesma colônia não são observações independentes: a colônia entra como efeito aleatório.
+- O n e o poder estatístico ficam visíveis. Num meliponário de ~30 colônias, a maioria dos efeitos realistas tem menos de 60% de chance de ser detectada.
+- Nada é apresentado como "efeito" sem grupo de comparação. Antes e depois de uma ação ("alimentei e o score subiu") nunca é eficácia: a maior parte do ganho é regressão à média.
+- Uma análise nova só vai para a tela depois de recuperar um efeito conhecido e de não acusar efeito no mundo nulo, nos dados simulados.
+
 #### 5.1 Análises Estatísticas
 **Correlações:**
-- Entre parâmetros (ex: mel vs cria)
+- Entre parâmetros (ex: mel vs cria), por correlação de postos (Spearman). Parâmetro × score não entra: é circular, porque o score é calculado dos próprios parâmetros
 - Matriz de correlação
 - Teste de significância estatística
 - Interpretação textual
@@ -303,30 +314,30 @@ Classificação:
 - Entre origens (captura vs compra vs divisão)
 - Entre tipos de caixa
 - Entre localizações
+- Com um meliponário só, comparações entre grupos são exploratórias: mostrar o n de colônias de cada grupo
 
 #### 5.2 Controle Genealógico
 **Árvore Genealógica:**
 - Visualização interativa
 - Mostra colônia-mãe e filhas
-- Indica sucesso/fracasso de divisões
-- Calcula taxa de sucesso por matriz
+- Indica sucesso/fracasso de divisões e calcula a taxa de sucesso por matriz. Depende de registrar a data e o motivo da mudança de status da colônia, que ainda não existem
 
 **Análise de Linhagens:**
 - Performance média de descendentes
-- Identificação de melhores matrizes
-- Diversidade genética (baseada em origens)
+- Ordenação de matrizes pela força das filhas, com aviso de incerteza (com poucas filhas, raramente é conclusiva)
+- Diversidade de procedência (origens das colônias). Diversidade genética exige genotipagem e fica fora
 - Sugestão de divisões
 
 #### 5.3 Análise Comportamental
-**Padrões de Atividade:**
-- Horários de pico (se registrado)
-- Dias da semana mais ativos
-- Correlação com clima
-- Variação sazonal
+**Padrões de inspeção e sazonalidade:**
+- Hora e dia da semana das inspeções, rotulados como "quando você abre a caixa". Não medem a atividade das abelhas: as inspeções se concentram em manhãs amenas
+- Variação sazonal do score
+- Clima antes da inspeção × score, sempre ajustado pela estação
+- Atividade real por horário só com contagem de campeiras em horários fixos (campo ainda não existe)
 
-**Velocidade de Postura:**
-- Cálculo baseado em discos de cria
-- Estimativa de idade da rainha
+**Velocidade de Postura (se você registrar):**
+- Exige contagem de discos de cria e eventos de rainha (introdução ou troca, com a data em que foi percebida), campos que ainda não existem
+- Com eles: postura estimada e idade **mínima** conhecida da rainha, sempre como aproximação
 - Predição de declínio produtivo
 
 #### 5.4 Machine Learning (Futuro)
@@ -415,27 +426,37 @@ Classificação:
 
 ### **MÓDULO 9: Funcionalidade Offline (PWA)**
 
+> **Implementado (05–12/11/2026).** Funcionamento técnico em `docs/estrutura-pastas.md` (nota de `services/offline/`), tela 35 em `docs/telas.md` e roteiro de demonstração em `docs/demonstracao-offline.md`.
+
 #### 9.1 Armazenamento Local
 **IndexedDB:**
-- Cópia local de colônias
-- Cópia de avaliações recentes
-- Parâmetros do usuário
-- Fila de sincronização
+- Cópia local de colônias, avaliações (todas, não só as recentes), colheitas e parâmetros, mais o catálogo de espécies
+- Fila de sincronização e fotos aguardando envio
+- Um banco por usuário no mesmo aparelho
 
 **Capacidade:**
-- Mínimo 100MB
-- Otimizado até 500MB
+- Meta original: mínimo 100 MB, otimizado até 500 MB. Não medida: a cota é do navegador, e a tela de Sincronização mostra o espaço usado e a cota estimada. Um meliponário pequeno ou médio cabe com folga.
+
+**Persistência:**
+- Mudanças pendentes só saem do aparelho depois de o servidor confirmar ou de o usuário decidir
+- O app pede armazenamento persistente ao navegador; se for negado, avisa e recomenda instalar o app (nenhum app web consegue forçar a persistência, quem decide é o navegador)
+- Logout com pendências: aviso com as opções sincronizar agora, cancelar ou sair descartando; sair apaga a fila e os dados locais. Token expirado não é logout: a fila sobe no próximo login do mesmo usuário
 
 #### 9.2 Sincronização
-**Estratégias:**
-- Manual (botão "Sincronizar")
-- Automática (quando detecta internet)
-- Background Sync (quando app está fechado)
+**Estratégias (o objetivo é manter os dados sincronizados sem ação do usuário):**
+- Automática: ao detectar internet, ao abrir o app e ao voltar para ele
+- Manual: botão "Sincronizar agora"
+- Background Sync (com o app fechado) como melhoria progressiva, onde o navegador oferece (Chrome/Android); nos demais, o resto funciona igual
+- Exigem conexão (offline, mostram o último resultado ou um aviso): alertas, resumo e relatório de produção, templates, exportação e fotos que já estão no servidor
 
-**Conflitos:**
-- Detecção de edições simultâneas
-- Interface para resolver conflitos
-- Last-write-wins para casos simples
+**Conflitos (o usuário só decide em último caso):**
+- Detecção de edições simultâneas (`baseUpdatedAt`)
+- Edições em campos diferentes são juntadas automaticamente; nunca há sobrescrita silenciosa
+- Mesmo campo alterado nos dois lados: o usuário escolhe entre a versão do servidor, a local ou editar manualmente
+- Falhas temporárias (rede, servidor) são retentadas sozinhas; mudança recusada pelo servidor vai para o usuário (editar manualmente ou descartar)
+
+**Incongruências:**
+- Antes de salvar, online ou offline, o app avisa e impede o que o servidor recusaria (genealogia, espécie já definida, janela de 7 dias), com a mesma mensagem do servidor
 
 #### 9.3 Indicadores
 **Interface:**
@@ -479,18 +500,19 @@ Classificação:
 
 ## 🗂️ Estrutura do Banco de Dados
 
-### **Tabelas Principais (10):**
+### **Tabelas Principais (11):**
 
 1. **users** - Usuários do sistema (id UUID)
 2. **meliponarios** - Dados do meliponário (1:1 com user)
 3. **especies** - Catálogo fixo de espécies (seed-only, somente leitura)
 4. **colonias** - Colônias de abelhas (referencia especie por FK)
 5. **parametros** - Parâmetros personalizáveis por usuário
-6. **avaliacoes** - Registros de avaliações
-7. **avaliacoes_parametros** - Valores de parâmetros por avaliação (N:N)
-8. **fotos** - Fotos anexadas (opcionais)
-9. **producoes** - Colheitas e produção
-10. **sync_queue** - Fila de sincronização offline
+6. **parametros_especies** - Critérios de um parâmetro específicos por espécie (override dos genéricos)
+7. **avaliacoes** - Registros de avaliações
+8. **avaliacoes_parametros** - Valores de parâmetros por avaliação (N:N)
+9. **fotos** - Fotos anexadas (opcionais)
+10. **producoes** - Colheitas e produção
+11. **sync_queue** - Registro no servidor das operações offline recebidas (idempotência)
 
 Todos os IDs são **UUID** (`@default(uuid())`) — escolha adequada para sincronização offline, evitando colisão de IDs entre dispositivos. Detalhes do schema em `docs/prisma-setup.md`.
 
@@ -501,12 +523,16 @@ users (1) → (N) colonias
 users (1) → (N) parametros
 especies (1) → (N) colonias        (catálogo fixo)
 colonias (1) → (N) colonias        (genealogia mãe/filha, recursivo)
+colonias (1) → (N) colonias        (doadora de campeiras em divisões, opcional)
+parametros (1) → (N) parametros_especies
+especies (1) → (N) parametros_especies
 colonias (1) → (N) avaliacoes
 avaliacoes (1) → (N) avaliacoes_parametros
 parametros (1) → (N) avaliacoes_parametros
 colonias (1) → (N) fotos
 avaliacoes (1) → (N) fotos
 avaliacoes_parametros (1) → (N) fotos
+producoes (1) → (N) fotos
 colonias (1) → (N) producoes
 ```
 
@@ -521,20 +547,22 @@ colonias (1) → (N) producoes
 4. **Responsividade** - Adapta a desktop, tablet, celular
 5. **Feedback visual** - Loading states, confirmações, erros claros
 
-### **Paleta de Cores (Sugestão):**
+### **Paleta de Cores (decidida em 14/10/2026):**
+
+As cores são tokens semânticos HSL em `app/frontend/src/index.css`, com modo claro e escuro. Os componentes nunca usam hex nem paleta fixa.
+
 ```
-Primária: Verde (#4CAF50) - Natureza, abelhas
-Secundária: Amarelo (#FFC107) - Mel, energia
-Sucesso: Verde claro (#81C784)
-Atenção: Laranja (#FF9800)
-Erro: Vermelho (#F44336)
-Neutros: Cinza (#757575, #BDBDBD, #E0E0E0)
+Fundo: creme · Texto: verde-escuro
+Primária (botões comuns): verde floresta
+Destaque (ação principal, item ativo, sublinhado de links): amarelo do logo #fff000, com borda preta
+  (amarelo nunca é cor de texto sobre fundo claro)
+Sidebar: verde-escuro (theme_color #203c2a)
+Status do score: verde / lima / âmbar / vermelho (semânticas, não mudam com o tema)
 ```
 
 ### **Tipografia:**
-- Títulos: Inter Bold
-- Corpo: Inter Regular
-- Código: Fira Code
+- Títulos: Plus Jakarta Sans
+- Corpo: Inter
 
 ### **Componentes Principais:**
 - Cards de colônia
@@ -542,8 +570,8 @@ Neutros: Cinza (#757575, #BDBDBD, #E0E0E0)
 - Gráficos de linha/barra/pizza
 - Tabelas responsivas
 - Modais para formulários
-- Drawer lateral (menu)
-- Bottom navigation (mobile)
+- Sidebar lateral recolhível (desktop)
+- Bottom navigation (mobile), com folha "Mais" para o restante do menu
 
 ---
 
@@ -596,17 +624,20 @@ Neutros: Cinza (#757575, #BDBDBD, #E0E0E0)
 
 ## 🚀 Fases de Desenvolvimento
 
+> Situação em 12/11/2026. Legenda: ✅ feito · ◐ parcial · 📋 planejado. As fases indicam ordem e dependência, não cronograma.
+
 ### **Fase 1: MVP**
 **Objetivo:** Versão funcional básica
 
 **Entregas:**
-- ✅ Cadastro de colônias
+- ✅ Cadastro de colônias (com genealogia mãe/filha e doadora de campeiras)
 - ✅ Parâmetros personalizáveis
 - ✅ Registro de avaliações
 - ✅ Histórico e gráficos básicos
 - ✅ Autenticação
-- ✅ Offline básico (PWA)
+- ✅ Offline (PWA): cópia local, escrita offline de colônias, avaliações, colheitas e fotos, sincronização automática (inclusive com o app fechado, onde o navegador oferece), conflitos e tela de Sincronização
 - ✅ Docker setup completo
+- ◐ Configurações: perfil (com troca de senha e exclusão da conta), meliponário, preferências e exportação prontos; falta importar backup
 
 **Tecnologias:**
 - Frontend: React + TypeScript + Vite + PWA
@@ -618,11 +649,11 @@ Neutros: Cinza (#757575, #BDBDBD, #E0E0E0)
 **Objetivo:** Adicionar inteligência ao sistema
 
 **Entregas:**
-- ✅ Microsserviço Python
-- ✅ Análises estatísticas (correlações, tendências)
-- ✅ Controle genealógico (árvore)
-- ✅ Análise comportamental
-- ✅ Relatórios em PDF
+- 📋 Microsserviço Python
+- 📋 Análises estatísticas (correlações, tendências)
+- 📋 Controle genealógico (árvore). Os dados de genealogia já são coletados e validados
+- 📋 Análise comportamental
+- 📋 Relatórios em PDF
 
 **Tecnologias:**
 - Analytics: Python + FastAPI (em `app/analytics`)
@@ -631,38 +662,38 @@ Neutros: Cinza (#757575, #BDBDBD, #E0E0E0)
 
 ### **Fase 3: Produção e Recursos Avançados**
 **Entregas:**
-- ✅ Registro de colheitas
-- ✅ Calendário de inspeções
-- ✅ Sistema de alertas
-- ✅ Exportação de dados
-- ✅ Melhorias de UX
+- ✅ Registro de colheitas (adiantado: entrou junto com o MVP)
+- ✅ Calendário de inspeções (mês com inspeções, colheitas, divisões e sugestões; frequência por colônia; sem agendamentos)
+- ✅ Sistema de alertas: central em `/app/alertas` (calculados das inspeções, resolver/reabrir, contador no menu); faltam avisos por e-mail/push
+- ◐ Exportação de dados: API completa (CSV/JSON + backup), tela de exportação nas Configurações e exportação filtrada nos históricos; falta importar e as fotos em zip
+- ◐ Melhorias de UX (contínuo)
 
 ### **Fase 4: Machine Learning**
 **Entregas:**
-- ✅ Predição de enxameação
-- ✅ Detecção de anomalias
-- ✅ Recomendações automáticas
-- ✅ Jupyter Notebooks
+- 📋 Predição de enxameação
+- 📋 Detecção de anomalias
+- 📋 Recomendações automáticas
+- 📋 Jupyter Notebooks
 
 **Tecnologias:**
 - ML: Scikit-learn, TensorFlow (opcional)
 
 ### **Fase 5: Polimento e Comunidade**
 **Entregas:**
-- ✅ Documentação completa
-- ✅ Tutoriais em vídeo
-- ✅ Templates de parâmetros
-- ✅ Multiidioma
-- ✅ Melhorias baseadas em feedback
+- ◐ Documentação completa: técnica e de metodologia em `docs/`; falta a documentação de usuário
+- 📋 Tutoriais em vídeo
+- 📋 Templates de parâmetros
+- 📋 Multiidioma
+- 📋 Melhorias baseadas em feedback
 
 ---
 
 ## 🧪 Testes
 
 ### **Testes Unitários:**
-- Backend Node.js: Jest
+- Backend Node.js: Vitest. Hoje são 138 testes, unitários e de integração via `app.inject`, contra um banco Postgres de teste separado e com CI no GitHub Actions
 - Backend Python: pytest
-- Frontend: Vitest + React Testing Library
+- Frontend: Vitest + React Testing Library (configurados, ainda sem testes)
 
 **Cobertura mínima:** 70%
 
@@ -747,16 +778,18 @@ Escolhida por ser permissiva e incluir proteção de patentes — adequada a um 
 
 ## 🎯 Critérios de Aceitação
 
-### **MVP é considerado completo quando:**- [ ] Usuário pode cadastrar 10+ colônias
-- [ ] Usuário pode definir parâmetros personalizados
-- [ ] Usuário pode avaliar colônias offline
-- [ ] Dados sincronizam ao voltar online
-- [ ] Histórico de avaliações é exibido graficamente
-- [ ] Sistema funciona em celular e desktop
-- [ ] Score de saúde é calculado automaticamente
-- [ ] Alertas básicos funcionam
-- [ ] Código está no GitHub
-- [ ] Documentação básica existe
+### **MVP é considerado completo quando:**
+
+- [x] Usuário pode cadastrar 10+ colônias
+- [x] Usuário pode definir parâmetros personalizados
+- [x] Usuário pode avaliar colônias offline
+- [x] Dados sincronizam ao voltar online (demonstração no navegador real pendente: `docs/demonstracao-offline.md`)
+- [x] Histórico de avaliações é exibido graficamente
+- [x] Sistema funciona em celular e desktop
+- [x] Score de saúde é calculado automaticamente
+- [x] Alertas básicos funcionam (central de alertas + destaque no dashboard)
+- [x] Código está no GitHub
+- [x] Documentação básica existe
 
 ### **Fase 2 completa quando:**
 - [ ] Análises estatísticas funcionam
@@ -803,7 +836,7 @@ Escolhida por ser permissiva e incluir proteção de patentes — adequada a um 
 
 **Tecnologia:** Node.js + Python + React + PostgreSQL (UUID) + Docker
 
-**Status:** Em desenvolvimento (backend scaffolded)  
+**Status:** Em desenvolvimento. O backend do MVP está completo e testado; o frontend tem as telas do MVP, incluindo configurações e o modo offline (PWA); faltam importar backup, fotos em zip e as análises (Fase 2)  
 **Licença:** Apache 2.0
 
 ---

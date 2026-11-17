@@ -1,14 +1,13 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Download, LayoutTemplate, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { Link, useLocation } from "react-router";
 import { Botao, LinkBotao } from "../../components/ui/Botao";
 import { CabecalhoPagina, Cartao, Selo } from "../../components/ui/Cartao";
-import { Carregando, ErroCarregamento, MensagemErro } from "../../components/ui/Estados";
+import { AvisoSemConexao, Carregando, ErroCarregamento, MensagemErro } from "../../components/ui/Estados";
 import { chaves, useParametros } from "../../hooks/useDados";
 import { parametrosApi } from "../../services/api/endpoints";
 import type { Parametro } from "../../types/api";
-import { PARAMETROS_SUGERIDOS } from "../../utils/parametrosSugeridos";
 
 export function ListaParametros() {
   const queryClient = useQueryClient();
@@ -16,12 +15,12 @@ export function ListaParametros() {
   const { data: parametros, isLoading, error, refetch } = useParametros();
   const invalidar = () => queryClient.invalidateQueries({ queryKey: chaves.parametros });
 
+  // Template Iniciante, aplicado numa única transação no servidor.
   const usarSugeridos = useMutation({
-    mutationFn: async () => {
-      for (const p of PARAMETROS_SUGERIDOS) await parametrosApi.criar(p);
-    },
+    mutationFn: () => parametrosApi.aplicarTemplate("iniciante", "mesclar"),
     onSettled: invalidar,
   });
+  const exportar = useMutation({ mutationFn: parametrosApi.exportar });
 
   const alterar = useMutation({
     mutationFn: (mudancas: { id: string; dados: Partial<Parametro> }[]) =>
@@ -32,9 +31,17 @@ export function ListaParametros() {
   const excluir = useMutation({ mutationFn: parametrosApi.excluir, onSettled: invalidar });
 
   const acoes = (
-    <LinkBotao to="/app/parametros/novo">
-      <Plus className="size-4" aria-hidden /> Novo parâmetro
-    </LinkBotao>
+    <>
+      <LinkBotao to="/app/parametros/templates" variante="secundario">
+        <LayoutTemplate className="size-4" aria-hidden /> Templates e importar
+      </LinkBotao>
+      <Botao variante="secundario" onClick={() => exportar.mutate()} carregando={exportar.isPending}>
+        <Download className="size-4" aria-hidden /> Exportar
+      </Botao>
+      <LinkBotao to="/app/parametros/novo">
+        <Plus className="size-4" aria-hidden /> Novo parâmetro
+      </LinkBotao>
+    </>
   );
 
   if (isLoading) return <><CabecalhoPagina titulo="Parâmetros" /><Carregando /></>;
@@ -61,6 +68,7 @@ export function ListaParametros() {
         subtitulo="O que você observa em cada inspeção. Cada parâmetro é classificado como Bom, Médio ou Ruim."
         acoes={parametros.length > 0 ? acoes : undefined}
       />
+      <AvisoSemConexao>Sem conexão: dá para consultar os parâmetros, mas criar, editar, reordenar, excluir ou aplicar templates exige conexão.</AvisoSemConexao>
 
       {parametros.length === 0 ? (
         <Cartao className="space-y-4 text-center">
@@ -74,7 +82,10 @@ export function ListaParametros() {
             <Botao onClick={() => usarSugeridos.mutate()} carregando={usarSugeridos.isPending}>
               Usar parâmetros sugeridos
             </Botao>
-            <LinkBotao to="/app/parametros/novo" variante="secundario">
+            <LinkBotao to="/app/parametros/templates" variante="secundario">
+              Ver outros templates
+            </LinkBotao>
+            <LinkBotao to="/app/parametros/novo" variante="fantasma">
               Criar do zero
             </LinkBotao>
           </div>
@@ -82,7 +93,7 @@ export function ListaParametros() {
         </Cartao>
       ) : (
         <>
-          <MensagemErro erro={alterar.error ?? excluir.error} />
+          <MensagemErro erro={alterar.error ?? excluir.error ?? exportar.error} />
           <ol className="space-y-3">
             {parametros.map((p, i) => {
               const usos = p._count.avaliacoesParametros;

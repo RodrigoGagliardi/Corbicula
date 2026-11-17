@@ -1,6 +1,8 @@
 # Análise de Efetividade Real das Funcionalidades
 
 > Premissa: uma funcionalidade só entrega valor se o usuário, no campo, com mãos ocupadas e abelhas voando, efetivamente registrar o dado que ela exige. Avaliação por **atrito de entrada × valor × dependência de disciplina**.
+>
+> Há um segundo eixo, independente do atrito: **o dado mede o que o gráfico diz que mede?** Ele está na seção [Validade](#-segundo-eixo-validade-do-dado).
 
 ---
 
@@ -42,13 +44,13 @@
 
 ### 5. Horário da inspeção
 - **Atrito:** Zero se auto-capturado; Alto se manual
-- **Valor:** Alto (análise de horários de atividade)
+- **Valor:** Alto para padrões de manejo. **Não** mede horário de atividade das abelhas: é a hora em que a caixa foi aberta (ver Validade)
 - **Efetividade real: depende 100% da implementação**
 - Se o sistema gravar o timestamp sozinho → MÁXIMA. Se pedir pro usuário informar "horário de pico de atividade" → quase ninguém preenche.
 
 ### 6. Genealogia (mãe/filha)
 - **Atrito:** Baixo-Médio — só preenchido no momento da divisão (evento raro)
-- **Valor:** Alto (controle genético, seleção de matrizes)
+- **Valor:** Alto (linhagem materna, seleção de matrizes). Não é controle genético: o pai é desconhecido
 - **Efetividade real: ALTA** ✅
 - Funciona porque é registrado uma vez, num momento que o usuário já está prestando atenção (divisão é evento importante). Baixa frequência = baixa fadiga.
 
@@ -64,6 +66,7 @@
 - **Valor:** Alto
 - **Efetividade real: ALTA** ✅ (condicionada a volume)
 - Não pede nada novo do usuário, só precisa de histórico acumulado. Efetividade cresce com o tempo de uso. Só não funciona nos primeiros meses (poucos dados).
+- Parâmetro × score é circular (o score vem dos parâmetros) e não conta. Clima × score precisa de ajuste sazonal (ver Validade).
 
 ### 9. Produção/Colheitas
 - **Atrito:** Baixo — evento pontual, poucas vezes ao ano, usuário motivado (é o "resultado")
@@ -106,6 +109,33 @@
 
 ---
 
+---
+
+## 🔬 Segundo eixo: validade do dado
+
+O ranking acima mede se o dado **chega**. Este eixo mede se ele **diz o que o gráfico afirma**. Números de uma simulação de meliponário (06/11/2026): ~30 colônias por 3 anos, 4 espécies, 200 rodadas com efeitos conhecidos e 200 sem nenhum efeito, reproduzindo os vieses reais da coleta (inspeção em dia ameno, de manhã, no fim de semana; buracos no inverno; ruído de observador; morte notada tarde). Os efeitos simulados são hipóteses, não fatos biológicos: os números mostram **o tamanho** de cada problema.
+
+| Análise | O que a simulação mostrou | Como apresentar |
+|---|---|---|
+| Clima na hora da inspeção × score | Correlação ~0,40 **com ou sem** efeito de clima; "significativa" em 100% das rodadas do mundo nulo. É a estação | Só com ajuste sazonal, e com o clima dos dias **antes** da inspeção |
+| Frio nos 14 dias antes × score | Com ajuste sazonal, poder de **8%** num meliponário só | Exploratório; relato de evento extremo, não índice |
+| "Alimentei e o score subiu" | Ganho de +18 pontos com efeito real e de **+14 sem efeito nenhum**: regressão à média | Nunca antes/depois como eficácia. Exige o motivo da ação e comparação com não tratadas |
+| Colônias ativas / perdas | Mortalidade anual verdadeira ~22%; o app mostra ~39% das colônias como mortas no período | Contagem, nunca taxa. Taxa exige data da perda |
+| Alerta de queda de 20 pontos | ~60% de precisão: 4 em 10 alertas são ruído de observação | "Confira esta colônia", não diagnóstico |
+| Score 0–100 | Com 5 parâmetros, só 11 valores possíveis; trata Ruim→Médio igual a Médio→Bom | Bom para manejo. Para pesquisa, cada parâmetro como ordinal |
+| Horários de atividade | 75% das inspeções entre 8h e 12h, nenhuma entre 13h e 16h | Rotular como horário das inspeções |
+| Espécie A × espécie B | Poder de 48% | Exploratório, com n |
+| Força da matriz passa às filhas | Poder de 28% | Ordenar com aviso de incerteza |
+| Score antes da colheita × quantidade | Poder de 60% | O melhor dos três; ainda exploratório |
+
+**Dados que mais aumentam a validade**, em ordem de valor por esforço no campo:
+1. **Data e motivo da mudança de status da colônia** (morte, perda, abandono). Destrava sobrevivência, sucesso de divisão e a validação do score.
+2. **Motivo da inspeção e da ação** (rotina ou problema; por que alimentou). Corrige a regressão à média.
+3. **Versão do protocolo** em cada avaliação (critérios e parâmetros vigentes). Pré-requisito para comparar meliponários.
+4. **Clima antes da inspeção, com procedência** (API ou digitado), calculado da coordenada sem trabalho do usuário.
+
+O limite que nenhum campo resolve: para perguntas ambientais, genéticas ou de manejo, o n que importa é o **número de meliponários**, não o de colônias.
+
 ## 💡 Conclusões Estratégicas
 
 **1. O padrão que separa alta de baixa efetividade é claro:**
@@ -125,5 +155,8 @@ seu instinto está certo — é a funcionalidade de maior atrito do sistema. Rec
 **4. Cuidado com a promessa de precisão:**
 idade da rainha e predições ML soam impressionantes, mas dependem de disciplina e volume que um usuário comum não terá. Melhor entregá-las como "estimativa aproximada, melhora com o tempo" do que como número exato — para não quebrar confiança.
 
-**5. O MVP está bem desenhado sob essa ótica:**
+**5. Atrito baixo não garante validade:**
+o horário automático e o clima automático têm atrito zero, mas medem o instante da inspeção, não a colônia. Toda análise nova passa pelos dois eixos.
+
+**6. O MVP está bem desenhado sob essa ótica:**
 ele concentra justamente as funcionalidades de baixo atrito (avaliação, score, histórico). As de alto atrito (fotos, clima manual, ML) estão corretamente nas fases posteriores ou como opcionais.

@@ -344,3 +344,183 @@ describe("colônias — CRUD e regras", () => {
     expect((await dono.api.get(`/colonias/${c.id}`)).body.status).toBe("ativa");
   });
 });
+
+describe("colônias — frequência de inspeção", () => {
+  it("é opcional, aceita 1–365 dias e pode ser zerada com null", async () => {
+    const { api } = await novoUsuario(app);
+    const semFrequencia = await criarColonia(api);
+    expect(semFrequencia.frequenciaInspecaoDias).toBeNull();
+
+    const c = await criarColonia(api, { frequenciaInspecaoDias: 15 });
+    expect(c.frequenciaInspecaoDias).toBe(15);
+    expect((await api.patch(`/colonias/${c.id}`, { frequenciaInspecaoDias: 30 })).body.frequenciaInspecaoDias).toBe(30);
+    expect((await api.patch(`/colonias/${c.id}`, { frequenciaInspecaoDias: null })).body.frequenciaInspecaoDias).toBeNull();
+
+    for (const invalido of [0, 366, 7.5, "15"]) {
+      expect((await api.patch(`/colonias/${c.id}`, { frequenciaInspecaoDias: invalido })).status).toBe(400);
+    }
+  });
+});
+
+describe("colônias — histórico de status (data e motivo)", () => {
+  const historico = async (api: Cliente, id: string) => (await api.get(`/colonias/${id}`)).body.historicoStatus;
+
+  it("criar uma colônia não gera entrada; os campos de status começam nulos", async () => {
+    const { api } = await novoUsuario(app);
+    const morta = await criarColonia(api, { status: "morta" });
+    expect(morta).toMatchObject({ statusDesde: null, motivoStatus: null, motivoStatusDetalhe: null, historicoStatus: [] });
+  });
+
+  it("morte com motivo e data, depois de volta a ativa: duas entradas", async () => {
+    const { api } = await novoUsuario(app);
+    const c = await criarColonia(api);
+
+    const morta = await api.patch(`/colonias/${c.id}`, {
+      status: "morta",
+      motivoStatus: "fome_escassez",
+      statusDesde: "2026-07-20T12:00:00.000Z",
+    });
+    expect(morta.status).toBe(200);
+    expect(morta.body).toMatchObject({
+      status: "morta",
+      statusDesde: "2026-07-20T12:00:00.000Z",
+      motivoStatus: "fome_escassez",
+      motivoStatusDetalhe: null,
+    });
+    expect(morta.body.historicoStatus).toHaveLength(1);
+    expect(morta.body.historicoStatus[0]).toMatchObject({
+      statusAnterior: "ativa",
+      statusNovo: "morta",
+      dataPercebida: "2026-07-20T12:00:00.000Z",
+      motivo: "fome_escassez",
+    });
+
+    const viva = await api.patch(`/colonias/${c.id}`, { status: "ativa", motivoStatus: "correcao_registro" });
+    expect(viva.body).toMatchObject({ status: "ativa", motivoStatus: "correcao_registro" });
+    expect(viva.body.historicoStatus.map((h: { statusAnterior: string; statusNovo: string }) => [h.statusAnterior, h.statusNovo]))
+      .toEqual([["ativa", "morta"], ["morta", "ativa"]]);
+  });
+
+  it("status sem detalhes: data = agora, motivo nulo, uma entrada", async () => {
+    const { api } = await novoUsuario(app);
+    const c = await criarColonia(api);
+    const antes = Date.now();
+
+    const res = await api.patch(`/colonias/${c.id}`, { status: "inativa" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.motivoStatus).toBeNull();
+    const desde = new Date(res.body.statusDesde).getTime();
+    expect(desde).toBeGreaterThanOrEqual(antes - 1000);
+    expect(desde).toBeLessThanOrEqual(Date.now() + 1000);
+    expect(res.body.historicoStatus).toHaveLength(1);
+    expect(res.body.historicoStatus[0]).toMatchObject({ statusNovo: "inativa", motivo: null, motivoDetalhe: null });
+  });
+
+  it("reenviar o mesmo status não cria entrada", async () => {
+    const { api } = await novoUsuario(app);
+    const c = await criarColonia(api);
+    await api.patch(`/colonias/${c.id}`, { status: "inativa" });
+    await api.patch(`/colonias/${c.id}`, { status: "inativa", observacoes: "sem mudança" });
+    expect(await historico(api, c.id)).toHaveLength(1);
+  });
+
+  it("corrigir motivo ou data sem mudar o status corrige a última entrada, sem criar outra", async () => {
+    const { api } = await novoUsuario(app);
+    const c = await criarColonia(api);
+    await api.patch(`/colonias/${c.id}`, { status: "morta", motivoStatus: "desconhecida" });
+
+    const res = await api.patch(`/colonias/${c.id}`, {
+      motivoStatus: "outro",
+      motivoStatusDetalhe: "tempestade derrubou a caixa",
+      statusDesde: "2026-08-01T12:00:00.000Z",
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      status: "morta",
+      motivoStatus: "outro",
+      motivoStatusDetalhe: "tempestade derrubou a caixa",
+      statusDesde: "2026-08-01T12:00:00.000Z",
+    });
+    expect(res.body.historicoStatus).toHaveLength(1);
+    expect(res.body.historicoStatus[0]).toMatchObject({
+      statusNovo: "morta",
+      motivo: "outro",
+      motivoDetalhe: "tempestade derrubou a caixa",
+      dataPercebida: "2026-08-01T12:00:00.000Z",
+    });
+  });
+
+  it("motivo incompatível com o status ou desconhecido: 400 e nada gravado", async () => {
+    const { api } = await novoUsuario(app);
+    const c = await criarColonia(api);
+
+    expect((await api.patch(`/colonias/${c.id}`, { status: "inativa", motivoStatus: "frio" })).status).toBe(400);
+    expect((await api.patch(`/colonias/${c.id}`, { status: "morta", motivoStatus: "venda_doacao" })).status).toBe(400);
+    expect((await api.patch(`/colonias/${c.id}`, { status: "morta", motivoStatus: "raio" })).status).toBe(400);
+    expect((await api.patch(`/colonias/${c.id}`, { status: "morta", statusDesde: "ontem" })).status).toBe(400);
+    // Sem `status`, o motivo é conferido contra o status atual (ativa).
+    expect((await api.patch(`/colonias/${c.id}`, { motivoStatus: "frio" })).status).toBe(400);
+
+    const atual = (await api.get(`/colonias/${c.id}`)).body;
+    expect(atual).toMatchObject({ status: "ativa", motivoStatus: null, statusDesde: null, historicoStatus: [] });
+
+    // `outro` vale para qualquer status; os da lista valem para o status deles.
+    expect((await api.patch(`/colonias/${c.id}`, { status: "inativa", motivoStatus: "outro" })).status).toBe(200);
+    expect((await api.patch(`/colonias/${c.id}`, { status: "inativa", motivoStatus: "uniao" })).status).toBe(200);
+    expect((await api.patch(`/colonias/${c.id}`, { status: "ativa", motivoStatus: "recuperada" })).status).toBe(200);
+  });
+
+  it("status ativa com motivo de morte: 400", async () => {
+    const { api } = await novoUsuario(app);
+    const c = await criarColonia(api);
+    await api.patch(`/colonias/${c.id}`, { status: "morta" });
+    expect((await api.patch(`/colonias/${c.id}`, { status: "ativa", motivoStatus: "frio" })).status).toBe(400);
+    expect((await api.get(`/colonias/${c.id}`)).body.status).toBe("morta");
+  });
+});
+
+describe("colônias — correção sem histórico e validação da data", () => {
+  it("colônia criada como morta: a correção cria a primeira entrada, com status anterior nulo", async () => {
+    const { api } = await novoUsuario(app);
+    const c = await criarColonia(api, { status: "morta" });
+
+    const res = await api.patch(`/colonias/${c.id}`, {
+      motivoStatus: "frio",
+      statusDesde: "2026-06-10T12:00:00.000Z",
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ status: "morta", motivoStatus: "frio", statusDesde: "2026-06-10T12:00:00.000Z" });
+    expect(res.body.historicoStatus).toHaveLength(1);
+    expect(res.body.historicoStatus[0]).toMatchObject({
+      statusAnterior: null,
+      statusNovo: "morta",
+      motivo: "frio",
+      dataPercebida: "2026-06-10T12:00:00.000Z",
+    });
+
+    // A próxima correção corrige essa entrada (não cria outra) e o updatedAt registra a correção.
+    const corrigida = await api.patch(`/colonias/${c.id}`, { motivoStatus: "fome_escassez" });
+    expect(corrigida.body.historicoStatus).toHaveLength(1);
+    const [entrada] = corrigida.body.historicoStatus;
+    expect(entrada).toMatchObject({ motivo: "fome_escassez", dataPercebida: "2026-06-10T12:00:00.000Z" });
+    expect(new Date(entrada.updatedAt).getTime()).toBeGreaterThan(new Date(entrada.createdAt).getTime());
+  });
+
+  it("recusa (400) statusDesde no futuro ou antes da entrada da colônia; aceita pequena diferença de relógio", async () => {
+    const { api } = await novoUsuario(app);
+    const c = await criarColonia(api); // entrada em 2026-01-10
+    const futuro = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString();
+
+    expect((await api.patch(`/colonias/${c.id}`, { status: "morta", statusDesde: futuro })).status).toBe(400);
+    expect((await api.patch(`/colonias/${c.id}`, { status: "morta", statusDesde: "2026-01-09T12:00:00.000Z" })).status).toBe(400);
+    expect((await api.get(`/colonias/${c.id}`)).body).toMatchObject({ status: "ativa", historicoStatus: [] });
+
+    const quaseAgora = new Date(Date.now() + 60 * 1000).toISOString();
+    expect((await api.patch(`/colonias/${c.id}`, { status: "morta", statusDesde: quaseAgora })).status).toBe(200);
+    // Mesmo dia da entrada vale.
+    expect((await api.patch(`/colonias/${c.id}`, { statusDesde: "2026-01-10T08:00:00.000Z" })).status).toBe(200);
+  });
+});

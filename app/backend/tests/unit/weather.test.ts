@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { buscarClima } from "../../src/services/weather.service";
+import { buscarClima, buscarClimaComFonte } from "../../src/services/weather.service";
 
 // A Open-Meteo nunca é chamada de verdade nos testes: `fetch` é substituído.
 // O cache do serviço é global ao módulo, por isso cada teste usa uma coordenada
@@ -108,5 +108,31 @@ describe("buscarClima", () => {
     mockFetch(() => respostaOpenMeteo("2023-08-02T12:00:00.000Z", 20, 50, 0)); // outro dia
     c = novaCoord();
     await expect(buscarClima(c.lat, c.lon, quando)).resolves.toBeNull();
+  });
+});
+
+describe("buscarClimaComFonte (procedência do clima)", () => {
+  it("devolve api_previsao para a Forecast e api_historico para a Archive, também a partir do cache", async () => {
+    const recente = new Date(Date.now() - 60 * 60 * 1000);
+    const fetchPrevisao = mockFetch(() => respostaOpenMeteo(recente.toISOString(), 20, 50, 0));
+    const c1 = novaCoord();
+    expect((await buscarClimaComFonte(c1.lat, c1.lon, recente))?.fonte).toBe("api_previsao");
+    expect((await buscarClimaComFonte(c1.lat, c1.lon, recente))?.fonte).toBe("api_previsao");
+    expect(fetchPrevisao).toHaveBeenCalledOnce();
+
+    const antiga = new Date("2022-02-01T10:00:00.000Z");
+    mockFetch(() => respostaOpenMeteo(antiga.toISOString(), 20, 50, 0));
+    const c2 = novaCoord();
+    const resultado = await buscarClimaComFonte(c2.lat, c2.lon, antiga);
+    expect(resultado).toEqual({
+      clima: { temperatura: 20, umidade: 50, condicaoClimatica: "ensolarado" },
+      fonte: "api_historico",
+    });
+  });
+
+  it("falha da API = null, sem procedência", async () => {
+    mockFetch(() => ({ ok: false, json: async () => ({}) }));
+    const c = novaCoord();
+    await expect(buscarClimaComFonte(c.lat, c.lon, new Date("2022-03-01T10:00:00.000Z"))).resolves.toBeNull();
   });
 });

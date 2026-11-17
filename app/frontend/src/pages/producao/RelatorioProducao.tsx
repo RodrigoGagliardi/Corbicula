@@ -43,7 +43,7 @@ export function RelatorioProducao() {
 
       {isLoading ? (
         <Carregando />
-      ) : error || !resumo ? (
+      ) : !resumo ? (
         <ErroCarregamento erro={error} tentarDeNovo={() => refetch()} />
       ) : resumo.grupos.length === 0 ? (
         <EstadoVazio

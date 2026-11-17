@@ -9,12 +9,22 @@ import { AreaTexto, Campo, CLASSE_ENTRADA, Entrada } from "../../components/ui/C
 import { CabecalhoPagina, Cartao } from "../../components/ui/Cartao";
 import { Carregando, ErroCarregamento, EstadoVazio, MensagemErro } from "../../components/ui/Estados";
 import { chaves, useColonias, useParametros } from "../../hooks/useDados";
-import { avaliacoesApi, fotosApi } from "../../services/api/endpoints";
+import { AvisoPendencia, NotaResolvendoPendencia } from "../../components/features/AvisoPendencia";
+import { substituirPendencia } from "../../services/offline/decisoes";
+import { escritas } from "../../services/offline/escrita";
+import { anexarFoto } from "../../services/offline/fotos";
 import type { AvaliacaoDetalhada, Classificacao, Colonia, Parametro } from "../../types/api";
 import { correspondeBusca } from "../../utils/colonias";
 import { formatarData, paraInputDataHora, tempoRelativo } from "../../utils/format";
-import { comprimirImagem } from "../../utils/imagem";
 import { calcularScore } from "../../utils/score";
+import { SeletorMotivo } from "../../components/features/SeletorMotivo";
+import {
+  MOTIVOS_ACAO,
+  MOTIVOS_INSPECAO,
+  payloadContextoAvaliacao,
+  type MotivoAcaoCodigo,
+  type MotivoInspecaoCodigo,
+} from "../../utils/vocabularios";
 
 const ACOES = ["Alimentação artificial", "Limpeza realizada", "Divisão executada", "Tratamento aplicado", "Troca de caixa"];
 const SUGESTOES_OBS = ["Colônia forte", "Rainha ativa", "Muitos forídeos", "Precisa limpeza", "Pouco alimento"];
@@ -133,8 +143,20 @@ function estadoInicial(avaliacao: AvaliacaoDetalhada | undefined) {
     dataHora: paraInputDataHora(avaliacao ? new Date(avaliacao.dataAvaliacao) : new Date()),
     observacoes: avaliacao?.observacoesGerais ?? "",
     acoes: avaliacao?.acoesTomadas ?? [],
+    motivoInspecao: avaliacao?.motivoInspecao ?? null,
+    motivoInspecaoDetalhe: avaliacao?.motivoInspecaoDetalhe ?? "",
+    motivosAcoes: (avaliacao?.motivosAcoes ?? {}) as Record<string, MotivoAcaoCodigo>,
   };
 }
+
+const OPCOES_MOTIVO_INSPECAO = (Object.keys(MOTIVOS_INSPECAO) as MotivoInspecaoCodigo[]).map((codigo) => ({
+  codigo,
+  rotulo: MOTIVOS_INSPECAO[codigo],
+}));
+const OPCOES_MOTIVO_ACAO = (Object.keys(MOTIVOS_ACAO) as MotivoAcaoCodigo[]).map((codigo) => ({
+  codigo,
+  rotulo: MOTIVOS_ACAO[codigo],
+}));
 
 // Criação (sem `avaliacao`) ou edição de uma avaliação existente (até 7 dias).
 export function FormularioAvaliacao({
@@ -148,6 +170,9 @@ export function FormularioAvaliacao({
 }) {
   const navegar = useNavigate();
   const queryClient = useQueryClient();
+  // "Editar manualmente" uma pendência (tela de Sincronização): salvar a substitui.
+  const [params] = useSearchParams();
+  const pendencia = avaliacao ? params.get("pendencia") : null;
   const [inicial] = useState(() => estadoInicial(avaliacao));
   const [classificacoes, setClassificacoes] = useState(inicial.classificacoes);
   const [notas, setNotas] = useState(inicial.notas);
@@ -155,6 +180,17 @@ export function FormularioAvaliacao({
   const [dataHora, setDataHora] = useState(inicial.dataHora);
   const [observacoes, setObservacoes] = useState(inicial.observacoes);
   const [acoes, setAcoes] = useState<string[]>(inicial.acoes);
+  // Contexto opcional: por que inspecionou e, por ação, preventiva ou resposta.
+  const [motivoInspecao, setMotivoInspecao] = useState<MotivoInspecaoCodigo | null>(inicial.motivoInspecao);
+  const [motivoInspecaoDetalhe, setMotivoInspecaoDetalhe] = useState(inicial.motivoInspecaoDetalhe);
+  const [motivosAcoes, setMotivosAcoes] = useState<Record<string, MotivoAcaoCodigo>>(inicial.motivosAcoes);
+  const marcarMotivoAcao = (acao: string, motivo: MotivoAcaoCodigo | null) =>
+    setMotivosAcoes((atual) => {
+      const novo = { ...atual };
+      if (motivo) novo[acao] = motivo;
+      else delete novo[acao];
+      return novo;
+    });
   const [foto, setFoto] = useState<File | null>(null);
   const inputFoto = useRef<HTMLInputElement>(null);
   const editando = Boolean(avaliacao);
@@ -176,32 +212,39 @@ export function FormularioAvaliacao({
         })),
         observacoesGerais: observacoes.trim() || null,
         acoesTomadas: acoes.length ? acoes : null,
+        // Sem nada marcado, nenhuma chave nova (payload de antes destes campos).
+        ...payloadContextoAvaliacao({ motivoInspecao, motivoInspecaoDetalhe, acoes, motivosAcoes }, avaliacao),
       };
       if (avaliacao) {
         // Edição: o servidor recalcula o score com o conjunto enviado. Fotos são
         // gerenciadas no detalhe da avaliação.
-        return { avaliacao: await avaliacoesApi.atualizar(colonia.id, avaliacao.id, dados), fotoFalhou: false };
+        // Offline, a edição fica na fila e aparece na hora na cópia local.
+        const salva = pendencia ? await substituirPendencia(pendencia, dados) : await escritas.atualizarAvaliacao(colonia.id, avaliacao, dados);
+        return { avaliacao: salva, fotoFalhou: false, fotoPendente: false };
       }
-      const criada = await avaliacoesApi.criar(colonia.id, dados);
+      const criada = await escritas.criarAvaliacao(colonia.id, dados);
 
-      // A foto é enviada depois e nunca desfaz a avaliação: se falhar, a
-      // avaliação continua salva e o aviso aparece no detalhe.
+      // A foto vai depois e nunca desfaz a avaliação. Sem conexão (ou com a
+      // avaliação ainda na fila), fica guardada no aparelho e sobe na
+      // sincronização; se falhar, a avaliação continua salva e o detalhe avisa.
       let fotoFalhou = false;
+      let fotoPendente = false;
       if (foto) {
         try {
-          await fotosApi.enviar(await comprimirImagem(foto), { avaliacaoId: criada.id });
+          fotoPendente = (await anexarFoto(foto, { avaliacaoId: criada.id })).pendente;
         } catch {
           fotoFalhou = true;
         }
       }
-      return { avaliacao: criada, fotoFalhou };
+      return { avaliacao: criada, fotoFalhou, fotoPendente };
     },
-    onSuccess: ({ avaliacao: salva, fotoFalhou }) => {
+    onSuccess: ({ avaliacao: salva, fotoFalhou, fotoPendente }) => {
       queryClient.invalidateQueries({ queryKey: chaves.colonias });
       queryClient.invalidateQueries({ queryKey: ["fotos"] });
+      if (pendencia) queryClient.invalidateQueries({ queryKey: ["sincronizacao"] });
       navegar(`/app/colonias/${colonia.id}/avaliacoes/${salva.id}`, {
         replace: true,
-        state: editando ? { editada: true } : { nova: true, fotoFalhou },
+        state: editando ? { editada: true } : { nova: true, fotoFalhou, fotoPendente },
       });
     },
   });
@@ -224,6 +267,8 @@ export function FormularioAvaliacao({
             : (colonia.especie?.nomePopular ?? "Espécie não identificada")
         }
       />
+      {pendencia && <NotaResolvendoPendencia />}
+      {avaliacao && !pendencia && <AvisoPendencia entidadeId={avaliacao.id} />}
 
       {/* Progresso + prévia do score, sempre visível no topo durante a rolagem */}
       <div className="sticky top-[57px] z-10 -mx-4 mb-4 border-b border-border bg-background/95 px-4 py-3 backdrop-blur md:top-0 md:mx-0 md:rounded-2xl md:border">
@@ -288,6 +333,27 @@ export function FormularioAvaliacao({
         <Cartao className="space-y-4">
           <h2 className="font-semibold text-foreground">Finalizar</h2>
 
+          <fieldset className="space-y-2">
+            <legend className="mb-2 text-sm font-medium text-foreground">
+              Motivo da inspeção <span className="font-normal text-muted-foreground">(opcional)</span>
+            </legend>
+            <SeletorMotivo
+              rotulo="Motivo da inspeção"
+              opcoes={OPCOES_MOTIVO_INSPECAO}
+              valor={motivoInspecao}
+              onChange={setMotivoInspecao}
+            />
+            {motivoInspecao === "outro" && (
+              <Entrada
+                aria-label="Descreva o motivo da inspeção"
+                placeholder="Descreva o motivo"
+                maxLength={500}
+                value={motivoInspecaoDetalhe}
+                onChange={(e) => setMotivoInspecaoDetalhe(e.target.value)}
+              />
+            )}
+          </fieldset>
+
           <Campo rotulo="Observações gerais">
             {(id) => (
               <>
@@ -310,17 +376,36 @@ export function FormularioAvaliacao({
 
           <fieldset>
             <legend className="mb-2 text-sm font-medium text-foreground">Ações tomadas</legend>
-            <div className="grid gap-1.5 sm:grid-cols-2">
+            <div className="grid items-start gap-1.5 sm:grid-cols-2">
               {opcoesAcoes.map((a) => (
-                <label key={a} className="flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm hover:bg-background">
-                  <input
-                    type="checkbox"
-                    className="size-5 accent-primary"
-                    checked={acoes.includes(a)}
-                    onChange={(e) => setAcoes((l) => (e.target.checked ? [...l, a] : l.filter((x) => x !== a)))}
-                  />
-                  {a}
-                </label>
+                <div key={a} className="rounded-lg px-2 py-2 hover:bg-background">
+                  <label className="flex items-center gap-2.5 text-sm">
+                    <input
+                      type="checkbox"
+                      className="size-5 accent-primary"
+                      checked={acoes.includes(a)}
+                      onChange={(e) => {
+                        const marcada = e.target.checked;
+                        setAcoes((l) => (marcada ? [...l, a] : l.filter((x) => x !== a)));
+                        // Ação desmarcada leva junto o motivo dela.
+                        if (!marcada) marcarMotivoAcao(a, null);
+                      }}
+                    />
+                    {a}
+                  </label>
+                  {/* Opcional: por que a ação foi tomada. */}
+                  {acoes.includes(a) && (
+                    <div className="mt-1.5 pl-7.5">
+                      <SeletorMotivo
+                        compacto
+                        rotulo={`Motivo da ação ${a}`}
+                        opcoes={OPCOES_MOTIVO_ACAO}
+                        valor={motivosAcoes[a] ?? null}
+                        onChange={(m) => marcarMotivoAcao(a, m)}
+                      />
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           </fieldset>

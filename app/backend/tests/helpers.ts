@@ -47,7 +47,7 @@ export function cliente(app: FastifyInstance, token?: string) {
     post: <T = any>(url: string, body?: unknown) => req<T>("POST", url, body),
     patch: <T = any>(url: string, body?: unknown) => req<T>("PATCH", url, body),
     put: <T = any>(url: string, body?: unknown) => req<T>("PUT", url, body),
-    delete: <T = any>(url: string) => req<T>("DELETE", url),
+    delete: <T = any>(url: string, body?: unknown) => req<T>("DELETE", url, body),
   };
 }
 

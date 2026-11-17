@@ -1,6 +1,8 @@
 // Tipos das respostas da API (espelham app/backend/src/modules/*).
 // Datas chegam como string ISO 8601 (UTC).
 
+import type { FonteClima, MotivoAcaoCodigo, MotivoInspecaoCodigo, MotivoStatusCodigo } from "../utils/vocabularios";
+
 export type Classificacao = "bom" | "medio" | "ruim";
 export type StatusAvaliacao = "excelente" | "boa" | "atencao" | "critica";
 export type StatusColonia = "ativa" | "inativa" | "morta";
@@ -17,12 +19,25 @@ export interface Meliponario {
   latitude: number | null;
   longitude: number | null;
   bioma: string | null;
+  areaTotal: number | null;
+}
+
+export interface MeliponarioInput {
+  nome: string;
+  endereco?: string;
+  cidade?: string;
+  estado?: string;
+  latitude?: number;
+  longitude?: number;
+  bioma?: string;
+  areaTotal?: number;
 }
 
 export interface Usuario {
   id: string;
   email: string;
   name: string;
+  createdAt: string;
   meliponario: Meliponario | null;
 }
 
@@ -71,6 +86,13 @@ export interface Colonia {
   longitude: number | null;
   observacoes: string | null;
   status: StatusColonia;
+  // Intervalo sugerido entre inspeções (dias); null = preferência geral.
+  frequenciaInspecaoDias: number | null;
+  // Estado atual do status (cópia da última entrada do histórico). Nulos em
+  // registros anteriores a 06/11/2026; podem faltar numa cópia offline antiga.
+  statusDesde: string | null;
+  motivoStatus: MotivoStatusCodigo | null;
+  motivoStatusDetalhe: string | null;
   especieId: string | null;
   coloniaMaeId: string | null;
   coloniaDoadoraCampeirasId: string | null;
@@ -86,6 +108,22 @@ export interface ColoniaDetalhada extends Colonia {
   coloniasFilhas: { id: string; codigo: string; status: StatusColonia }[];
   coloniaDoadoraCampeiras: { id: string; codigo: string } | null;
   coloniasReceptorasCampeiras: { id: string; codigo: string; status: StatusColonia }[];
+  // Só na API (GET /colonias/:id); a cópia offline não o tem.
+  historicoStatus?: EntradaHistoricoStatus[];
+}
+
+// Uma mudança de status (a API devolve da mais antiga para a mais recente).
+export interface EntradaHistoricoStatus {
+  id: string;
+  // null = primeira entrada criada por uma correção (status anterior desconhecido).
+  statusAnterior: StatusColonia | null;
+  statusNovo: StatusColonia;
+  dataPercebida: string;
+  motivo: MotivoStatusCodigo | null;
+  motivoDetalhe: string | null;
+  createdAt: string;
+  // Difere de createdAt quando a entrada foi corrigida.
+  updatedAt: string;
 }
 
 export interface CriterioEspecie {
@@ -128,6 +166,13 @@ export interface Avaliacao {
   condicaoClimatica: CondicaoClimatica | null;
   observacoesGerais: string | null;
   acoesTomadas: string[];
+  // Contexto (06/11/2026; nulos em registros anteriores).
+  motivoInspecao: MotivoInspecaoCodigo | null;
+  motivoInspecaoDetalhe: string | null;
+  // Ação (de acoesTomadas) → motivo.
+  motivosAcoes: Record<string, MotivoAcaoCodigo> | null;
+  climaFonte: FonteClima | null;
+  protocoloId: string | null;
   scoreGeral: number;
   statusGeral: StatusAvaliacao;
   createdAt: string;
@@ -237,7 +282,9 @@ export interface ResumoProducao {
 
 // ─── Payloads ─────────────────────────────────────────────────────────────────
 
+// `id` (create): UUID gerado no cliente, o mesmo da operação offline (services/offline/escrita.ts).
 export interface ColoniaInput {
+  id?: string;
   dataEntrada: string;
   origem: Origem;
   tipoCaixa: TipoCaixa;
@@ -250,14 +297,23 @@ export interface ColoniaInput {
   latitude?: number | null;
   longitude?: number | null;
   observacoes?: string | null;
+  frequenciaInspecaoDias?: number | null;
+  // Só no PATCH: data e motivo da mudança de status (ou correção da última).
+  statusDesde?: string;
+  motivoStatus?: MotivoStatusCodigo | null;
+  motivoStatusDetalhe?: string | null;
 }
 
 export interface AvaliacaoInput {
+  id?: string;
   dataAvaliacao: string;
   parametros: { parametroId: string; classificacao: Classificacao; observacoes?: string | null }[];
   observacoesGerais?: string | null;
   acoesTomadas?: string[] | null;
   duracaoMinutos?: number | null;
+  motivoInspecao?: MotivoInspecaoCodigo | null;
+  motivoInspecaoDetalhe?: string | null;
+  motivosAcoes?: Record<string, MotivoAcaoCodigo> | null;
 }
 
 export interface ParametroInput {
@@ -270,6 +326,7 @@ export interface ParametroInput {
 }
 
 export interface ProducaoInput {
+  id?: string;
   coloniaId: string;
   dataColheita: string;
   tipoProduto: TipoProduto;
@@ -277,4 +334,67 @@ export interface ProducaoInput {
   unidade: Unidade;
   caracteristicas?: Caracteristicas | null;
   observacoes?: string | null;
+}
+
+// ─── Templates e importação de parâmetros (tela 18) ──────────────────────────
+
+export type ModoAplicacao = "mesclar" | "substituir";
+
+export interface CriteriosTexto {
+  criterioBom: string;
+  criterioMedio: string;
+  criterioRuim: string;
+}
+
+export interface TemplateParametros {
+  id: string;
+  nome: string;
+  versao: number;
+  descricao: string;
+  parametros: (CriteriosTexto & { nome: string })[];
+}
+
+// Formato de GET /parametros/exportar (aceito por POST /parametros/importar).
+export interface ArquivoParametros {
+  formato: "corbicula-parametros";
+  versao: 1;
+  exportadoEm?: string;
+  parametros: (CriteriosTexto & {
+    nome: string;
+    ativo?: boolean;
+    criteriosEspecie?: (CriteriosTexto & { especie: string })[];
+  })[];
+}
+
+export interface ResumoAplicacao {
+  criados: string[];
+  reativados: string[];
+  desativados: string[];
+  existentes: string[];
+  criteriosDiferentes: string[];
+  especiesIgnoradas: string[];
+}
+
+// ─── Central de Alertas (tela 30) ────────────────────────────────────────────
+
+export type TipoAlerta = "nunca_avaliada" | "sem_inspecao" | "score_baixo" | "queda_score" | "parametro_ruim";
+
+export interface Alerta {
+  chave: string;
+  tipo: TipoAlerta;
+  gravidade: "alta" | "media";
+  titulo: string;
+  detalhe: string;
+  desde: string;
+  colonia: { id: string; codigo: string; especie: { codigo: string; nomePopular: string } | null };
+  avaliacao: AvaliacaoResumo | null;
+  dados: Record<string, unknown>;
+  resolvido: boolean;
+  resolvidoEm: string | null;
+}
+
+export interface RespostaAlertas {
+  alertas: Alerta[];
+  totais: { abertos: number; alta: number; media: number; resolvidos: number };
+  criterios: { diasSemInspecao: number; diasSemInspecaoPadrao: number; quedaScoreMinima: number; descricao: string };
 }

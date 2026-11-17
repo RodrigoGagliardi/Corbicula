@@ -10,6 +10,10 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: "autoUpdate",
+      // Service Worker próprio (src/sw.ts): app shell, fontes e Background Sync.
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "sw.ts",
       includeAssets: ["icons/favicon.svg", "icons/apple-touch-icon.png"],
       manifest: {
         name: "Corbicula — Meliponários",
@@ -28,23 +32,10 @@ export default defineConfig({
           { src: "/icons/icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
         ],
       },
-      workbox: {
-        // App shell em cache: a interface abre offline. Os dados offline
-        // (IndexedDB + fila /sync) são a próxima etapa do PWA.
+      // App shell em cache (precache injetado no sw.ts); fallback de navegação e
+      // cache das fontes do Google ficam no próprio sw.ts.
+      injectManifest: {
         globPatterns: ["**/*.{js,css,html,svg,png,woff2}"],
-        navigateFallback: "/index.html",
-        // Fontes do Google: guardadas no primeiro acesso para o app abrir offline com a tipografia certa.
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/,
-            handler: "CacheFirst",
-            options: {
-              cacheName: "fontes",
-              expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 365 },
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-        ],
       },
       devOptions: { enabled: false },
     }),

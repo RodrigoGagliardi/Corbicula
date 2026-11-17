@@ -1,8 +1,10 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
+import { erroRequisicao } from "../../shared/errors";
+import { MOTIVOS_STATUS, motivoCompativel } from "../../shared/vocabularios";
 import { apagarArquivos, listarArquivosDe } from "../fotos/fotos.service";
-import { coloniasRepository, parsearDimensoes } from "./colonias.repository";
-import type { CriarColoniaInput, AtualizarColoniaInput, FiltrosColonia } from "./colonias.types";
+import { coloniasRepository, parsearDimensoes, type AlteracaoStatus } from "./colonias.repository";
+import type { CriarColoniaInput, AtualizarColoniaInput, FiltrosColonia, STATUS_COLONIA } from "./colonias.types";
 
 // ─── Erros tipados ────────────────────────────────────────────────────────────
 
@@ -160,6 +162,107 @@ function conferirVinculos(id: string | null, final: { origem: string; maeId: str
   }
 }
 
+// ─── Mudança de status (histórico) ────────────────────────────────────────────
+// - Mudança efetiva de status → nova entrada no histórico (status anterior →
+//   novo, data percebida = statusDesde ou agora, motivo opcional) e a colônia
+//   guarda a cópia do estado atual. Motivo e detalhe não enviados ficam nulos.
+// - Sem mudança de status, statusDesde/motivo/detalhe enviados corrigem a
+//   colônia e a última entrada do histórico (um status marcado por engano ou
+//   um motivo esquecido não geram entrada nova). Sem entrada (colônia criada
+//   já inativa/morta, ou que mudou antes de 06/11/2026), a correção cria a
+//   primeira, com statusAnterior nulo (desconhecido), para a colônia e o
+//   histórico não divergirem.
+// - O motivo precisa servir para o status final (`outro` vale para qualquer um).
+// - statusDesde não pode estar no futuro (tolerância de relógio) nem antes do
+//   dia de entrada da colônia.
+// - Sem statusDesde, a data padrão é agora; no /sync, o instante em que a
+//   operação foi feita no cliente (statusDesdePadrao).
+
+const TOLERANCIA_RELOGIO_MS = 10 * 60 * 1000;
+
+interface StatusAtual {
+  status: string;
+  statusDesde: Date | null;
+  motivoStatus: string | null;
+  motivoStatusDetalhe: string | null;
+  dataEntrada: Date;
+}
+
+function conferirStatusDesde(statusDesde: string, dataEntrada: Date | string) {
+  const quando = new Date(statusDesde);
+  if (quando.getTime() > Date.now() + TOLERANCIA_RELOGIO_MS) {
+    throw erroRequisicao("A data da mudança de status não pode estar no futuro.");
+  }
+  if (dia(quando) < dia(dataEntrada)) {
+    throw erroRequisicao(
+      `A data da mudança de status não pode ser anterior à entrada da colônia (${dia(dataEntrada)}).`
+    );
+  }
+}
+
+function resolverStatus(
+  existente: StatusAtual,
+  data: AtualizarColoniaInput,
+  statusDesdePadrao?: Date
+): AlteracaoStatus | undefined {
+  const atual = existente.status;
+  const statusFinal = (data.status ?? atual) as (typeof STATUS_COLONIA)[number];
+  if (data.motivoStatus && !motivoCompativel(data.motivoStatus, statusFinal)) {
+    throw erroRequisicao(
+      `O motivo "${data.motivoStatus}" (${MOTIVOS_STATUS[data.motivoStatus].rotulo}) não se aplica ao status "${statusFinal}".`
+    );
+  }
+  if (data.statusDesde !== undefined) conferirStatusDesde(data.statusDesde, data.dataEntrada ?? existente.dataEntrada);
+
+  if (data.status !== undefined && data.status !== atual) {
+    const padrao =
+      statusDesdePadrao && statusDesdePadrao.getTime() <= Date.now() ? statusDesdePadrao : new Date();
+    const dataPercebida = data.statusDesde ? new Date(data.statusDesde) : padrao;
+    const motivo = data.motivoStatus ?? null;
+    const motivoDetalhe = data.motivoStatusDetalhe ?? null;
+    return {
+      colonia: { statusDesde: dataPercebida, motivoStatus: motivo, motivoStatusDetalhe: motivoDetalhe },
+      historico: {
+        tipo: "nova",
+        entrada: { statusAnterior: atual, statusNovo: data.status, dataPercebida, motivo, motivoDetalhe },
+      },
+    };
+  }
+
+  const desde = data.statusDesde !== undefined ? new Date(data.statusDesde) : undefined;
+  if (desde === undefined && data.motivoStatus === undefined && data.motivoStatusDetalhe === undefined) {
+    return undefined;
+  }
+  // Primeira entrada (só usada se não houver nenhuma): sem data informada, vale
+  // a que a colônia já tem; sem nenhuma, o dia da correção.
+  const primeira = {
+    statusAnterior: null,
+    statusNovo: atual,
+    dataPercebida: desde ?? existente.statusDesde ?? new Date(),
+    motivo: data.motivoStatus !== undefined ? data.motivoStatus : existente.motivoStatus,
+    motivoDetalhe: data.motivoStatusDetalhe !== undefined ? data.motivoStatusDetalhe : existente.motivoStatusDetalhe,
+  };
+  // statusDesde nulo na colônia = ainda não há entrada: a colônia recebe a
+  // mesma data da primeira entrada.
+  const statusDesde = desde ?? (existente.statusDesde === null ? primeira.dataPercebida : undefined);
+  return {
+    colonia: {
+      ...(statusDesde !== undefined && { statusDesde }),
+      ...(data.motivoStatus !== undefined && { motivoStatus: data.motivoStatus }),
+      ...(data.motivoStatusDetalhe !== undefined && { motivoStatusDetalhe: data.motivoStatusDetalhe }),
+    },
+    historico: {
+      tipo: "corrigir",
+      campos: {
+        ...(desde !== undefined && { dataPercebida: desde }),
+        ...(data.motivoStatus !== undefined && { motivo: data.motivoStatus }),
+        ...(data.motivoStatusDetalhe !== undefined && { motivoDetalhe: data.motivoStatusDetalhe }),
+      },
+      primeira,
+    },
+  };
+}
+
 // ─── Service ──────────────────────────────────────────────────────────────────
 
 export const coloniasService = {
@@ -212,9 +315,13 @@ export const coloniasService = {
     }
   },
 
-  async atualizar(id: string, userId: string, data: AtualizarColoniaInput) {
+  // statusDesdePadrao: data da mudança de status quando o payload não traz
+  // statusDesde (o /sync passa o instante da operação no cliente).
+  async atualizar(id: string, userId: string, data: AtualizarColoniaInput, opcoes: { statusDesdePadrao?: Date } = {}) {
     const existente = await coloniasRepository.buscarPorId(id, userId);
     if (!existente) throw erroNaoEncontrado();
+
+    const alteracaoStatus = resolverStatus(existente, data, opcoes.statusDesdePadrao);
 
     if (data.coloniaMaeId === id) {
       throw erroConflito("Uma colônia não pode ser mãe de si mesma");
@@ -264,7 +371,12 @@ export const coloniasService = {
     // Identificar uma colônia COL-NNN dá a ela o código da espécie (ex.: TETRANGU-004).
     const codigo = trocaEspecie ? await gerarCodigoColonia(userId, final.especieId) : undefined;
 
-    const colonia = await coloniasRepository.atualizar(id, userId, { ...data, ...(codigo && { codigo }) });
+    const colonia = await coloniasRepository.atualizar(
+      id,
+      userId,
+      { ...data, ...(codigo && { codigo }) },
+      alteracaoStatus
+    );
     return mapearSaida(colonia);
   },
 
