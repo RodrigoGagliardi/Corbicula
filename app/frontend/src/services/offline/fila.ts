@@ -15,6 +15,13 @@ import type {
 
 // O POST /sync aceita até 500 operações por lote.
 export const MAX_LOTE = 500;
+// E um corpo de até 1 MiB (limite padrão do Fastify): o lote para em ~800 KB de
+// JSON das operações, com folga para o envelope.
+export const MAX_BYTES_LOTE = 800_000;
+
+const codificador = new TextEncoder();
+// Bytes da operação no corpo do POST /sync (JSON em UTF-8).
+export const tamanhoDoEnvio = (op: OperacaoFila): number => codificador.encode(JSON.stringify(paraEnvio(op))).length;
 
 const texto = (v: unknown): v is string => typeof v === "string" && v.length > 0;
 
@@ -87,10 +94,12 @@ const porOrdem = (fila: readonly OperacaoFila[]) => [...fila].sort((a, b) => a.o
 //  - O lote termina antes de uma operação que referencia uma entidade criada no
 //    próprio lote: ela só vai depois que o servidor responder ao create (se ele for
 //    recusado, a dependente fica bloqueada em vez de voltar como "não encontrada").
-export function proximoLote(fila: readonly OperacaoFila[], max = MAX_LOTE): OperacaoFila[] {
+//  - No máximo `max` operações e `maxBytes` de JSON (limites do servidor).
+export function proximoLote(fila: readonly OperacaoFila[], max = MAX_LOTE, maxBytes = MAX_BYTES_LOTE): OperacaoFila[] {
   const bloqueadas = new Set<string>();
   const criadasNoLote = new Set<string>();
   const lote: OperacaoFila[] = [];
+  let bytes = 0;
   for (const op of porOrdem(fila)) {
     if (lote.length >= max) break;
     const chaves = [op.entidadeId, ...op.relacionadas];
@@ -99,6 +108,11 @@ export function proximoLote(fila: readonly OperacaoFila[], max = MAX_LOTE): Oper
       continue;
     }
     if (op.relacionadas.some((id) => criadasNoLote.has(id))) break;
+    // O lote para antes de passar do limite de tamanho, mas leva sempre ao menos
+    // uma operação (se ela sozinha passar do limite, o servidor a recusa e ela é isolada).
+    const tamanho = tamanhoDoEnvio(op);
+    if (lote.length > 0 && bytes + tamanho > maxBytes) break;
+    bytes += tamanho;
     lote.push(op);
     if (op.operacao === "create") criadasNoLote.add(op.entidadeId);
   }

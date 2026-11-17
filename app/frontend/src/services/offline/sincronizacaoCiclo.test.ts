@@ -147,6 +147,8 @@ describe("sincronizar", () => {
 
     const r = await sincronizar("fora-do-ar");
     expect(r.falhaEnvio).toMatchObject({ motivo: "servidor" });
+    // Falha transitória: o lote não é dividido.
+    expect(apis.syncApi.enviar).toHaveBeenCalledTimes(1);
     // No Service Worker, isto rejeita o evento sync e o navegador tenta de novo.
     expect(falhaTransitoria(r)).toBe(true);
     expect(r.pull).toBeNull();
@@ -390,6 +392,93 @@ describe("comTrava (Web Locks)", () => {
   it("falha da própria trava: o ciclo roda sem ela", async () => {
     Object.defineProperty(navigator, "locks", { configurable: true, value: { request: vi.fn(async () => { throw new Error("SecurityError"); }) } });
     expect(await comTrava("u", async () => "rodou")).toBe("rodou");
+  });
+});
+
+describe("lote recusado inteiro (400/413)", () => {
+  // Colônias criadas offline; o servidor recusa todo lote que contém a ruim.
+  async function colonias(usuarioId: string, n: number, extra: (i: number) => object = () => ({})) {
+    await entrarCarregado(usuarioId);
+    conexao.online = false;
+    const ids: string[] = [];
+    for (let i = 0; i < n; i++) ids.push((await escritas.criarColonia({ ...(COLONIA as object), ...extra(i) } as never)).id);
+    conexao.online = true;
+    return ids;
+  }
+  function recusarLotesCom(ruim: string, erro: ErroApi) {
+    apis.syncApi.enviar.mockImplementation(async (operacoes: OperacaoSync[]) => {
+      if (operacoes.some((o) => o.entidadeId === ruim)) throw erro;
+      return {
+        servidorEm: "2026-11-17T12:00:00.000Z", processadas: operacoes.length, aplicadas: operacoes.length, duplicadas: 0, conflitos: 0, erros: 0,
+        resultados: operacoes.map((o) => ({ id: o.id, entidadeId: o.entidadeId, status: "aplicado" as const })),
+      };
+    });
+  }
+
+  it("400 por uma operação malformada: as boas sobem no mesmo ciclo, a ruim para com a mensagem e a dependente fica presa", async () => {
+    const ids = await colonias("lote-400", 10);
+    const ruim = ids[6]!;
+    conexao.online = false;
+    await escritas.criarAvaliacao(ruim, AVALIACAO);
+    conexao.online = true;
+    recusarLotesCom(ruim, new ErroApi(400, "Dados inválidos", [{ campo: "operacoes.6.criadoEm", mensagem: "Data inválida" }]));
+
+    const r = await sincronizar("lote-400");
+    expect(r).toMatchObject({ enviadas: 9, paradas: 1, falhaEnvio: null });
+    const db = await banco.abrirBanco("lote-400");
+    const fila = await banco.lerFila(db);
+    expect(fila).toHaveLength(2);
+    expect(fila.find((o) => o.entidadeId === ruim)).toMatchObject({ estado: "erro", ultimoErro: "O servidor recusou esta mudança: Data inválida", tentativas: 1 });
+    // A avaliação da colônia recusada nunca foi enviada.
+    const enviadas = apis.syncApi.enviar.mock.calls.flatMap(([ops]) => (ops as OperacaoSync[]).map((o) => o.tipo));
+    expect(enviadas).not.toContain("avaliacao");
+    expect(fila.find((o) => o.tipo === "avaliacao")).toMatchObject({ estado: "pendente" });
+    // Não é falha transitória: nada de nova tentativa, e as telas são avisadas.
+    expect(agendadas()).toEqual([]);
+    expect(useSincronizacao.getState()).toMatchObject({ decisoes: 1, operacoesPresas: 1 });
+    // O erro aponta a operação (operacoes.6): isolada sem dividir o lote.
+    expect(apis.syncApi.enviar).toHaveBeenCalledTimes(2);
+  });
+
+  it("400 sem apontar a operação: divide o lote até isolar a culpada", async () => {
+    const ids = await colonias("lote-400-sem-indice", 10);
+    recusarLotesCom(ids[6]!, new ErroApi(400, "Dados inválidos", [{ campo: "operacoes", mensagem: "Lote inválido" }]));
+    const r = await sincronizar("lote-400-sem-indice");
+    expect(r).toMatchObject({ enviadas: 9, paradas: 1, falhaEnvio: null });
+    const [parada] = await banco.lerFila(await banco.abrirBanco("lote-400-sem-indice"));
+    expect(parada).toMatchObject({ entidadeId: ids[6], estado: "erro", ultimoErro: "O servidor recusou esta mudança: Lote inválido" });
+    // Isolar 1 entre 10 custa poucas requisições a mais.
+    expect(apis.syncApi.enviar.mock.calls.length).toBeLessThanOrEqual(8);
+  });
+
+  it("rodadas do ciclo esgotadas com fila enviável: o ciclo seguinte continua sozinho", async () => {
+    // 16 operações recusadas uma a uma (413): isolá-las custa mais de 60 rodadas, além das 50 de um ciclo.
+    const ids = await colonias("lote-esgotado", 16);
+    apis.syncApi.enviar.mockRejectedValue(new ErroApi(413, "Request body is too large"));
+    await sincronizar("lote-esgotado");
+    const db = await banco.abrirBanco("lote-esgotado");
+    expect((await banco.lerFila(db)).some((o) => o.estado === "pendente")).toBe(true);
+    await vi.waitFor(async () => {
+      const fila = await banco.lerFila(db);
+      expect(fila.filter((o) => o.estado === "erro").map((o) => o.entidadeId).sort()).toEqual([...ids].sort());
+    });
+  });
+
+  it("413 numa operação grande demais: ela para com a mensagem de tamanho e as outras sobem", async () => {
+    const ids = await colonias("lote-413", 3);
+    recusarLotesCom(ids[1]!, new ErroApi(413, "Request body is too large"));
+    const r = await sincronizar("lote-413");
+    expect(r).toMatchObject({ enviadas: 2, paradas: 1, falhaEnvio: null });
+    const [parada] = await banco.lerFila(await banco.abrirBanco("lote-413"));
+    expect(parada).toMatchObject({ entidadeId: ids[1], estado: "erro", ultimoErro: "Esta mudança é grande demais para o servidor aceitar." });
+  });
+
+  it("fila maior que o limite de tamanho: sai em vários lotes, todos aplicados no mesmo ciclo", async () => {
+    await colonias("lote-grande", 3, () => ({ observacoes: "x".repeat(300_000) }));
+    servidor();
+    const r = await sincronizar("lote-grande");
+    expect(r).toMatchObject({ enviadas: 3, falhaEnvio: null, naFila: 0 });
+    expect(apis.syncApi.enviar).toHaveBeenCalledTimes(2);
   });
 });
 

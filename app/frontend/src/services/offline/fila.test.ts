@@ -3,12 +3,14 @@ import {
   aplicarResultados,
   baseParaUpdate,
   entidadesBloqueadas,
+  MAX_BYTES_LOTE,
   MAX_LOTE,
   montarOperacao,
   paraEnvio,
   proximoLote,
   relacionadasDe,
   situacaoDaFoto,
+  tamanhoDoEnvio,
   temPendenciaRelacionada,
 } from "./fila";
 import type { ColoniaServidor, OperacaoFila } from "./tipos";
@@ -29,6 +31,28 @@ function op(parcial: Partial<OperacaoFila> & Pick<OperacaoFila, "entidadeId">): 
     ...parcial,
   };
 }
+
+describe("proximoLote: limite de tamanho", () => {
+  const grande = (entidadeId: string, kb: number) => op({ entidadeId, dados: { observacoes: "x".repeat(kb * 1000) } });
+
+  it("para antes de passar do limite em bytes, na ordem da fila", () => {
+    const fila = [grande("c1", 300), grande("c2", 300), grande("c3", 300)];
+    const lote = proximoLote(fila);
+    expect(lote.map((o) => o.entidadeId)).toEqual(["c1", "c2"]);
+    expect(lote.reduce((t, o) => t + tamanhoDoEnvio(o), 0)).toBeLessThanOrEqual(MAX_BYTES_LOTE);
+  });
+
+  it("uma operação maior que o limite vai sozinha (o servidor decide)", () => {
+    const fila = [grande("c1", 900), grande("c2", 1)];
+    expect(proximoLote(fila).map((o) => o.entidadeId)).toEqual(["c1"]);
+  });
+
+  it("o tamanho conta bytes UTF-8, não caracteres", () => {
+    expect(tamanhoDoEnvio(op({ entidadeId: "c1", dados: { observacoes: "ção" } }))).toBe(
+      tamanhoDoEnvio(op({ entidadeId: "c1", dados: { observacoes: "cao" } })) + 2
+    );
+  });
+});
 
 describe("situação das fotos guardadas", () => {
   const foto = (entidadeId: string, estado: "pendente" | "erro" = "pendente") => ({ entidadeId, estado });

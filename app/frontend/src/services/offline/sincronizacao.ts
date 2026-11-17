@@ -18,8 +18,9 @@ import {
   removerFoto,
   type BancoOffline,
 } from "./banco";
-import { aplicarResultados, entidadesBloqueadas, paraEnvio, proximoLote, situacaoDaFoto } from "./fila";
+import { aplicarResultados, entidadesBloqueadas, MAX_LOTE, paraEnvio, proximoLote, situacaoDaFoto } from "./fila";
 import { semRede } from "./leituraLocal";
+import type { OperacaoFila } from "./tipos";
 import { pedirSincronizacaoEmSegundoPlano } from "./segundoPlano";
 
 // Orquestração do pull (GET /sync/alteracoes) para o banco local do usuário.
@@ -274,12 +275,38 @@ export async function atualizarContagem(usuarioId: string): Promise<number> {
 const avancar = (n: number) =>
   useSincronizacao.setState((s) => (s.progresso ? { progresso: { ...s.progresso, feitas: Math.min(s.progresso.total, s.progresso.feitas + n) } } : {}));
 
-type ResultadoEnvio = Pick<ResultadoSincronizacao, "enviadas" | "paradas" | "falhaEnvio">;
+// incompleto: as rodadas do ciclo acabaram com operações ainda enviáveis.
+type ResultadoEnvio = Pick<ResultadoSincronizacao, "enviadas" | "paradas" | "falhaEnvio"> & { incompleto?: boolean };
 
+// O servidor recusou o lote inteiro: uma operação malformada (400, o lote é
+// validado de uma vez) ou corpo grande demais (413). Não é falha transitória:
+// reenviar o mesmo lote daria o mesmo resultado.
+const loteRecusado = (erro: unknown): erro is ErroApi => erro instanceof ErroApi && (erro.status === 400 || erro.status === 413);
+
+const motivoDaRecusa = (erro: ErroApi) =>
+  erro.status === 413
+    ? "Esta mudança é grande demais para o servidor aceitar."
+    : `O servidor recusou esta mudança: ${erro.mensagemAmigavel}`;
+
+// A validação do servidor aponta a operação no campo do erro ("operacoes.6.criadoEm"):
+// com o índice, a culpada é isolada sem dividir o lote.
+function operacaoApontada(erro: ErroApi, lote: readonly OperacaoFila[]): OperacaoFila | undefined {
+  if (erro.status !== 400) return undefined;
+  const indice = /^operacoes\.(\d+)(?:\.|$)/.exec(erro.detalhes[0]?.campo ?? "")?.[1];
+  return indice === undefined ? undefined : lote[Number(indice)];
+}
+
+// Envia a fila em lotes. Um lote recusado inteiro é dividido ao meio e reenviado
+// até isolar a operação culpada, que para como "erro" (vai para as decisões do
+// usuário); o resto da fila segue no mesmo ciclo.
 async function enviarFila(db: BancoOffline, usuarioId: string): Promise<ResultadoEnvio> {
   const envio: ResultadoEnvio = { enviadas: 0, paradas: 0, falhaEnvio: null };
-  for (let rodada = 0; rodada < MAX_RODADAS; rodada++) {
-    const lote = proximoLote(await lerFila(db));
+  // Tamanho do lote: cai pela metade a cada recusa e volta ao máximo quando a
+  // operação culpada é isolada (até lá, os lotes menores mantêm a busca estreita).
+  let limite = MAX_LOTE;
+  let rodada = 0;
+  for (; rodada < MAX_RODADAS; rodada++) {
+    const lote = proximoLote(await lerFila(db), limite);
     if (lote.length === 0) break;
     // O token enviado precisa ser do dono da fila.
     if (!sessaoDoUsuario(usuarioId)) return { ...envio, falhaEnvio: SESSAO_TROCADA as FalhaPull };
@@ -287,6 +314,18 @@ async function enviarFila(db: BancoOffline, usuarioId: string): Promise<Resultad
     try {
       resposta = await syncApi.enviar(lote.map(paraEnvio));
     } catch (erro) {
+      if (loteRecusado(erro)) {
+        const op = operacaoApontada(erro, lote) ?? (lote.length === 1 ? lote[0] : undefined);
+        if (!op) {
+          limite = Math.ceil(lote.length / 2);
+          continue;
+        }
+        await atualizarFila(db, { remover: [], atualizar: [{ ...op, estado: "erro", tentativas: op.tentativas + 1, ultimoErro: motivoDaRecusa(erro) }] });
+        avancar(1);
+        envio.paradas += 1;
+        limite = MAX_LOTE;
+        continue;
+      }
       // Rede, timeout, 5xx ou 401: a fila fica como está; o reenvio usa os mesmos ids.
       return { ...envio, falhaEnvio: falha(erro) as FalhaPull };
     }
@@ -298,6 +337,9 @@ async function enviarFila(db: BancoOffline, usuarioId: string): Promise<Resultad
     // Nenhum resultado casou com o lote: parar evita reenviar o mesmo lote sem fim.
     if (mudancas.remover.length + mudancas.atualizar.length === 0) break;
   }
+  // Rodadas esgotadas (fila enorme ou muitas recusas isoladas uma a uma): o
+  // ciclo seguinte continua de onde este parou (`executarSincronizacao`).
+  if (rodada === MAX_RODADAS && proximoLote(await lerFila(db)).length > 0) envio.incompleto = true;
   return envio;
 }
 
@@ -387,13 +429,16 @@ async function executarSincronizacao(usuarioId: string): Promise<ResultadoSincro
 
   useSincronizacao.setState({ sincronizando: true, progresso: null });
   let resultado: ResultadoSincronizacao;
+  // O envio parou por falta de rodadas com fila enviável: agenda a continuação.
+  let continuar = false;
   try {
     const db = await abrirBanco(usuarioId);
     // Total do ciclo: operações a enviar e fotos aguardando.
     const [filaInicial, fotosIniciais] = await Promise.all([lerFila(db), contarFotosPendentes(db)]);
     const total = filaInicial.filter((o) => o.estado === "pendente").length + fotosIniciais;
     useSincronizacao.setState({ progresso: total > 0 ? { feitas: 0, total } : null });
-    const envio = await enviarFila(db, usuarioId);
+    const { incompleto, ...envio } = await enviarFila(db, usuarioId);
+    continuar = Boolean(incompleto);
     const fotos = envio.falhaEnvio ? { enviadas: 0, alteradas: 0, falha: null } : await enviarFotos(db, usuarioId);
     const pull = envio.falhaEnvio ? null : await puxarAlteracoes(usuarioId);
     resultado = {
@@ -428,6 +473,16 @@ async function executarSincronizacao(usuarioId: string): Promise<ResultadoSincro
     useSincronizacao.setState({ sincronizando: false, progresso: null });
   }
 
+  if (continuar && !falhaTransitoria(resultado) && sessaoDoUsuario(usuarioId)) {
+    // Sobrou fila enviável depois das rodadas do ciclo: continua logo depois dele.
+    novasTentativas.set(
+      usuarioId,
+      setTimeout(() => {
+        novasTentativas.delete(usuarioId);
+        void sincronizar(usuarioId);
+      }, 0)
+    );
+  }
   if (!falhaTransitoria(resultado)) {
     falhasSeguidas.delete(usuarioId);
   } else if (!semRede() && sessaoDoUsuario(usuarioId)) {
