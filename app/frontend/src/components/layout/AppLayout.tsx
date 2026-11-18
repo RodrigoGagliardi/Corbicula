@@ -5,7 +5,7 @@ import { useCargaLocal } from "../../hooks/useCargaLocal";
 import { useAlertas } from "../../hooks/useDados";
 import { useAuth } from "../../store/auth";
 import { usePreferencias } from "../../store/preferencias";
-import { TEMAS } from "./AlternarTema";
+import { SeletorTema } from "./SeletorTema";
 import { DialogoSair, useSair } from "./DialogoSair";
 import { IndicadorConexao } from "./IndicadorConexao";
 import { Marca } from "./Marca";
@@ -29,30 +29,6 @@ export function AppLayout() {
       </div>
       <BarraInferior />
       <DialogoSair />
-    </div>
-  );
-}
-
-function SeletorTema() {
-  const { tema, definirTema } = usePreferencias();
-  return (
-    <div className="flex rounded-lg bg-black/20 p-0.5" role="radiogroup" aria-label="Tema">
-      {TEMAS.map(({ valor, rotulo, icone: Icone }) => (
-        <button
-          key={valor}
-          type="button"
-          role="radio"
-          aria-checked={tema === valor}
-          title={rotulo}
-          onClick={() => definirTema(valor)}
-          className={`flex flex-1 items-center justify-center rounded-md p-1.5 ${
-            tema === valor ? "bg-sidebar-primary text-sidebar-primary-foreground" : "opacity-70 hover:opacity-100"
-          }`}
-        >
-          <Icone className="size-4" aria-hidden />
-          <span className="sr-only">{rotulo}</span>
-        </button>
-      ))}
     </div>
   );
 }

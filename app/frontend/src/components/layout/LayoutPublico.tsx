@@ -1,7 +1,7 @@
 import { Link, NavLink, Outlet } from "react-router";
 import { useAuth } from "../../store/auth";
 import { classesBotao } from "../ui/Botao";
-import { AlternarTema } from "./AlternarTema";
+import { SeletorTema } from "./SeletorTema";
 import { Marca } from "./Marca";
 
 // Casca das páginas públicas (landing, login, cadastro, recuperar senha, sobre):
@@ -16,7 +16,7 @@ export function LayoutPublico() {
             <Marca />
           </Link>
           <nav className="flex items-center gap-1 sm:gap-2" aria-label="Site">
-            <AlternarTema />
+            <SeletorTema variante="pagina" />
             <NavLink
               to="/sobre"
               className={({ isActive }) =>
