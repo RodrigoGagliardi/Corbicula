@@ -13,7 +13,10 @@
      (contraste ~1,1:1): ele entra como preenchimento, com texto preto
      (`text-accent-foreground`), nunca como cor de texto no tema claro.
    - Sidebar verde-escura, onde o logo amarelo/preto aparece bem.
-   Cores de status seguem as faixas do score (docs/exportacao.md) e não mudam. */
+   Cores de status seguem as faixas do score (docs/exportacao.md); a paleta
+   (13/11/2026, "Floresta") tem tons fechados no claro e uma versão mais clara
+   no escuro, e texto próprio sobre a cor cheia (`text-sobre-status`): branco no
+   claro, quase preto no escuro. */
 :root {
   --background: 45 25% 97%; /* creme claro */
   --foreground: 150 30% 15%; /* verde-escuro */
@@ -78,6 +81,14 @@
   --chart-1: 142 50% 45%;
   --chart-3: 30 35% 55%;
   --chart-4: 175 50% 45%;
+
+  /* Status do score no modo escuro: tons mais claros da mesma família, legíveis
+     como texto sobre o cartão e com texto escuro por cima quando cheios. */
+  --color-excelente: #4ade80;
+  --color-boa: #a3e635;
+  --color-atencao: #fbbf24;
+  --color-critica: #f87171;
+  --color-sobre-status: #111814;
 }
 
 @theme inline {
@@ -130,10 +141,13 @@
   --color-mel-500: #e6d800;
   --color-mel-600: #ccc000;
 
-  --color-excelente: #00ff08;
-  --color-boa: #16b900;
-  --color-atencao: #d97706;
-  --color-critica: #dc2626;
+  /* Status do score (paleta "Floresta"): verde, lima, âmbar e vermelho no tom
+     700, com contraste ≥ 4,5:1 como texto sobre o cartão e com texto branco por cima. */
+  --color-excelente: #15803d;
+  --color-boa: #4d7c0f;
+  --color-atencao: #b45309;
+  --color-critica: #b91c1c;
+  --color-sobre-status: #ffffff;
 
   --animate-fade-in: fade-in 0.3s ease-out;
   --animate-slide-in: slide-in 0.25s ease-out;

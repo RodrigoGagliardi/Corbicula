@@ -19,7 +19,7 @@ import { rotuloFonteClima, rotuloMotivoAcao, rotuloMotivoInspecao, temClima } fr
 const COR_CLASSIFICACAO: Record<Classificacao, string> = {
   bom: "bg-green-100 text-green-800 dark:bg-green-950/60 dark:text-green-300",
   medio: "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300",
-  ruim: "bg-red-100 text-destructive",
+  ruim: "bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-300",
 };
 
 export function DetalheAvaliacao() {

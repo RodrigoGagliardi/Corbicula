@@ -1,10 +1,11 @@
 import { Link, NavLink, Outlet } from "react-router";
 import { useAuth } from "../../store/auth";
 import { classesBotao } from "../ui/Botao";
+import { AlternarTema } from "./AlternarTema";
 import { Marca } from "./Marca";
 
 // Casca das páginas públicas (landing, login, cadastro, recuperar senha, sobre):
-// cabeçalho fixo com a marca e as ações de conta + rodapé.
+// cabeçalho fixo com a marca, a troca de tema e as ações de conta + rodapé.
 export function LayoutPublico() {
   const logado = Boolean(useAuth((s) => s.token));
   return (
@@ -15,6 +16,7 @@ export function LayoutPublico() {
             <Marca />
           </Link>
           <nav className="flex items-center gap-1 sm:gap-2" aria-label="Site">
+            <AlternarTema />
             <NavLink
               to="/sobre"
               className={({ isActive }) =>

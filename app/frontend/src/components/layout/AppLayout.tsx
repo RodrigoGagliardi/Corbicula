@@ -1,10 +1,11 @@
-import { Ellipsis, Info, LogOut, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Settings, Sun, User, X } from "lucide-react";
+import { Ellipsis, Info, LogOut, PanelLeftClose, PanelLeftOpen, Settings, User, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router";
 import { useCargaLocal } from "../../hooks/useCargaLocal";
 import { useAlertas } from "../../hooks/useDados";
 import { useAuth } from "../../store/auth";
-import { usePreferencias, type Tema } from "../../store/preferencias";
+import { usePreferencias } from "../../store/preferencias";
+import { TEMAS } from "./AlternarTema";
 import { DialogoSair, useSair } from "./DialogoSair";
 import { IndicadorConexao } from "./IndicadorConexao";
 import { Marca } from "./Marca";
@@ -31,12 +32,6 @@ export function AppLayout() {
     </div>
   );
 }
-
-const TEMAS: { valor: Tema; rotulo: string; icone: typeof Sun }[] = [
-  { valor: "claro", rotulo: "Claro", icone: Sun },
-  { valor: "escuro", rotulo: "Escuro", icone: Moon },
-  { valor: "sistema", rotulo: "Sistema", icone: Monitor },
-];
 
 function SeletorTema() {
   const { tema, definirTema } = usePreferencias();
@@ -139,7 +134,7 @@ function Contador({ valor, compacto = false }: { valor: number; compacto?: boole
     return <span className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full border-2 border-sidebar bg-critica" aria-hidden />;
   }
   return (
-    <span className="ml-auto rounded-full bg-critica px-1.5 py-0.5 text-[11px] leading-none font-semibold text-white" aria-label={`${texto} alertas abertos`}>
+    <span className="ml-auto rounded-full bg-critica px-1.5 py-0.5 text-[11px] leading-none font-semibold text-sobre-status" aria-label={`${texto} alertas abertos`}>
       {texto}
     </span>
   );
@@ -335,7 +330,7 @@ function MenuMais({ itens, alertasAbertos, fechar }: { itens: typeof ITENS_NAV; 
                 <span className="relative">
                   <Icone className="size-6" aria-hidden />
                   {rota === ROTA_ALERTAS && alertasAbertos > 0 && (
-                    <span className="absolute -top-1.5 -right-3 rounded-full bg-critica px-1.5 py-0.5 text-[10px] leading-none font-semibold text-white">
+                    <span className="absolute -top-1.5 -right-3 rounded-full bg-critica px-1.5 py-0.5 text-[10px] leading-none font-semibold text-sobre-status">
                       {alertasAbertos > 99 ? "99+" : alertasAbertos}
                     </span>
                   )}

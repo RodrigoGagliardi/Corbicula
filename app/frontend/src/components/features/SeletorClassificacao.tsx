@@ -2,9 +2,9 @@ import type { Classificacao } from "../../types/api";
 import { ROTULO_CLASSIFICACAO } from "../../utils/score";
 
 const ESTILO: Record<Classificacao, { ativo: string; inativo: string }> = {
-  bom: { ativo: "border-excelente bg-excelente text-white", inativo: "border-green-200 text-green-800 hover:bg-green-50 dark:border-green-900 dark:text-green-300 dark:hover:bg-green-950" },
-  medio: { ativo: "border-atencao bg-atencao text-white", inativo: "border-amber-200 text-amber-800 hover:bg-amber-50 dark:border-amber-900 dark:text-amber-300 dark:hover:bg-amber-950" },
-  ruim: { ativo: "border-critica bg-critica text-white", inativo: "border-red-200 text-red-800 hover:bg-red-50 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950" },
+  bom: { ativo: "border-excelente bg-excelente text-sobre-status", inativo: "border-green-200 text-green-800 hover:bg-green-50 dark:border-green-900 dark:text-green-300 dark:hover:bg-green-950" },
+  medio: { ativo: "border-atencao bg-atencao text-sobre-status", inativo: "border-amber-200 text-amber-800 hover:bg-amber-50 dark:border-amber-900 dark:text-amber-300 dark:hover:bg-amber-950" },
+  ruim: { ativo: "border-critica bg-critica text-sobre-status", inativo: "border-red-200 text-red-800 hover:bg-red-50 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950" },
 };
 
 // Três botões grandes (alvo de toque ≥ 48px) — o núcleo da avaliação rápida.

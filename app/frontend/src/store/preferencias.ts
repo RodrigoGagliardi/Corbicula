@@ -29,11 +29,11 @@ export const usePreferencias = create<EstadoPreferencias>()(
   )
 );
 
-const consultaEscuro = window.matchMedia("(prefers-color-scheme: dark)");
-
 // Aplica a classe .dark no <html> conforme a preferência (e acompanha o
-// sistema quando o tema é "sistema"). Chamado uma vez em main.tsx.
+// sistema quando o tema é "sistema"). Chamado uma vez em main.tsx. A consulta
+// ao sistema fica aqui dentro: importar a store não exige `matchMedia`.
 export function aplicarTema() {
+  const consultaEscuro = window.matchMedia("(prefers-color-scheme: dark)");
   const atualizar = () => {
     const { tema } = usePreferencias.getState();
     const escuro = tema === "escuro" || (tema === "sistema" && consultaEscuro.matches);

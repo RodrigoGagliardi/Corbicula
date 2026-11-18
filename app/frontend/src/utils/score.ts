@@ -44,8 +44,8 @@ export const STATUS_AVALIACAO: StatusAvaliacao[] = ["excelente", "boa", "atencao
 
 // Classes Tailwind por status (cores definidas em index.css).
 export const COR_STATUS: Record<StatusAvaliacao, { fundo: string; texto: string; barra: string }> = {
-  excelente: { fundo: "bg-green-50 dark:bg-green-950/50", texto: "text-excelente", barra: "bg-excelente" },
-  boa: { fundo: "bg-lime-50 dark:bg-lime-950/50", texto: "text-boa", barra: "bg-boa" },
-  atencao: { fundo: "bg-amber-50 dark:bg-amber-950/50", texto: "text-atencao", barra: "bg-atencao" },
-  critica: { fundo: "bg-red-50 dark:bg-red-950/50", texto: "text-critica", barra: "bg-critica" },
+  excelente: { fundo: "bg-green-100 dark:bg-green-900/60", texto: "text-excelente", barra: "bg-excelente" },
+  boa: { fundo: "bg-lime-100 dark:bg-lime-900/60", texto: "text-boa", barra: "bg-boa" },
+  atencao: { fundo: "bg-amber-100 dark:bg-amber-900/60", texto: "text-atencao", barra: "bg-atencao" },
+  critica: { fundo: "bg-red-100 dark:bg-red-900/60", texto: "text-critica", barra: "bg-critica" },
 };

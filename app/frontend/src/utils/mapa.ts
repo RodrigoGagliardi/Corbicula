@@ -64,11 +64,11 @@ export function especiesPresentes(colonias: Colonia[]) {
 // Classes dos marcadores (cores de status definidas em index.css). Escritas por
 // extenso para o Tailwind encontrá-las no código.
 export const CLASSE_MARCADOR: Record<StatusMapa, string> = {
-  excelente: "bg-excelente text-black",
-  boa: "bg-boa text-white",
-  atencao: "bg-atencao text-white",
-  critica: "bg-critica text-white",
-  sem: "bg-muted-foreground text-white",
+  excelente: "bg-excelente text-sobre-status",
+  boa: "bg-boa text-sobre-status",
+  atencao: "bg-atencao text-sobre-status",
+  critica: "bg-critica text-sobre-status",
+  sem: "bg-muted-foreground text-background",
 };
 
 export const ROTULO_STATUS_MAPA: Record<StatusMapa, string> = {
